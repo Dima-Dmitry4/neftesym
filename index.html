@@ -53,8 +53,10 @@
     display:flex; flex-direction:column; background:var(--panel);
     border:1px solid var(--line); border-radius:12px; padding:18px;
     text-decoration:none; color:inherit; transition:border-color .15s, transform .15s, box-shadow .15s;
+    cursor:pointer;
   }
   .card:hover { border-color:var(--accent); transform:translateY(-2px); box-shadow:0 10px 30px #0b112055; }
+  .card:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .card-head { display:flex; align-items:flex-start; gap:12px; }
   .card-title { font-size:17px; font-weight:650; line-height:1.3; }
   .card-sub { color:var(--accent); font-size:13px; margin-top:3px; }
@@ -173,8 +175,14 @@
     const links = (Array.isArray(p.links) ? p.links : [])
       .map((l) => `<a href="${esc(l.path)}" title="${esc(l.path)}">${esc(l.label || l.path)}</a>`)
       .join("");
+    // Внешний <a> нам не подходит: внутри карточки есть ссылки на
+    // дополнительные материалы (links[]), а вкладывать <a> в <a> HTML5
+    // запрещает — браузер рвёт разметку, и ссылки выпадают за карточку.
+    // Поэтому карточка — <div role="link" data-href>, а вся кликабельная
+    // логика (mouse + keyboard) делается делегированием в render().
     return `
-      <a class="card" href="${esc(p.path)}">
+      <div class="card" data-href="${esc(p.path)}" role="link" tabindex="0"
+           aria-label="Открыть прототип: ${esc(p.title)}">
         <div class="card-head">
           <div>
             <div class="card-title">${esc(p.title)}</div>
@@ -187,9 +195,9 @@
         ${links ? `<div class="card-links">${links}</div>` : ""}
         <div class="card-foot">
           <span class="card-path">${esc(p.path)}</span>
-          <span class="open">Открыть →</span>
+          <a class="open" href="${esc(p.path)}">Открыть →</a>
         </div>
-      </a>`;
+      </div>`;
   }
 
   function render() {
@@ -201,6 +209,25 @@
     }
     grid.innerHTML = list.map(card).join("");
   }
+
+  // Делегирование клика/клавиатуры на контейнере — переживает
+  // любое перерендерирование (фильтр, поиск). Клик по самой карточке
+  // открывает прототип; клик по вложенной <a> (документация, "Открыть →")
+  // проходит до самой ссылки и не перехватывается.
+  grid.addEventListener("click", (e) => {
+    const card = e.target.closest(".card[data-href]");
+    if (!card || !grid.contains(card)) return;
+    if (e.target.closest("a")) return; // вложенная ссылка — не мешаем
+    window.location.href = card.dataset.href;
+  });
+  grid.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target !== e.currentTarget && !e.target.classList?.contains("card")) return;
+    const card = e.target.closest(".card[data-href]");
+    if (!card || !grid.contains(card)) return;
+    e.preventDefault();
+    window.location.href = card.dataset.href;
+  });
 
   function renderFilters() {
     const chips = ['<button class="chip active" data-tag="">Все</button>']
