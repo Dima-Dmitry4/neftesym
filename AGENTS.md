@@ -24,6 +24,11 @@ ressim_prototypes/
 │   ├── README.md              описание прототипа
 │   ├── docs/                  спецификация и план разработки
 │   └── tests/selftest.js      node-харнесс самотеста ядра физики
+├── v3_pebi/                   прототип ПЕБИ: МКЭ (RT0) на вороной-сетке
+│   ├── index.html             точка входа (скрипты в js/core и js/ui)
+│   ├── README.md              описание расчетной модели
+│   ├── vendor/                локальная копия d3-delaunay (без CDN)
+│   └── tests/run.js           node-харнесс тестов (53 проверки)
 ├── .nojekyll                  отключает Jekyll при публикации на GitVerse Pages
 ├── AGENTS.md                  этот файл
 ├── README.md                  краткое описание проекта и списка прототипов

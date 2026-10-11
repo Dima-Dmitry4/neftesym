@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ПЕБИ — двухфазная фильтрация: МКЭ на вороной-сетке</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">
+    <span class="logo">ПЕБИ</span>
+    <span class="subtitle">двухфазная фильтрация · МКЭ (RT0) · неструктурированная вороной-сетка</span>
+  </div>
+  <div id="statusbar">
+    <span class="stat" title="Модельное время"><label>время</label><b id="st-time">0 сут</b></span>
+    <span class="stat" title="Номер шага"><label>шаг</label><b id="st-step">0</b></span>
+    <span class="stat" title="Текущий шаг по времени"><label>dt</label><b id="st-dt">—</b></span>
+    <span class="stat" title="Число ячеек сетки"><label>ячеек</label><b id="st-cells">—</b></span>
+    <span class="stat" title="Невязка материального баланса воды, м3/сут"><label>баланс</label><b id="st-imb">—</b></span>
+    <span class="stat" title="Время расчета шага"><label>шаг, мс</label><b id="st-ms">—</b></span>
+  </div>
+</header>
+
+<main id="layout">
+  <aside id="sidebar">
+    <section class="card" id="run-card">
+      <h3>Управление расчетом</h3>
+      <div class="btn-row">
+        <button id="btn-play" class="btn primary">▶ Пуск</button>
+        <button id="btn-step" class="btn">Шаг</button>
+        <button id="btn-reset" class="btn">Сброс</button>
+      </div>
+      <div class="field">
+        <label>Скорость (шагов/кадр)</label>
+        <select id="sel-speed">
+          <option value="1">1 — плавно</option>
+          <option value="4" selected>4 — средне</option>
+          <option value="16">16 — быстро</option>
+          <option value="0">макс (бюджет 25 мс)</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="card well-card" id="well-0" data-well="0">
+      <h3><span class="dot injector"></span>Нагнетательная</h3>
+      <div class="field">
+        <label>Режим</label>
+        <select class="well-mode">
+          <option value="bhp">Забойное давление</option>
+          <option value="rate">Приемистость (поверхн.)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="well-slider-label">Забойное давление, бар</label>
+        <input type="range" class="well-slider" min="50" max="350" step="1" value="180">
+        <span class="well-value">180</span>
+      </div>
+      <div class="well-facts">
+        <span>факт. p<sub>wf</sub>: <b class="fact-pwf">—</b></span>
+        <span>приемистость: <b class="fact-q">—</b> м³/сут</span>
+      </div>
+    </section>
+
+    <section class="card well-card" id="well-1" data-well="1">
+      <h3><span class="dot producer"></span>Добывающая</h3>
+      <div class="field">
+        <label>Режим</label>
+        <select class="well-mode">
+          <option value="bhp">Забойное давление</option>
+          <option value="rate">Дебит жидкости (поверхн.)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="well-slider-label">Забойное давление, бар</label>
+        <input type="range" class="well-slider" min="50" max="350" step="1" value="120">
+        <span class="well-value">120</span>
+      </div>
+      <div class="well-facts">
+        <span>факт. p<sub>wf</sub>: <b class="fact-pwf">—</b></span>
+        <span>дебит жидкости: <b class="fact-q">—</b> м³/сут</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Сетка</h3>
+      <div class="field">
+        <label>Целевое число ячеек: <span id="cells-label">3000</span></label>
+        <input type="range" id="mesh-cells" min="800" max="10000" step="200" value="3000">
+      </div>
+      <div class="field">
+        <label>Радиус уплотнения к скважинам: <span id="grad-label">130 м</span></label>
+        <input type="range" id="mesh-grad" min="50" max="250" step="10" value="130">
+      </div>
+      <div class="btn-row">
+        <button id="btn-rebuild" class="btn">Перестроить сетку</button>
+      </div>
+      <div class="hint">Перестроение сбрасывает расчет. Ячейки у стволов ~3 м, вдали — крупнее.</div>
+    </section>
+
+    <section class="card">
+      <h3>Пласт и флюиды <span class="hint-inline">(изменение — сброс)</span></h3>
+      <div class="props-grid" id="props-grid">
+        <label>Прониц., мД<input class="prop" data-p="rock.k" type="number" step="1" value="100"></label>
+        <label>Пористость<input class="prop" data-p="rock.phi" type="number" step="0.01" value="0.2"></label>
+        <label>Толщина, м<input class="prop" data-p="domain.h" type="number" step="1" value="10"></label>
+        <label>μ воды, сП<input class="prop" data-p="fluid.muw" type="number" step="0.05" value="0.5"></label>
+        <label>μ нефти, сП<input class="prop" data-p="fluid.muo" type="number" step="0.1" value="2"></label>
+        <label>k_rw0<input class="prop" data-p="fluid.krw0" type="number" step="0.05" value="0.3"></label>
+        <label>k_ro0<input class="prop" data-p="fluid.kro0" type="number" step="0.05" value="1"></label>
+        <label>n воды<input class="prop" data-p="fluid.nw" type="number" step="0.5" value="2"></label>
+        <label>n нефти<input class="prop" data-p="fluid.no" type="number" step="0.5" value="2"></label>
+        <label>S_wc<input class="prop" data-p="fluid.swc" type="number" step="0.01" value="0.2"></label>
+        <label>S_or<input class="prop" data-p="fluid.sor" type="number" step="0.01" value="0.2"></label>
+        <label>c воды, 1/бар<input class="prop" data-p="fluid.cw" type="number" step="0.1e-5" value="0.000044"></label>
+        <label>c нефти, 1/бар<input class="prop" data-p="fluid.co" type="number" step="0.1e-5" value="0.0001"></label>
+        <label>c породы, 1/бар<input class="prop" data-p="rock.cr" type="number" step="0.1e-5" value="0.00005"></label>
+        <label>P нач., бар<input class="prop" data-p="init.p0" type="number" step="1" value="150"></label>
+      </div>
+    </section>
+  </aside>
+
+  <section id="map-area">
+    <div id="map-toolbar">
+      <div class="seg">
+        <button id="btn-field-p" class="segbtn active">Давление, бар</button>
+        <button id="btn-field-s" class="segbtn">Водонасыщенность</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="chk-grid"> сетка ячеек</label>
+      <span class="hint" id="map-hint">клик по скважине — выбор; слайдеры действуют сразу</span>
+    </div>
+    <div id="map-wrap">
+      <canvas id="map-canvas"></canvas>
+      <canvas id="legend-canvas" width="24" height="220"></canvas>
+      <div id="legend-labels"><span id="leg-max">—</span><span id="leg-title">p, бар</span><span id="leg-min">—</span></div>
+      <div id="tooltip" hidden></div>
+    </div>
+  </section>
+</main>
+
+<section id="charts">
+  <div class="chart-tile"><h4>Добыча: нефть / вода, м³/сут</h4><div id="ch1"></div></div>
+  <div class="chart-tile"><h4>Обводненность / приемистость</h4><div id="ch2"></div></div>
+  <div class="chart-tile"><h4>Давления, бар</h4><div id="ch3"></div></div>
+      <div class="chart-tile"><h4>Накопленная нефть, м³</h4><div id="ch4"></div></div>
+</section>
+
+<div id="toast" hidden></div>
+
+<script src="vendor/d3-delaunay.min.js"></script>
+<script src="js/core/sparse.js"></script>
+<script src="js/core/fluid.js"></script>
+<script src="js/core/mesh.js"></script>
+<script src="js/core/wells.js"></script>
+<script src="js/core/pressure.js"></script>
+<script src="js/core/transport.js"></script>
+<script src="js/core/timestepper.js"></script>
+<script src="js/core/engine.js"></script>
+<script src="js/ui/maps.js"></script>
+<script src="js/ui/charts.js"></script>
+<script src="js/ui/app.js"></script>
+</body>
+</html>

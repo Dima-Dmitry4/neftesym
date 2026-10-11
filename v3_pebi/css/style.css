@@ -1,0 +1,128 @@
+/* ПЕБИ — темная инженерная тема */
+:root {
+  --bg: #14171c;
+  --panel: #1c2129;
+  --panel2: #222834;
+  --border: #2e3644;
+  --text: #d7dde6;
+  --muted: #8a94a4;
+  --accent: #4da3ff;
+  --injector: #3f8cff;
+  --producer: #35c46f;
+  --warn: #ffb547;
+  --danger: #ff5c69;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ---------- шапка ---------- */
+#topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.logo { font-size: 19px; font-weight: 700; letter-spacing: 2px; color: var(--accent); }
+.subtitle { color: var(--muted); font-size: 12px; }
+#statusbar { display: flex; gap: 16px; }
+.stat { display: flex; flex-direction: column; align-items: flex-end; }
+.stat label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.stat b { font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* ---------- раскладка ---------- */
+#layout { display: flex; flex: 1 1 auto; min-height: 0; }
+#sidebar {
+  width: 305px; flex: 0 0 auto; overflow-y: auto; padding: 10px;
+  background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+}
+#map-area { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+
+/* ---------- карточки ---------- */
+.card { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.card h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
+.hint-inline { color: var(--muted); font-size: 10px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+.btn-row { display: flex; gap: 6px; }
+.btn {
+  flex: 1 1 auto; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: #2a3140; color: var(--text); cursor: pointer; font-size: 13px;
+}
+.btn:hover { background: #333c4e; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #0b1420; font-weight: 600; }
+.btn.primary.running { background: var(--warn); border-color: var(--warn); }
+
+.field { margin: 8px 0; }
+.field > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+select, input[type=number] {
+  width: 100%; padding: 5px 7px; background: #171c25; color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px; font-size: 12px;
+}
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+/* скважины */
+.well-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot.injector { background: var(--injector); }
+.dot.producer { background: var(--producer); }
+.well-facts { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+.well-facts b { color: var(--text); font-variant-numeric: tabular-nums; }
+.well-value { display: inline-block; min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* свойства */
+.props-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; }
+.props-grid label { font-size: 10.5px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.props-grid input { font-size: 11.5px; padding: 3px 5px; }
+
+/* ---------- карта ---------- */
+#map-toolbar {
+  display: flex; align-items: center; gap: 14px; padding: 6px 12px;
+  background: var(--panel); border-bottom: 1px solid var(--border); flex: 0 0 auto;
+}
+.seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segbtn { padding: 5px 12px; background: #2a3140; color: var(--text); border: 0; cursor: pointer; font-size: 12px; }
+.segbtn.active { background: var(--accent); color: #0b1420; font-weight: 600; }
+.chk { color: var(--muted); font-size: 12px; display: flex; gap: 5px; align-items: center; }
+#map-hint { margin-left: auto; }
+
+#map-wrap { position: relative; flex: 1 1 auto; min-height: 0; background: #0f1216; }
+#map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+#legend-canvas { position: absolute; right: 14px; top: 14px; bottom: 14px; height: auto; border-radius: 4px; }
+#legend-labels {
+  position: absolute; right: 44px; top: 14px; bottom: 14px;
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;
+  pointer-events: none; font-variant-numeric: tabular-nums;
+}
+#leg-title { font-size: 11px; color: var(--text); }
+#legend-labels span { font-size: 11px; color: var(--text); text-shadow: 0 1px 2px #000; }
+#tooltip {
+  position: absolute; pointer-events: none; background: #0b0e13ee; border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 9px; font-size: 11.5px; z-index: 5; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- графики ---------- */
+#charts {
+  flex: 0 0 205px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  padding: 8px; background: var(--panel); border-top: 1px solid var(--border);
+}
+.chart-tile { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px 2px; min-width: 0; display: flex; flex-direction: column; }
+.chart-tile h4 { margin: 0 0 2px; font-size: 11px; color: var(--muted); font-weight: 500; }
+.chart-tile > div { flex: 1 1 auto; min-height: 0; }
+
+/* ---------- прочее ---------- */
+#toast {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: #3a1216; color: #ffd7da; border: 1px solid var(--danger);
+  border-radius: 8px; padding: 9px 16px; z-index: 50; max-width: 70%;
+}
+#legend-title { font-size: 11px; color: var(--text); }
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-thumb { background: #333c4e; border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }

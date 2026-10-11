@@ -1,0 +1,10 @@
+'use strict';
+const Del = require('../vendor/d3-delaunay.min.js');
+const Pebi = {};
+Object.assign(Pebi, require('../js/core/mesh.js'));
+Object.assign(Pebi, require('../js/core/wells.js'));
+const params = { wells: [{ type: 'injector', x: 250, y: 250, rw: 0.1 }, { type: 'producer', x: 750, y: 250, rw: 0.1 }] };
+const mesh = Pebi.generate({ Lx: 1000, Ly: 500, wells: params.wells, sMin: 3, sMax: 31.1, RGrad: 130, seed: 42, lloydIters: 2 }, Del.Delaunay);
+console.log('N=', mesh.N);
+const ws = Pebi.createWells(mesh, params.wells, 100, 10);
+ws.forEach(w => console.log(w.type, 'cell=', w.cell, 'A=', mesh.cellArea[w.cell], 're=', w.re, 'WI=', w.WI, 'ratio=', w.re / w.rw, 'k=', 100, 'h=', 10));
