@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Разработка нефтяного месторождения — учебный симулятор</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --panel2:#162032; --line:#334155; --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --good:#34d399; --bad:#f87171; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; }
+  body { background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, sans-serif; overflow:hidden; }
+  button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--accent); }
+  button.active { background:var(--accent); color:#08203a; border-color:var(--accent); font-weight:600; }
+  input[type=range] { accent-color:var(--accent); }
+  .screen { display:none; height:100%; } .screen.visible { display:flex; flex-direction:column; }
+  h1 { font-size:20px; margin-bottom:6px; }
+  h2 { font-size:14px; color:var(--muted); margin:10px 0 6px; text-transform:uppercase; letter-spacing:.04em; }
+  .sub { color:var(--muted); margin-bottom:16px; }
+  .hidden { display:none !important; }
+
+  /* ---------- экран настроек ---------- */
+  #screen-settings { overflow:auto; align-items:flex-start; justify-content:center; }
+  .settings-box { width:min(960px, 96vw); margin:24px auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px 24px; }
+  .settings-cols { display:flex; gap:28px; flex-wrap:wrap; }
+  .settings-cols > div { flex:1; min-width:320px; }
+  #preview-canvas { border-radius:6px; border:1px solid var(--line); image-rendering:pixelated; width:100%; }
+  .prop-block div { padding:2px 0; }
+  .form-grid { display:grid; grid-template-columns:1fr 110px; gap:8px 10px; align-items:center; }
+  .form-grid label { color:var(--text); }
+  .form-grid input { background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:5px; padding:5px 8px; width:100%; font:inherit; }
+  .form-grid .hint { color:var(--muted); font-size:12px; grid-column:1 / span 2; margin-top:-4px; }
+  .settings-buttons { display:flex; gap:10px; margin-top:18px; }
+  button.primary { background:var(--accent); color:#08203a; border-color:var(--accent); font-weight:600; }
+  .selftest-out { margin-top:12px; background:#0b1120; border:1px solid var(--line); border-radius:6px; padding:10px; font:12px/1.5 ui-monospace, monospace; max-height:280px; overflow:auto; white-space:pre-wrap; }
+
+  /* ---------- экран игры ---------- */
+  #topbar { display:flex; align-items:center; gap:16px; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--line); }
+  .tb-group { display:flex; gap:4px; }
+  .tb-info { font-size:15px; }
+  #tb-money.good { color:var(--good); font-weight:600; }
+  #tb-money.bad { color:var(--bad); font-weight:600; }
+  .tb-right { margin-left:auto; display:flex; gap:6px; }
+  #gamemain { display:flex; gap:14px; padding:12px 14px; flex:1; min-height:0; }
+  #leftcol { flex:0 0 624px; display:flex; flex-direction:column; min-height:0; }
+  #rightcol { flex:1; min-width:380px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+  .layerbar { display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+  .layerbar .lbl { color:var(--muted); margin-right:2px; }
+  .layerbar button { padding:4px 10px; font-size:13px; }
+  #mapwrap { position:relative; }
+  #map-canvas { border-radius:8px; border:1px solid var(--line); cursor:crosshair; display:block; width:600px; height:600px; }
+  #map-tooltip { position:absolute; pointer-events:none; background:#0b1120ee; border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:12px; line-height:1.5; z-index:5; }
+  #map-scale { display:block; margin:2px 0 10px; }
+  .panel-title { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin:4px 0 6px; }
+  #wellpanel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; max-height:180px; overflow-y:auto; }
+  .w-dot { width:11px; height:11px; border-radius:50%; display:inline-block; vertical-align:-1px; }
+  .w-pwf { width:130px; }
+
+  .chart-card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px 6px; }
+  .chart-title { font-size:12.5px; color:var(--muted); margin-bottom:4px; }
+  .chart-card canvas { display:block; width:100%; height:auto; }
+
+  /* ---------- экран итогов ---------- */
+  #screen-results { overflow:auto; align-items:flex-start; justify-content:center; }
+  .results-box { width:min(860px, 96vw); margin:24px auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px 24px; }
+  #res-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin:14px 0; }
+  .kpi { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .kpi .k { color:var(--muted); font-size:12px; }
+  .kpi .v { font-size:19px; font-weight:600; margin-top:2px; }
+  #res-wells { margin:8px 0 16px; }
+  #res-wells table, #welltable { width:100%; border-collapse:collapse; font-size:13px; }
+  #res-wells th, #welltable th { text-align:left; color:var(--muted); font-weight:500; padding:3px 8px 6px 0; border-bottom:1px solid var(--line); }
+  #res-wells td, #welltable td { padding:5px 8px 5px 0; border-bottom:1px solid #22304a; }
+
+  /* ---------- toast ---------- */
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#0b1120; border:1px solid var(--accent); color:var(--text); border-radius:8px; padding:9px 16px; z-index:50; transition:opacity .25s; }
+  #toast.warn { border-color:var(--bad); }
+</style>
+</head>
+<body>
+<div id="screen-settings" class="screen visible">
+  <div class="settings-box">
+    <h1>Разработка нефтяного месторождения</h1>
+    <p class="sub">Учебный симулятор: IMPES-расчёт давления и насыщенности, скважины по Писману</p>
+    <div class="settings-cols">
+      <div>
+        <h2>Карта проницаемости</h2>
+        <canvas id="preview-canvas" width="300" height="300"></canvas>
+        <div class="prop-block">
+          <h2>Свойства пласта</h2>
+          <div id="props-read"></div>
+        </div>
+      </div>
+      <div>
+        <h2>Экономика и флюиды (можно менять)</h2>
+        <div class="form-grid" id="params-form"></div>
+        <div class="settings-buttons">
+          <button id="btn-selftest">Самотест физики (~5 с)</button>
+          <button id="btn-start" class="primary">Начать разработку</button>
+        </div>
+        <pre id="selftest-out" class="selftest-out hidden"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="screen-game" class="screen">
+  <header id="topbar">
+    <div class="tb-group">
+      <button id="sp-pause" class="active" title="Пауза">⏸</button>
+      <button id="sp-1" title="2 сут/с">×1</button>
+      <button id="sp-10" title="20 сут/с">×10</button>
+      <button id="sp-50" title="100 сут/с">×50</button>
+    </div>
+    <div id="tb-date" class="tb-info">—</div>
+    <div id="tb-money" class="tb-info">—</div>
+    <div class="tb-right">
+      <button id="btn-results">Итоги</button>
+    </div>
+  </header>
+  <main id="gamemain">
+    <section id="leftcol">
+      <div class="layerbar">
+        <span class="lbl">Слой:</span>
+        <button id="lay-k" class="active">Проницаемость</button>
+        <button id="lay-P">Давление</button>
+        <button id="lay-Sw">Насыщенность</button>
+        <span class="tb-right">
+          <button id="tool-prod">⛏ Добывающая</button>
+          <button id="tool-inj">▲ Нагнетательная</button>
+        </span>
+      </div>
+      <div id="mapwrap">
+        <canvas id="map-canvas" width="600" height="600"></canvas>
+        <div id="map-tooltip" class="hidden"></div>
+      </div>
+      <canvas id="map-scale" width="600" height="36"></canvas>
+      <div class="panel-title">Скважины <span id="wellcount"></span></div>
+      <div id="wellpanel"><table id="welltable">
+        <thead><tr><th></th><th>Скв.</th><th>P<sub>wf</sub>, атм</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+    <aside id="rightcol">
+      <div class="chart-card"><div class="chart-title">Дебит нефти, т/сут</div><canvas id="chart-rate" width="380" height="160"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Среднее пластовое давление, атм</div><canvas id="chart-p" width="380" height="160"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Забойные давления, атм</div><canvas id="chart-pwf" width="380" height="160"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Накопленная добыча нефти, тыс. т</div><canvas id="chart-cum" width="380" height="160"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Баланс, млн руб</div><canvas id="chart-money" width="380" height="160"></canvas></div>
+    </aside>
+  </main>
+</div>
+
+<div id="screen-results" class="screen">
+  <div class="results-box">
+    <h1 id="res-title">Итоги разработки</h1>
+    <div id="res-grid"></div>
+    <h2>По скважинам</h2>
+    <div id="res-wells"></div>
+    <div class="settings-buttons">
+      <button id="btn-continue" class="primary">Продолжить (песочница)</button>
+      <button id="btn-restart">Начать заново</button>
+    </div>
+  </div>
+</div>
+<div id="toast" class="hidden"></div>
+
+<script id="sim-core">
+"use strict";
+// =====================================================================
+// sim-core: чистое ядро симуляции (без DOM). Тестируется node-харнессом
+// tests/selftest.js: он вырезает этот скрипт и исполняет в vm-песочнице.
+// В браузере ядро доступно как globalThis.OILCORE.
+// Соглашения: давление атм; проницаемость мД; вязкость сП; время сут;
+// дебиты и объёмы м³/сут и м³ (пластовые, FVF=1); нефть в тонны — только
+// на выводе (rho=0.86 т/м³). Знак дебита скважины: q>0 — отбор из пласта
+// (для нагнетательной храним закачку как w.q>0 и учитываем стоком).
+// =====================================================================
+function registerCore(api) { globalThis.OILCORE = api; }
+// ---------- Константы и параметры ----------
+const CONV_K = 0.00864; // м³/сут·сП /(мД·м·атм): q = CONV_K·k·(A/L)·ΔP/μ (выведено из СИ, сверено с Писманом)
+const GRID = { nx: 50, ny: 50, dx: 40, h: 10, phi: 0.2 };
+const DEFAULT_PARAMS = {
+  mu_o: 5,            // сП
+  price_oil: 10000,   // руб/т (netback)
+  drill_cost: 10e6,   // руб за скважину
+  lift_cost: 500,     // руб/м³ жидкости
+  inj_cost: 300,      // руб/м³ закачки
+  horizon_days: 3650, // 10 лет
+  init_money: 50e6,   // стартовый капитал, руб
+};
+
+// ---------- ГПСЧ (детерминированный seed) ----------
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0);
+  };
+}
+function gauss(rng) { // Box–Muller
+  const u = (rng() + 1) / 4294967297 || 1e-12, v = rng() / 4294967296;
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// ---------- Геология ----------
+function buildReservoir(params) {
+  const { nx, ny, dx, h, phi } = GRID;
+  const rng = mulberry32(20260915);
+  const cx = (nx - 1) / 2, cy = (ny - 1) / 2;
+  const active = new Uint8Array(nx * ny), k = new Float64Array(nx * ny);
+  // русло: синусоидальный канал через поле
+  const river = (i) => cy + 6 * Math.sin((i / nx) * 2 * Math.PI) + 3 * Math.sin(i / 7.0);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const c = j * nx + i;
+      // контур нефтеносности: эллипс с гармоническими возмущениями
+      const th = Math.atan2((j - cy) / 19, (i - cx) / 24);
+      const wob = 1 + 0.10 * Math.sin(3 * th + 0.7) + 0.06 * Math.sin(5 * th - 1.3);
+      const ri = Math.hypot((i - cx) / 24, (j - cy) / 19);
+      if (ri / wob < 1) {
+        active[c] = 1;
+        const kbg = Math.min(150, Math.max(15, 20 * Math.exp(0.7 * gauss(rng)))); // фон 15–150 мД
+        const inRiver = Math.abs(j - river(i)) < 2.6;
+        const kch = 300 + 500 * (rng() / 4294967296); // канал 300–800 мД
+        k[c] = inRiver ? Math.max(kch, kbg) : kbg;
+      }
+    }
+  }
+  const poreVol = new Float64Array(nx * ny);
+  const cells = [];
+  for (let c = 0; c < nx * ny; c++)
+    if (active[c]) { poreVol[c] = dx * dx * h * phi; cells.push(c); }
+  const ooipM3 = cells.reduce((s, c) => s + poreVol[c] * (1 - 0.2), 0);
+  return { nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1,
+           Swc: 0.2, Sor: 0.25, rho_oil: 0.86, active, k, poreVol, ooipM3, cells };
+}
+
+// связность активной области по 4-соседям
+function isConnected(r) {
+  const NB = (c) => [c % r.nx > 0 ? c - 1 : -1, c % r.nx < r.nx - 1 ? c + 1 : -1, c - r.nx, c + r.nx];
+  const seen = new Uint8Array(r.nx * r.ny);
+  const queue = [r.cells[0]]; seen[r.cells[0]] = 1;
+  let cnt = 1;
+  while (queue.length) {
+    const c = queue.pop();
+    for (const nb of NB(c)) if (nb >= 0 && r.active[nb] && !seen[nb]) { seen[nb] = 1; cnt++; queue.push(nb); }
+  }
+  return cnt === r.cells.length;
+}
+
+// ---------- Тесты ----------
+function reservoirTests() {
+  const out = [];
+  const r = buildReservoir(DEFAULT_PARAMS);
+  const nAct = r.cells.length;
+  out.push({ name: "геология: сетка 50x50", pass: r.nx === 50 && r.ny === 50 });
+  const frac = nAct / (50 * 50);
+  out.push({ name: "геология: активная доля 0.5–0.7", pass: frac > 0.5 && frac < 0.7,
+             details: `frac=${frac.toFixed(2)}` });
+  let kmin = 1e9, kmax = 0, ksum = 0;
+  for (const c of r.cells) { kmin = Math.min(kmin, r.k[c]); kmax = Math.max(kmax, r.k[c]); ksum += r.k[c]; }
+  out.push({ name: "геология: k в [10, 900] мД", pass: kmin >= 10 && kmax <= 900,
+             details: `k=[${kmin.toFixed(0)}, ${kmax.toFixed(0)}] мД, среднее ${(ksum / nAct).toFixed(0)}` });
+  const r2 = buildReservoir(DEFAULT_PARAMS);
+  let same = true;
+  for (let c = 0; c < r.k.length; c++) if (r.k[c] !== r2.k[c]) { same = false; break; }
+  out.push({ name: "геология: детерминизм (seed)", pass: same });
+  const pvSum = r.cells.reduce((s, c) => s + r.poreVol[c], 0);
+  const ooipErr = Math.abs(r.ooipM3 - pvSum * (1 - r.Swc)) / r.ooipM3;
+  out.push({ name: "геология: OOIP = Vp·(1-Swc)", pass: ooipErr < 1e-9,
+             details: `OOIP=${(r.ooipM3 / 1e6).toFixed(2)} млн м³` });
+  out.push({ name: "геология: активная область связна", pass: isConnected(r) });
+  return out;
+}
+
+// ---------- ОФП, дробное течение, индекс скважины ----------
+// Линейные «поршневые» ОФП: krw от 0 при Swc до 1 при 1-Sor, kro зеркально.
+function krw(Sw, r) { const s = (Sw - r.Swc) / (1 - r.Swc - r.Sor); return Math.max(0, Math.min(1, s)); }
+function kro(Sw, r) { const s = (1 - r.Sor - Sw) / (1 - r.Swc - r.Sor); return Math.max(0, Math.min(1, s)); }
+function fw(Sw, r) {
+  const a = krw(Sw, r) / r.mu_w, b = kro(Sw, r) / r.mu_o;
+  return (a + b) > 0 ? a / (a + b) : 0;
+}
+function lambdaT(Sw, r) { return krw(Sw, r) / r.mu_w + kro(Sw, r) / r.mu_o; }
+// Писман: q = WI·λt·(P_яч − Pwf), re = 0.2·Δ = 8 м, rw = 0.1 м, skin = 0
+function wellIndex(k, r) { return CONV_K * 2 * Math.PI * k * r.h / Math.log(8 / 0.1); }
+
+// ---------- Симуляция: давление ----------
+const NB = (c, r) => [c % r.nx > 0 ? c - 1 : -1, c % r.nx < r.nx - 1 ? c + 1 : -1,
+                      c - r.nx, c + r.nx]; // [запад, восток, юг, север]; -1 = вне сетки
+
+function createSim(reservoir, params) {
+  const r = reservoir, N = r.cells.length;
+  const sim = {
+    r, params,
+    P: new Float64Array(r.nx * r.ny).fill(r.P0),
+    Sw: new Float64Array(r.nx * r.ny).fill(r.Swc),
+    wells: [],
+    t: 0, cumProdM3: 0,
+    history: { days: [] },          // посуточные снимки (заполняется в advance)
+    lastCG: { iters: 0, resid: 0, rhs0: 1 },
+    _rowOf: new Int32Array(r.nx * r.ny).fill(-1), // ячейка → строка матрицы
+    _Te: new Float64Array(r.nx * r.ny),           // проводимость восточной грани ячейки
+    _Tn: new Float64Array(r.nx * r.ny),           // проводимость северной грани ячейки
+    _uE: new Float64Array(r.nx * r.ny),           // поток на восток (м³/сут, >0 из ячейки)
+    _uN: new Float64Array(r.nx * r.ny),           // поток на север
+    _lastSolveT: null, _fluxValid: false,
+    _x: new Float64Array(N), _Ap: new Float64Array(N),
+    _res: new Float64Array(N), _z: new Float64Array(N), _pk: null,
+    _diag: new Float64Array(N), _b: new Float64Array(N),
+  };
+  r.cells.forEach((c, idx) => (sim._rowOf[c] = idx));
+  sim.addWell = (c, type, pwf) => {
+    if (!r.active[c]) throw new Error("ячейка вне контура");
+    if (sim.wells.some((w) => w.cell === c)) throw new Error("ячейка занята");
+    sim.wells.push({ cell: c, type, pwf, q: 0, qo: 0, qw: 0,
+                     cum: { oil: 0, water: 0, inj: 0 } });
+  };
+  sim.economy = createEconomy(params);
+  sim.avgPressure = () => {
+    let s = 0, v = 0;
+    for (const c of r.cells) { s += r.poreVol[c] * sim.P[c]; v += r.poreVol[c]; }
+    return s / v;
+  };
+  return sim;
+}
+
+// Проводимости граней: λt — арифметическое среднее соседей (симметрия для CG;
+// upstream-λ используется только в переносе насыщенности).
+function buildFaceT(sim) {
+  const r = sim.r, { _Te: Te, _Tn: Tn, Sw } = sim;
+  Te.fill(0); Tn.fill(0);
+  for (const c of r.cells) {
+    const e = c + 1, n = c + r.nx;
+    if (r.nx > 0 && c % r.nx < r.nx - 1 && r.active[e]) {
+      const kH = (2 * r.k[c] * r.k[e]) / (r.k[c] + r.k[e]);
+      Te[c] = CONV_K * kH * r.h * 0.5 * (lambdaT(Sw[c], r) + lambdaT(Sw[e], r));
+    }
+    if (n < r.nx * r.ny && r.active[n]) {
+      const kH = (2 * r.k[c] * r.k[n]) / (r.k[c] + r.k[n]);
+      Tn[c] = CONV_K * kH * r.h * 0.5 * (lambdaT(Sw[c], r) + lambdaT(Sw[n], r));
+    }
+  }
+}
+
+// Неявное давление: (acc+ΣT+G)·P_i − ΣT·P_nb = acc·P_old + G·Pwf.
+// Матрично-свободный CG с Якоби-предобуславливателем и warm start.
+function solvePressure(sim, dt) {
+  const r = sim.r, N = r.cells.length;
+  const { _x: x, _Ap: Ap, _res: res, _z: z, _diag: diag, _b: b, _Te: Te, _Tn: Tn } = sim;
+  const Pold = sim.P;
+  buildFaceT(sim);
+  for (let idx = 0; idx < N; idx++) {
+    const c = r.cells[idx];
+    const acc = r.poreVol[c] * r.ct / dt;
+    let d = acc;
+    if (Te[c] > 0) d += Te[c];
+    if (Tn[c] > 0) d += Tn[c];
+    if (c % r.nx > 0 && Te[c - 1] > 0) d += Te[c - 1];
+    if (c - r.nx >= 0 && Tn[c - r.nx] > 0) d += Tn[c - r.nx];
+    diag[idx] = d;
+    b[idx] = acc * Pold[c];
+  }
+  for (const w of sim.wells) {
+    const idx = sim._rowOf[w.cell];
+    const G = wellIndex(r.k[w.cell], r) * lambdaT(sim.Sw[w.cell], r);
+    diag[idx] += G;
+    b[idx] += G * w.pwf;
+  }
+  const applyA = (v, out) => {
+    for (let idx = 0; idx < N; idx++) {
+      const c = r.cells[idx];
+      let s = diag[idx] * v[idx];
+      if (Te[c] > 0) s -= Te[c] * v[sim._rowOf[c + 1]];
+      if (Tn[c] > 0) s -= Tn[c] * v[sim._rowOf[c + r.nx]];
+      if (c % r.nx > 0 && Te[c - 1] > 0) s -= Te[c - 1] * v[sim._rowOf[c - 1]];
+      if (c - r.nx >= 0 && Tn[c - r.nx] > 0) s -= Tn[c - r.nx] * v[sim._rowOf[c - r.nx]];
+      out[idx] = s;
+    }
+  };
+  for (let idx = 0; idx < N; idx++) x[idx] = Pold[r.cells[idx]]; // warm start
+  applyA(x, Ap);
+  let rhs2 = 0;
+  for (let idx = 0; idx < N; idx++) { res[idx] = b[idx] - Ap[idx]; rhs2 += b[idx] * b[idx]; }
+  const rhs0 = Math.sqrt(rhs2) || 1;
+  let rz = 0, r2 = 0;
+  for (let idx = 0; idx < N; idx++) { z[idx] = res[idx] / diag[idx]; rz += res[idx] * z[idx]; r2 += res[idx] * res[idx]; }
+  let pk = sim._pk && sim._pk.length === N ? sim._pk : (sim._pk = new Float64Array(N));
+  for (let idx = 0; idx < N; idx++) pk[idx] = z[idx];
+  let iters = 0, resid = Math.sqrt(r2);
+  while (resid > 1e-6 * rhs0 && iters < 500) {
+    applyA(pk, Ap);
+    let pAp = 0;
+    for (let idx = 0; idx < N; idx++) pAp += pk[idx] * Ap[idx];
+    const ak = rz / pAp;
+    for (let idx = 0; idx < N; idx++) { x[idx] += ak * pk[idx]; res[idx] -= ak * Ap[idx]; }
+    let rzNew = 0;
+    r2 = 0;
+    for (let idx = 0; idx < N; idx++) { z[idx] = res[idx] / diag[idx]; rzNew += res[idx] * z[idx]; r2 += res[idx] * res[idx]; }
+    const bk = rzNew / rz;
+    for (let idx = 0; idx < N; idx++) pk[idx] = z[idx] + bk * pk[idx];
+    rz = rzNew;
+    resid = Math.sqrt(r2);
+    iters++;
+  }
+  sim.lastCG = { iters, resid, rhs0 };
+  for (let idx = 0; idx < N; idx++) sim.P[r.cells[idx]] = x[idx];
+}
+
+// ---------- Дебиты скважин (Писман, клампы направления) ----------
+// Соглашение о знаках: для добывающей w.q>0 — отбор жидкости; для нагнетательной
+// w.q>0 — закачка воды. Расщепление фаз — по подвижностям ячейки.
+function updateWellRates(sim) {
+  const r = sim.r;
+  for (const w of sim.wells) {
+    const G = wellIndex(r.k[w.cell], r) * lambdaT(sim.Sw[w.cell], r);
+    const dp = w.type === "prod" ? sim.P[w.cell] - w.pwf : w.pwf - sim.P[w.cell];
+    const q = Math.max(0, G * dp);
+    w.q = q;
+    if (w.type === "prod") {
+      const lo = kro(sim.Sw[w.cell], r) / r.mu_o, lw = krw(sim.Sw[w.cell], r) / r.mu_w, s = lo + lw;
+      w.qo = s > 0 ? q * lo / s : 0;
+      w.qw = s > 0 ? q * lw / s : 0;
+    } else { w.qo = 0; w.qw = q; }
+    w.fw = w.q > 0 ? w.qw / w.q : 0;
+  }
+}
+
+// ---------- advance (давление; насыщенность подключается в Task 6) ----------
+// Полный IMPES-цикл: давление неявно раз в сутки, насыщенность явно субшагами CFL.
+function computeFaceFluxes(sim) {
+  const r = sim.r, { _Te: Te, _Tn: Tn, _uE: uE, _uN: uN, P } = sim;
+  for (const c of r.cells) {
+    uE[c] = Te[c] > 0 ? Te[c] * (P[c] - P[c + 1]) : 0;          // >0: из c на восток
+    uN[c] = Tn[c] > 0 ? Tn[c] * (P[c] - P[c + r.nx]) : 0;       // >0: из c на север
+  }
+}
+function transportSubstep(sim, dt) {
+  const r = sim.r, { _uE: uE, _uN: uN, Sw } = sim;
+  const dSw = sim._dSw || (sim._dSw = new Float64Array(r.nx * r.ny));
+  dSw.fill(0);
+  for (const c of r.cells) {
+    let netWat = 0;
+    if (c % r.nx > 0 && r.active[c - 1]) {         // западная грань = восточная грань c-1
+      const u = uE[c - 1];
+      netWat += u > 0 ? u * fw(Sw[c - 1], r) : u * fw(Sw[c], r);
+    }
+    if (c % r.nx < r.nx - 1 && r.active[c + 1]) {  // восточная грань
+      const u = uE[c];
+      netWat += u > 0 ? -u * fw(Sw[c], r) : -u * fw(Sw[c + 1], r);
+    }
+    if (c - r.nx >= 0 && r.active[c - r.nx]) {     // южная грань = северная грань c-nx
+      const u = uN[c - r.nx];
+      netWat += u > 0 ? u * fw(Sw[c - r.nx], r) : u * fw(Sw[c], r);
+    }
+    if (c + r.nx < r.nx * r.ny && r.active[c + r.nx]) { // северная грань
+      const u = uN[c];
+      netWat += u > 0 ? -u * fw(Sw[c], r) : -u * fw(Sw[c + r.nx], r);
+    }
+    dSw[c] += netWat * dt / r.poreVol[c];
+  }
+  for (const w of sim.wells) {
+    if (w.type === "inj") dSw[w.cell] += (w.q * dt) / r.poreVol[w.cell];
+    else dSw[w.cell] -= (w.qw * dt) / r.poreVol[w.cell];
+  }
+  for (const c of r.cells)
+    Sw[c] = Math.min(1 - r.Sor, Math.max(r.Swc, Sw[c] + dSw[c])); // кламп — страховка
+}
+function cflLimit(sim) {
+  const r = sim.r, { _uE: uE, _uN: uN } = sim;
+  let dt = 2;
+  for (const c of r.cells) {
+    let inflow = 0;
+    if (c % r.nx > 0 && r.active[c - 1] && uE[c - 1] > 0) inflow += uE[c - 1];
+    if (c % r.nx < r.nx - 1 && r.active[c + 1] && uE[c] < 0) inflow -= uE[c];
+    if (c - r.nx >= 0 && r.active[c - r.nx] && uN[c - r.nx] > 0) inflow += uN[c - r.nx];
+    if (c + r.nx < r.nx * r.ny && r.active[c + r.nx] && uN[c] < 0) inflow -= uN[c];
+    for (const w of sim.wells) if (w.cell === c && w.type === "inj") inflow += w.q;
+    if (inflow > 0) dt = Math.min(dt, (0.25 * r.poreVol[c]) / inflow);
+  }
+  return dt;
+}
+function recordHistory(sim) {
+  const h = sim.history.days;
+  while (h.length < Math.floor(sim.t + 1e-9)) {
+    h.push({
+      t: h.length + 1, avgP: sim.avgPressure(),
+      cumOilM3: sim.wells.reduce((s, w) => s + w.cum.oil, 0),
+      money: sim.economy ? sim.economy.balance : null,
+      wells: sim.wells.map((w) => ({ qo: w.qo, qw: w.qw, q: w.q, fw: w.fw, pwf: w.pwf })),
+    });
+  }
+}
+function advance(sim, days) {
+  let remaining = days;
+  while (remaining > 1e-9) {
+    // давление: при первом входе или если с последнего решения прошло ≥ 1 суток
+    const sinceSolve = sim.t - (sim._lastSolveT ?? -1e9);
+    if (!sim._fluxValid || sinceSolve >= 1 - 1e-9) {
+      const dtP = sim._fluxValid ? sinceSolve : Math.min(1, remaining);
+      solvePressure(sim, Math.max(1e-9, dtP));
+      sim._lastSolveT = sim.t;
+      sim._fluxValid = true;
+      computeFaceFluxes(sim);
+      updateWellRates(sim);
+    }
+    const dtSub = Math.min(2, cflLimit(sim), remaining);
+    // кумулятивы — теми же дебитами, что использованы в transportSubstep (до пересчёта)
+    for (const w of sim.wells) {
+      if (w.type === "prod") {
+        sim.cumProdM3 += w.q * dtSub;
+        w.cum.oil += w.qo * dtSub; w.cum.water += w.qw * dtSub;
+      } else { w.cum.inj += w.q * dtSub; }
+    }
+    transportSubstep(sim, dtSub);
+    updateWellRates(sim); // расщепление фаз зависит от Sw
+    if (sim.economy) sim.economy.update(dtSub, sim.wells); // подключается в Task 7
+    sim.t += dtSub;
+    remaining -= dtSub;
+    recordHistory(sim);
+  }
+}
+function simStats(sim) {
+  const r = sim.r;
+  const cumOilM3 = sim.wells.reduce((s, w) => s + w.cum.oil, 0);
+  const cumWatM3 = sim.wells.reduce((s, w) => s + w.cum.water, 0);
+  const cumInjM3 = sim.wells.reduce((s, w) => s + w.cum.inj, 0);
+  let q = 0, qw = 0;
+  for (const w of sim.wells) if (w.type === "prod") { q += w.q; qw += w.qw; }
+  return { avgP: sim.avgPressure(), cumOilM3, cumWatM3, cumInjM3,
+           waterCut: q > 0 ? qw / q : 0, ooipM3: r.ooipM3,
+           recovery: cumOilM3 / r.ooipM3, day: sim.t };
+}
+// оценка порового объёма коридора между двумя скважинами (для теста времени прорыва)
+function estimatePathPV(sim, c1, c2) {
+  const r = sim.r;
+  const p1 = { x: c1 % r.nx, y: Math.floor(c1 / r.nx) };
+  const p2 = { x: c2 % r.nx, y: Math.floor(c2 / r.nx) };
+  const vx = p2.x - p1.x, vy = p2.y - p1.y, len2 = vx * vx + vy * vy;
+  let pv = 0;
+  for (const c of r.cells) {
+    const px = (c % r.nx) - p1.x, py = Math.floor(c / r.nx) - p1.y;
+    const tt = len2 > 0 ? Math.max(0, Math.min(1, (px * vx + py * vy) / len2)) : 0;
+    const dx = px - tt * vx, dy = py - tt * vy;
+    if (Math.hypot(dx, dy) < 2.5) pv += r.poreVol[c];
+  }
+  return pv;
+}
+
+// ---------- Тесты ОФП ----------
+function relPermTests() {
+  const r = buildReservoir(DEFAULT_PARAMS);
+  const t = [];
+  const close = (a, b, eps) => Math.abs(a - b) < eps;
+  t.push({ name: "ОФП: kro=1 при Sw=Swc", pass: close(kro(r.Swc, r), 1, 1e-12) });
+  t.push({ name: "ОФП: krw=0 при Sw=Swc", pass: close(krw(r.Swc, r), 0, 1e-12) });
+  t.push({ name: "ОФП: krw=1 при Sw=1-Sor", pass: close(krw(1 - r.Sor, r), 1, 1e-12) });
+  t.push({ name: "ОФП: kro=0 при Sw=1-Sor", pass: close(kro(1 - r.Sor, r), 0, 1e-12) });
+  // при Sw=0.5: krw=(0.5-0.2)/0.55=0.54545, kro=(0.75-0.5)/0.55=0.45455;
+  // fw=(0.54545/1)/((0.54545/1)+(0.45455/5)) = 6/7
+  t.push({ name: "fw: значение при Sw=0.5 (μo=5)", pass: close(fw(0.5, r), 6 / 7, 1e-9),
+           details: `fw=${fw(0.5, r).toFixed(6)}` });
+  const wi = wellIndex(100, r);
+  t.push({ name: "WI: k=100 мД → ≈12.5 м³/сут/атм",
+           pass: close(wi, CONV_K * 2 * Math.PI * 100 * r.h / Math.log(80), 1e-9),
+           details: `WI=${wi.toFixed(3)} м³/сут/атм/(1/сП)` });
+  return t;
+}
+
+// ---------- Тесты давления ----------
+function materialBalance(sim) {
+  let withdrawn = sim.cumProdM3 - sim.wells.reduce((s, w) => s + w.cum.inj, 0); // чистый отбор
+  let expansion = 0; // упругое расширение: отбор = Σ Vp·ct·(P0 − P)
+  for (const c of sim.r.cells) expansion += sim.r.poreVol[c] * sim.r.ct * (sim.r.P0 - sim.P[c]);
+  return { withdrawn, expansion, err: (withdrawn - expansion) / Math.max(1, Math.abs(withdrawn)) };
+}
+function pressureTests() {
+  const t = [];
+  // 1) без скважин P не дрейфует
+  let sim = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  advance(sim, 30);
+  let dP = 0;
+  for (const c of sim.r.cells) dP = Math.max(dP, Math.abs(sim.P[c] - sim.r.P0));
+  t.push({ name: "P: дрейф без скважин < 0.01 атм (30 сут)", pass: dP < 0.01, details: `dP=${dP.toExponential(1)}` });
+  // 2) CG сходится, 1 добывающая Pwf=150
+  sim = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  sim.addWell(sim.r.cells[Math.floor(sim.r.cells.length * 0.4)], "prod", 150);
+  advance(sim, 1);
+  t.push({ name: "P: CG сошёлся за 1 сутки",
+           pass: sim.lastCG.iters < 500 && sim.lastCG.resid < 1e-6 * sim.lastCG.rhs0,
+           details: `iters=${sim.lastCG.iters}, rel=${(sim.lastCG.resid / sim.lastCG.rhs0).toExponential(1)}` });
+  // 3) материальный баланс 365 сут (одна добывающая)
+  sim = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  sim.addWell(sim.r.cells[Math.floor(sim.r.cells.length * 0.4)], "prod", 150);
+  advance(sim, 365);
+  const mb = materialBalance(sim);
+  t.push({ name: "P: материальный баланс < 1%", pass: Math.abs(mb.err) < 0.01,
+           details: `отбор=${(mb.withdrawn / 1e4).toFixed(1)}e4 м³, упругий запас=${(mb.expansion / 1e4).toFixed(1)}e4 м³, err=${(mb.err * 100).toFixed(3)}%` });
+  return t;
+}
+
+// ---------- Тесты скважин ----------
+function wellTests() {
+  const t = [];
+  const sim = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  const c = sim.r.cells.find((x) => sim.r.active[x]);
+  const c2 = sim.r.cells.find((x) => x !== c && sim.r.active[x]);
+  sim.addWell(c, "prod", 150);
+  sim.addWell(c2, "inj", 325);
+  solvePressure(sim, 1); // до updateWellRates Sw=Swc: kro=1, krw=0
+  updateWellRates(sim);
+  const wp = sim.wells[0], wi = sim.wells[1];
+  // ожидание — та же формула с фактическим P ячейки после solvePressure (депрессия)
+  const expect = wellIndex(sim.r.k[wp.cell], sim.r) * lambdaT(sim.r.Swc, sim.r) * (sim.P[wp.cell] - 150);
+  t.push({ name: "скв: дебит чистой нефти = формула Писмана",
+           pass: Math.abs(wp.q - expect) < 1e-9 * expect && wp.qw < 1e-9,
+           details: `q=${wp.q.toFixed(1)} м³/сут (ож. ${expect.toFixed(1)})` });
+  t.push({ name: "скв: закачка > 0, вся вода", pass: wi.q > 0 && wi.qw === wi.q && wi.qo === 0,
+           details: `q=${wi.q.toFixed(1)} м³/сут` });
+  const sim2 = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  sim2.addWell(sim2.r.cells[0], "prod", 250); // Pwf = P0 → q≈0
+  solvePressure(sim2, 1);
+  updateWellRates(sim2);
+  t.push({ name: "скв: кламп q≥0 для добывающей", pass: sim2.wells[0].q >= -1e-9,
+           details: `q=${sim2.wells[0].q.toExponential(1)}` });
+  return t;
+}
+
+// ---------- Тесты насыщенности ----------
+function saturationTests() {
+  const t = [];
+  // пара скважин, 730 сут: сохранение массы воды, стабилизация давления, прорыв
+  let sim = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  const mid = sim.r.cells[Math.floor(sim.r.cells.length / 2)];
+  const far = sim.r.cells[sim.r.cells.length - 10];
+  sim.addWell(far, "prod", 100);
+  sim.addWell(mid, "inj", 375);
+  advance(sim, 730);
+  let swVol0 = 0, swVol = 0;
+  for (const c of sim.r.cells) { swVol0 += sim.r.poreVol[c] * sim.r.Swc; swVol += sim.r.poreVol[c] * sim.Sw[c]; }
+  const inj = sim.wells[1].cum.inj, prodW = sim.wells[0].cum.water;
+  const errW = (inj - (swVol - swVol0) - prodW) / Math.max(1, inj);
+  t.push({ name: "Sw: баланс воды < 0.1%", pass: Math.abs(errW) < 1e-3,
+           details: `закачано=${(inj / 1e3).toFixed(0)}e3, в пласте +${((swVol - swVol0) / 1e3).toFixed(0)}e3, добыто=${(prodW / 1e3).toFixed(0)}e3 м³, err=${(errW * 100).toFixed(3)}%` });
+  const h = sim.history.days, y2 = h[h.length - 1], y1 = h[h.length - 182];
+  const drift = Math.abs(y2.avgP - y1.avgP);
+  t.push({ name: "P: стабилизация при закачке", pass: simStats(sim).avgP > sim.r.P0 - 60 && drift < 15,
+           details: `avgP=${simStats(sim).avgP.toFixed(0)} атм, дрейф/полгода=${drift.toFixed(1)} атм` });
+  return t;
+}
+// сценарий прорыва: пара скважин на русле (k>250 мД) в ~10 колонках друг от друга
+function breakthroughScenario(sim) {
+  const r = sim.r;
+  const channelAt = (i) => {
+    for (let j = 0; j < r.ny; j++) { const c = j * r.nx + i; if (r.active[c] && r.k[c] > 250) return c; }
+    return -1;
+  };
+  for (let i = 5; i < r.nx - 12; i++) {
+    const a = channelAt(i), b = channelAt(i + 10);
+    if (a >= 0 && b >= 0 && Math.abs(a - b) <= 12 * r.nx) return [a, b];
+  }
+  return null;
+}
+function breakthroughTests() {
+  const t = [];
+  const sim = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  const pair = breakthroughScenario(sim);
+  t.push({ name: "Sw: сценарий прорыва найден", pass: pair !== null });
+  if (!pair) return t;
+  sim.addWell(pair[1], "prod", 80);
+  sim.addWell(pair[0], "inj", 375);
+  advance(sim, 730);
+  const h = sim.history.days;
+  // порог fw>0.5 ≈ прохождение фронта; оценка поршневого вытеснения:
+  // фронт доходит, когда закачано ≈ мобильный объём коридора (1-Swc-Sor)·PV
+  const btIdx = h.findIndex((d) => d.wells[0] && d.wells[0].fw > 0.5);
+  const bt = btIdx >= 0 ? h[btIdx].t : -1;
+  const pathPV = estimatePathPV(sim, pair[1], pair[0]);
+  const rateEst = sim.wells[1].cum.inj / 730;
+  const btEst = 0.55 * pathPV / rateEst;
+  const ratio = bt < 0 ? Infinity : bt / btEst;
+  t.push({ name: "Sw: фронт (fw=0.5) в [0.5, 2.5]×оценки", pass: ratio > 0.5 && ratio < 2.5,
+           details: `фронт=${bt} сут, оценка=${btEst.toFixed(0)} сут, ratio=${ratio.toFixed(2)}, закачка ср.=${rateEst.toFixed(0)} м³/сут` });
+  return t;
+}
+
+// ---------- Экономика (руб) ----------
+const RHO_OIL = 0.86; // т/м³ — используется и в геологии, и в экономике
+function createEconomy(params) {
+  const eco = {
+    balance: params.init_money,
+    revenue: 0, opex: 0, drillSpent: 0, drills: [], // drills — сутки бурений (для графика)
+    update(dt, wells) {
+      for (const w of wells) {
+        if (w.type === "prod") {
+          eco.revenue += w.qo * RHO_OIL * params.price_oil * dt; // нефть: м³→т→руб
+          eco.opex += w.q * params.lift_cost * dt;                // подъём всей жидкости
+        } else {
+          eco.opex += w.q * params.inj_cost * dt;                 // закачка воды
+        }
+      }
+      eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent;
+    },
+    drill(day) {
+      eco.drillSpent += params.drill_cost;
+      eco.drills.push(day);
+      eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent;
+    },
+  };
+  return eco;
+}
+
+// ---------- Тесты экономики ----------
+function economyTests() {
+  const t = [];
+  const eco = createEconomy(DEFAULT_PARAMS);
+  eco.update(10, [{ type: "prod", q: 100, qo: 60, qw: 40 }, { type: "inj", q: 80, qo: 0, qw: 80 }]);
+  const rev = 60 * 10 * 0.86 * 10000, lift = 100 * 10 * 500, inj = 80 * 10 * 300;
+  const expect = DEFAULT_PARAMS.init_money + rev - lift - inj;
+  t.push({ name: "экономика: арифметика суток", pass: Math.abs(eco.balance - expect) < 1e-6,
+           details: `balance=${eco.balance.toFixed(0)} (ож. ${expect.toFixed(0)})` });
+  const sim = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  sim.addWell(sim.r.cells[100], "prod", 150);
+  advance(sim, 365);
+  const e2 = sim.economy;
+  t.push({ name: "экономика: за год баланс = капитал + поток, история посуточно",
+           pass: sim.history.days.length >= 364 &&
+                 Math.abs(e2.balance - (DEFAULT_PARAMS.init_money + e2.revenue - e2.opex)) < 1e-6,
+           details: `money=${(e2.balance / 1e6).toFixed(1)} млн руб, дней=${sim.history.days.length}` });
+  return t;
+}
+
+registerCore({
+  VERSION: "0.7.0",
+  DEFAULT_PARAMS, GRID, CONV_K,
+  mulberry32, gauss, buildReservoir, isConnected,
+  krw, kro, fw, lambdaT, wellIndex,
+  createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
+  computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
+  createEconomy, RHO_OIL,
+  reservoirTests, relPermTests, pressureTests, wellTests,
+  saturationTests, breakthroughTests, economyTests,
+  runSelfTests() {
+    return [...reservoirTests(), ...relPermTests(), ...pressureTests(), ...wellTests(),
+            ...saturationTests(), ...breakthroughTests(), ...economyTests()];
+  },
+});
+</script>
+
+<script id="app">
+"use strict";
+// =====================================================================
+// app: UI — рендер карты, графики, экраны, игровой цикл. Ядро: OILCORE.
+// =====================================================================
+const C = globalThis.OILCORE;
+const $ = (id) => document.getElementById(id);
+const PALETTE = ["#f87171", "#fbbf24", "#34d399", "#60a5fa", "#c084fc", "#f472b6",
+                 "#a3e635", "#fb923c", "#22d3ee", "#e879f9"];
+
+const G = {
+  params: null, sim: null,
+  speed: 0, layer: "k", tool: null,
+  wellNames: { prod: 0, inj: 0 }, colorSeq: 0,
+  done: false, frameLast: 0, uiLast: 0,
+};
+
+function toast(msg, warn = false) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.toggle("warn", warn);
+  el.classList.remove("hidden");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.add("hidden"), 2600);
+}
+function fmtYears(days) {
+  const y = Math.floor(days / 365.25), m = Math.round((days - y * 365.25) / 30.44);
+  return m === 0 ? `${y} г` : `${y} г ${m} мес`;
+}
+
+// ---------------- цветовые шкалы ----------------
+function makeLut(stops) { // stops: [[r,g,b], ...] равномерно
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(t)), f = t - k;
+    for (let ch = 0; ch < 3; ch++)
+      lut[i * 3 + ch] = Math.round(stops[k][ch] + (stops[k + 1][ch] - stops[k][ch]) * f);
+  }
+  return lut;
+}
+const LUT_K = makeLut([[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]]);
+const LUT_P = makeLut([[59, 76, 192], [103, 169, 207], [247, 247, 247], [239, 138, 98], [180, 4, 38]]);
+const LUT_SW = makeLut([[180, 83, 9], [134, 99, 33], [58, 110, 82], [37, 84, 160], [29, 78, 216]]);
+
+// ---------------- рендер карты ----------------
+const R = {
+  cv: null, ctx: null, off: null, octx: null, img: null, contour: null,
+  init() {
+    this.cv = $("map-canvas"); this.ctx = this.cv.getContext("2d");
+    this.off = document.createElement("canvas");
+    this.cv.addEventListener("mousemove", (e) => this.hover(e));
+    this.cv.addEventListener("mouseleave", () => $("map-tooltip").classList.add("hidden"));
+    this.cv.addEventListener("click", (e) => this.click(e));
+  },
+  prep(sim) {
+    const r = sim.r;
+    this.off.width = r.nx; this.off.height = r.ny;
+    this.octx = this.off.getContext("2d");
+    this.img = this.octx.createImageData(r.nx, r.ny);
+    // контур: рёбра между активными и неактивными ячейками (в координатах ячеек)
+    const seg = [];
+    for (const c of r.cells) {
+      const i = c % r.nx, j = Math.floor(c / r.nx);
+      if (i === 0 || !r.active[c - 1]) seg.push([i, j, i, j + 1]);
+      if (i === r.nx - 1 || !r.active[c + 1]) seg.push([i + 1, j, i + 1, j + 1]);
+      if (j === 0 || !r.active[c - r.nx]) seg.push([i, j, i + 1, j]);
+      if (j === r.ny - 1 || !r.active[c + r.nx]) seg.push([i, j + 1, i + 1, j + 1]);
+    }
+    this.contour = seg;
+  },
+  fieldRange(sim) {
+    const r = sim.r;
+    if (G.layer === "k") return { min: 15, max: 800, log: true, unit: "мД (log)" };
+    if (G.layer === "P") {
+      let mn = 1e9, mx = -1e9;
+      for (const c of r.cells) { mn = Math.min(mn, sim.P[c]); mx = Math.max(mx, sim.P[c]); }
+      return { min: Math.floor(mn / 10) * 10, max: Math.ceil(mx / 10) * 10, unit: "атм" };
+    }
+    return { min: r.Swc, max: 1 - r.Sor, unit: "доли ед." };
+  },
+  fillImage(sim) {
+    const r = sim.r, d = this.img.data, range = this.fieldRange(sim);
+    for (let j = 0; j < r.ny; j++) {
+      for (let i = 0; i < r.nx; i++) {
+        const c = j * r.nx + i, p = c * 4;
+        if (!r.active[c]) { d[p] = 28; d[p + 1] = 37; d[p + 2] = 48; d[p + 3] = 255; continue; }
+        let v;
+        if (G.layer === "k") v = (Math.log10(r.k[c]) - Math.log10(range.min)) / (Math.log10(range.max) - Math.log10(range.min));
+        else if (G.layer === "P") v = (sim.P[c] - range.min) / (range.max - range.min);
+        else v = (sim.Sw[c] - range.min) / (range.max - range.min);
+        v = Math.max(0, Math.min(1, v));
+        const q = Math.round(v * 255) * 3;
+        const lut = G.layer === "k" ? LUT_K : G.layer === "P" ? LUT_P : LUT_SW;
+        d[p] = lut[q]; d[p + 1] = lut[q + 1]; d[p + 2] = lut[q + 2]; d[p + 3] = 255;
+      }
+    }
+    this.octx.putImageData(this.img, 0, 0);
+  },
+  draw(sim) {
+    if (!this.octx) this.prep(sim);
+    this.fillImage(sim);
+    const s = this.cv.width / sim.r.nx, ctx = this.ctx;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+    ctx.drawImage(this.off, 0, 0, this.cv.width, this.cv.height);
+    // контур
+    ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (const [x1, y1, x2, y2] of this.contour) {
+      ctx.moveTo(x1 * s, y1 * s); ctx.lineTo(x2 * s, y2 * s);
+    }
+    ctx.stroke();
+    // скважины
+    ctx.font = "600 11px system-ui"; ctx.textAlign = "center";
+    for (const w of sim.wells) {
+      const i = w.cell % sim.r.nx, j = Math.floor(w.cell / sim.r.nx);
+      const x = (i + 0.5) * s, y = (j + 0.5) * s;
+      ctx.lineWidth = 3; ctx.strokeStyle = w.color || "#fff"; ctx.fillStyle = "#fff";
+      if (w.type === "prod") {
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + 7, y + 5); ctx.lineTo(x - 7, y + 5);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.strokeText(w.name, x, y - 11);
+      ctx.fillText(w.name, x, y - 11);
+    }
+  },
+  drawScale(sim) {
+    const cv = $("map-scale"), ctx = cv.getContext("2d"), range = this.fieldRange(sim);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const x0 = 4, y0 = 8, w = cv.width - 8, h = 12;
+    const lut = G.layer === "k" ? LUT_K : G.layer === "P" ? LUT_P : LUT_SW;
+    for (let x = 0; x < w; x++) {
+      const q = Math.round((x / w) * 255) * 3;
+      ctx.fillStyle = `rgb(${lut[q]},${lut[q + 1]},${lut[q + 2]})`;
+      ctx.fillRect(x0 + x, y0, 1, h);
+    }
+    ctx.fillStyle = "#94a3b8"; ctx.font = "11px system-ui"; ctx.textAlign = "left";
+    const fmt = (v) => G.layer === "k" ? v.toFixed(0) : G.layer === "P" ? v.toFixed(0) : v.toFixed(2);
+    ctx.fillText(`${fmt(range.min)}`, x0, y0 + h + 12);
+    ctx.textAlign = "right"; ctx.fillText(`${fmt(range.max)} ${range.unit}`, x0 + w, y0 + h + 12);
+  },
+  cellAt(e) {
+    const rect = this.cv.getBoundingClientRect();
+    const i = Math.floor(((e.clientX - rect.left) / rect.width) * G.sim.r.nx);
+    const j = Math.floor(((e.clientY - rect.top) / rect.height) * G.sim.r.ny);
+    if (i < 0 || j < 0 || i >= G.sim.r.nx || j >= G.sim.r.ny) return -1;
+    return j * G.sim.r.nx + i;
+  },
+  hover(e) {
+    if (!G.sim) return;
+    const c = this.cellAt(e), tip = $("map-tooltip"), r = G.sim.r;
+    if (c < 0 || !r.active[c]) { tip.classList.add("hidden"); return; }
+    const i = c % r.nx, j = Math.floor(c / r.nx);
+    const w = G.sim.wells.find((x) => x.cell === c);
+    tip.innerHTML = `ячейка (${i}, ${j})<br>k = ${r.k[c].toFixed(0)} мД` +
+      `<br>P = ${G.sim.P[c].toFixed(1)} атм<br>Sw = ${G.sim.Sw[c].toFixed(2)} (So = ${(1 - G.sim.Sw[c]).toFixed(2)})` +
+      (w ? `<br><b>${w.name}</b>: Pwf = ${w.pwf.toFixed(0)} атм` : "");
+    tip.classList.remove("hidden");
+    const wrap = $("mapwrap").getBoundingClientRect();
+    let x = e.clientX - wrap.left + 14, y = e.clientY - wrap.top + 14;
+    if (x > wrap.width - 150) x -= 170;
+    if (y > wrap.height - 90) y -= 100;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  },
+  click(e) {
+    if (!G.sim || !G.tool) { if (!G.tool) toast("Сначала выберите инструмент бурения"); return; }
+    drillWell(this.cellAt(e));
+  },
+};
+
+// ---------------- бурение ----------------
+function drillWell(cell) {
+  const sim = G.sim, r = sim.r;
+  if (cell < 0) return;
+  if (!r.active[cell]) return toast("Вне контура нефтеносности", true);
+  if (sim.wells.some((w) => w.cell === cell)) return toast("В этой ячейке уже есть скважина", true);
+  const type = G.tool;
+  sim.economy.drill(sim.t);
+  const name = (type === "prod" ? "П" : "Н") + ++G.wellNames[type];
+  const color = PALETTE[G.colorSeq++ % PALETTE.length];
+  sim.addWell(cell, type, type === "prod" ? 150 : 325);
+  const w = sim.wells[sim.wells.length - 1];
+  w.name = name; w.color = color;
+  toast(`Пробурена ${name} (${type === "prod" ? "добывающая" : "нагнетательная"}), −${(G.params.drill_cost / 1e6).toFixed(0)} млн руб`);
+  renderWellTable(true);
+  drawAllCharts();
+}
+
+// ---------------- графики ----------------
+function lineChart(cv, cfg) {
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const mL = 46, mR = 8, mT = 8, mB = 20, pw = W - mL - mR, ph = H - mT - mB;
+  const n = cfg.series.length ? cfg.series[0].ys.length : 0;
+  ctx.font = "10px system-ui"; ctx.fillStyle = "#94a3b8";
+  if (!n) { ctx.textAlign = "center"; ctx.fillText("нет данных", W / 2, H / 2); return; }
+  let ymin = cfg.yMin, ymax = cfg.yMax;
+  if (ymin === undefined) {
+    ymin = Infinity; ymax = -Infinity;
+    for (const s of cfg.series) for (const v of s.ys) { if (v < ymin) ymin = v; if (v > ymax) ymax = v; }
+    if (!isFinite(ymin)) { ymin = 0; ymax = 1; }
+    if (ymax - ymin < 1e-9) { const c = ymax || 0; ymin = c - 1; ymax = c + 1; }
+    const pad = (ymax - ymin) * 0.08; ymin -= pad; ymax += pad;
+    if (cfg.y0 && ymin > 0) ymin = 0;
+  }
+  const xMax = cfg.xMax || n;
+  const X = (t) => mL + (t / xMax) * pw;
+  const Y = (v) => mT + ph - ((v - ymin) / (ymax - ymin)) * ph;
+  // сетка + подписи Y
+  ctx.textAlign = "right"; ctx.strokeStyle = "#26324a"; ctx.lineWidth = 1;
+  for (let k = 0; k <= 4; k++) {
+    const v = ymin + ((ymax - ymin) * k) / 4, y = Y(v);
+    ctx.beginPath(); ctx.moveTo(mL, y); ctx.lineTo(W - mR, y); ctx.stroke();
+    ctx.fillText(cfg.fmtY ? cfg.fmtY(v) : v.toFixed(0), mL - 4, y + 3);
+  }
+  // подписи X (годы)
+  ctx.textAlign = "center";
+  const yTicks = Math.max(1, Math.round(xMax / 365.25 / 4));
+  for (let yr = 0; yr * 365.25 <= xMax; yr += yTicks)
+    ctx.fillText(yr === 0 ? "0" : `${yr}`, X(yr * 365.25), H - 6);
+  if (xMax > 700) { ctx.textAlign = "left"; ctx.fillText("годы", W - mR - 34, H - 6); }
+  // отметки бурений
+  if (cfg.marks) {
+    ctx.strokeStyle = "#64748b"; ctx.setLineDash([2, 3]);
+    for (const m of cfg.marks) { const x = X(m); ctx.beginPath(); ctx.moveTo(x, mT); ctx.lineTo(x, mT + ph); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+  // пунктир (например, P0)
+  if (cfg.dashed !== undefined) {
+    ctx.strokeStyle = "#94a3b8"; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(mL, Y(cfg.dashed)); ctx.lineTo(W - mR, Y(cfg.dashed)); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // серии
+  const step = Math.max(1, Math.ceil(n / pw));
+  const idxs = [];
+  for (let k = 0; k < n; k += step) idxs.push(k);
+  if (idxs[idxs.length - 1] !== n - 1) idxs.push(n - 1);
+  if (cfg.stack) {
+    const cum = new Float64Array(n);
+    for (const s of cfg.series) {
+      ctx.beginPath();
+      let first = true;
+      for (const k of idxs) { const x = X(k + 1), y = Y(cum[k] + s.ys[k]); first ? ctx.moveTo(x, y) : ctx.lineTo(x, y); first = false; }
+      for (let q = idxs.length - 1; q >= 0; q--) { const k = idxs[q]; ctx.lineTo(X(k + 1), Y(cum[k])); }
+      ctx.closePath();
+      ctx.fillStyle = s.color + "8c"; ctx.fill();
+      for (let k = 0; k < n; k++) cum[k] += s.ys[k];
+    }
+    // суммарная линия
+    ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1.4; ctx.beginPath();
+    idxs.forEach((k, q) => { const x = X(k + 1), y = Y(cum[k]); q === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+  } else {
+    for (const s of cfg.series) {
+      ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 1.3; ctx.beginPath();
+      idxs.forEach((k, q) => { const x = X(k + 1), y = Y(s.ys[k]); q === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.stroke();
+    }
+  }
+}
+function histSeries(sim, pick) {
+  const h = sim.history.days;
+  const n = sim.wells.length ? h.length : 0;
+  const ys = new Array(n);
+  for (let k = 0; k < n; k++) ys[k] = pick(h[k]);
+  return ys;
+}
+function drawAllCharts() {
+  const sim = G.sim; if (!sim) return;
+  const h = sim.history.days, xMax = Math.max(G.params.horizon_days, sim.t);
+  const prods = sim.wells.filter((w) => w.type === "prod");
+  lineChart($("chart-rate"), {
+    stack: true, xMax,
+    series: prods.map((w) => ({ color: w.color, ys: histSeries(sim, (d) => (d.wells[w.idx] ? d.wells[w.idx].qo * 0.86 : 0)) })),
+    fmtY: (v) => v.toFixed(0), y0: true,
+  });
+  lineChart($("chart-p"), {
+    xMax, dashed: sim.r.P0,
+    series: [{ color: "#60a5fa", ys: h.map((d) => d.avgP), width: 1.6 }],
+    fmtY: (v) => v.toFixed(0),
+  });
+  lineChart($("chart-pwf"), {
+    xMax, yMin: 0, yMax: 390,
+    series: sim.wells.map((w) => ({ color: w.color, ys: histSeries(sim, (d) => (d.wells[w.idx] ? d.wells[w.idx].pwf : w.pwf)) })),
+    fmtY: (v) => v.toFixed(0),
+  });
+  lineChart($("chart-cum"), {
+    xMax,
+    series: [{ color: "#fbbf24", ys: h.map((d) => (d.cumOilM3 * 0.86) / 1000), width: 1.6 }],
+    fmtY: (v) => v.toFixed(0), y0: true,
+  });
+  const last = sim.economy.balance / 1e6;
+  lineChart($("chart-money"), {
+    xMax, marks: sim.economy.drills, y0: true,
+    series: [{ color: last >= 0 ? "#34d399" : "#f87171", ys: h.map((d) => d.money / 1e6), width: 1.6 }],
+    fmtY: (v) => v.toFixed(0),
+  });
+}
+
+// ---------------- панель скважин ----------------
+const wellRows = new Map(); // well → {tr, tdPwf, tdOil, tdWat, tdFw, slider, val}
+function renderWellTable(force = false) {
+  const sim = G.sim; if (!sim) return;
+  const tb = $("welltable").tBodies[0];
+  if (force || wellRows.size !== sim.wells.length) {
+    tb.innerHTML = ""; wellRows.clear();
+    sim.wells.forEach((w, idx) => {
+      w.idx = idx;
+      const tr = document.createElement("tr");
+      const rng = w.type === "prod" ? [1, 225] : [250, 375];
+      tr.innerHTML =
+        `<td><span class="w-dot" style="background:${w.color}"></span></td>` +
+        `<td>${w.name}</td>` +
+        `<td class="w-pwf"><input type="range" min="${rng[0]}" max="${rng[1]}" step="1" value="${w.pwf}">` +
+        `<span class="pwf-val">${w.pwf.toFixed(0)}</span></td>` +
+        `<td class="qo"></td><td class="qw"></td><td class="fw"></td>`;
+      const slider = tr.querySelector("input"), val = tr.querySelector(".pwf-val");
+      slider.addEventListener("input", () => { w.pwf = +slider.value; val.textContent = w.pwf.toFixed(0); });
+      tb.appendChild(tr);
+      wellRows.set(w, { slider, val, qo: tr.querySelector(".qo"), qw: tr.querySelector(".qw"), fw: tr.querySelector(".fw") });
+    });
+    $("wellcount").textContent = `(${sim.wells.length}: доб. ${sim.wells.filter((w) => w.type === "prod").length}, наг. ${sim.wells.filter((w) => w.type === "inj").length})`;
+  }
+  for (const w of sim.wells) {
+    const row = wellRows.get(w); if (!row) continue;
+    if (+row.slider.value !== Math.round(w.pwf)) { row.slider.value = w.pwf; row.val.textContent = w.pwf.toFixed(0); }
+    row.qo.textContent = (w.qo * 0.86).toFixed(1);
+    row.qw.textContent = w.qw.toFixed(1);
+    row.fw.textContent = (w.fw * 100).toFixed(0);
+  }
+}
+
+// ---------------- верхняя панель ----------------
+function updateTopbar() {
+  const sim = G.sim, p = G.params;
+  const elapsed = sim.t, total = p.horizon_days;
+  $("tb-date").textContent = G.done
+    ? `${fmtYears(elapsed)} (${Math.floor(elapsed)} сут) — песочница`
+    : `${fmtYears(elapsed)} (${Math.floor(elapsed)} / ${Math.floor(total)} сут)`;
+  const m = sim.economy.balance / 1e6;
+  const h = sim.history.days;
+  const d30 = h[Math.max(0, h.length - 31)];
+  const dm = d30 && d30.money !== null ? (sim.economy.balance - d30.money) / 1e6 : 0;
+  const el = $("tb-money");
+  el.textContent = `${m.toFixed(1)} млн руб (${dm >= 0 ? "+" : ""}${dm.toFixed(1)}/мес)`;
+  el.className = "tb-info " + (m >= 0 ? "good" : "bad");
+}
+
+// ---------------- игровой цикл ----------------
+function gameLoop(ts) {
+  requestAnimationFrame(gameLoop);
+  const dt = Math.min(0.1, Math.max(0, (ts - G.frameLast) / 1000));
+  G.frameLast = ts;
+  if (G.sim && G.speed > 0) {
+    C.advance(G.sim, Math.min(2.5, G.speed * dt));
+    if (!G.done && G.sim.t >= G.params.horizon_days - 1e-9) {
+      setSpeed(0); showResults();
+    }
+  }
+  if (G.sim) {
+    R.draw(G.sim); R.drawScale(G.sim); updateTopbar();
+    if (ts - G.uiLast > 250) { G.uiLast = ts; renderWellTable(); drawAllCharts(); }
+  }
+}
+function setSpeed(v) {
+  G.speed = v;
+  for (const [id, val] of [["sp-pause", 0], ["sp-1", 2], ["sp-10", 20], ["sp-50", 100]])
+    $(id).classList.toggle("active", G.speed === val);
+}
+
+// ---------------- экраны ----------------
+function show(id) {
+  for (const s of ["screen-settings", "screen-game", "screen-results"])
+    $(s).classList.toggle("visible", s === id);
+}
+function showResults() {
+  const sim = G.sim, st = C.simStats(sim), e = sim.economy;
+  const kpi = [
+    ["Накопленная добыча нефти", `${(st.cumOilM3 * 0.86 / 1e3).toFixed(1)} тыс. т`],
+    ["Извлечение от OOIP", `${(st.recovery * 100).toFixed(1)} %`],
+    ["Конечный баланс", `${(e.balance / 1e6).toFixed(1)} млн руб`],
+    ["Добыто воды", `${(st.cumWatM3 / 1e3).toFixed(0)} тыс. м³`],
+    ["Закачано воды", `${(st.cumInjM3 / 1e3).toFixed(0)} тыс. м³`],
+    ["Обводнённость (тек.)", `${(st.waterCut * 100).toFixed(0)} %`],
+    ["Среднее давление", `${st.avgP.toFixed(0)} атм`],
+    ["Скважин", `${sim.wells.length} (доб. ${sim.wells.filter((w) => w.type === "prod").length} / наг. ${sim.wells.filter((w) => w.type === "inj").length})`],
+  ];
+  $("res-grid").innerHTML = kpi.map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  let rows = "";
+  for (const w of sim.wells) {
+    rows += `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td>` +
+      `<td>${w.type === "prod" ? "добывающая" : "нагнетательная"}</td>` +
+      `<td>${(w.cum.oil * 0.86).toFixed(0)} т</td><td>${w.cum.water.toFixed(0)} м³</td>` +
+      `<td>${w.cum.inj.toFixed(0)} м³</td><td>${(w.fw * 100).toFixed(0)} %</td></tr>`;
+  }
+  $("res-wells").innerHTML = rows
+    ? `<table id="welltable2"><thead><tr><th>Скв.</th><th>Тип</th><th>Нефть, т</th><th>Вода, м³</th><th>Закачка, м³</th><th>Обзв.</th></tr></thead><tbody>${rows}</tbody></table>`
+    : "<p class='sub'>Скважины не пробурены</p>";
+  show("screen-results");
+}
+
+// ---------------- экран настроек ----------------
+const FORM_FIELDS = [
+  ["mu_o", "Вязкость нефти, сП", 5, 1, 50, 0.5],
+  ["price_oil", "Цена нефти (netback), руб/т", 10000, 1000, 30000, 500],
+  ["drill_cost", "Стоимость скважины, млн руб", 10, 1, 100, 1],
+  ["lift_cost", "Подъём жидкости, руб/м³", 500, 50, 2000, 10],
+  ["inj_cost", "Закачка воды, руб/м³", 300, 50, 2000, 10],
+  ["horizon_years", "Горизонт, лет", 10, 1, 30, 1],
+  ["init_money", "Стартовый капитал, млн руб", 50, 5, 500, 5],
+];
+function initSettings() {
+  const form = $("params-form");
+  form.innerHTML = FORM_FIELDS.map(([key, label, def, min, max, step]) =>
+    `<label for="pf-${key}">${label}</label>` +
+    `<input id="pf-${key}" type="number" value="${def}" min="${min}" max="${max}" step="${step}">`).join("");
+  // превью карты проницаемости (k не зависит от μ — можно строить с дефолтами)
+  const r = C.buildReservoir(C.DEFAULT_PARAMS);
+  const pv = document.createElement("canvas"); pv.width = r.nx; pv.height = r.ny;
+  const pctx = pv.getContext("2d"), img = pctx.createImageData(r.nx, r.ny), d = img.data;
+  const kMin = Math.log10(15), kMax = Math.log10(800);
+  for (let c = 0; c < r.nx * r.ny; c++) {
+    const p = c * 4;
+    if (!r.active[c]) { d[p] = 28; d[p + 1] = 37; d[p + 2] = 48; d[p + 3] = 255; continue; }
+    const v = Math.round(Math.max(0, Math.min(1, (Math.log10(r.k[c]) - kMin) / (kMax - kMin))) * 255) * 3;
+    d[p] = LUT_K[v]; d[p + 1] = LUT_K[v + 1]; d[p + 2] = LUT_K[v + 2]; d[p + 3] = 255;
+  }
+  pctx.putImageData(img, 0, 0);
+  const dst = $("preview-canvas").getContext("2d");
+  dst.imageSmoothingEnabled = false;
+  dst.drawImage(pv, 0, 0, 300, 300);
+  $("props-read").innerHTML = [
+    ["Начальное давление", "250 атм"], ["Сетка", "50×50, ячейка 40×40 м"],
+    ["Толщина пласта", "10 м"], ["Пористость", "0.20"],
+    ["Связанная вода / остаточная нефть", "0.20 / 0.25"],
+    ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"],
+    ["Плотность нефти", "0.86 т/м³"],
+    ["Запасы OOIP", `${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т`],
+  ].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
+  $("btn-start").addEventListener("click", startGame);
+  $("btn-selftest").addEventListener("click", runSelfTestBrowser);
+}
+async function runSelfTestBrowser() {
+  const out = $("selftest-out");
+  out.classList.remove("hidden");
+  out.textContent = "Запуск самотеста физики…\n";
+  const groups = ["reservoirTests", "relPermTests", "pressureTests", "wellTests", "saturationTests", "breakthroughTests", "economyTests"];
+  let pass = 0, total = 0;
+  for (const gname of groups) {
+    out.textContent += `▶ ${gname}…\n`;
+    out.scrollTop = out.scrollHeight;
+    await new Promise((r) => setTimeout(r, 30)); // отдать кадр браузеру
+    const res = C[gname]();
+    for (const r of res) {
+      out.textContent += `${r.pass ? "PASS" : "FAIL"}  ${r.name}${r.details ? " — " + r.details : ""}\n`;
+      if (r.pass) pass++;
+      total++;
+    }
+    out.scrollTop = out.scrollHeight;
+  }
+  out.textContent += `\n${pass}/${total} проверок пройдено\n`;
+  out.scrollTop = out.scrollHeight;
+}
+function readParams() {
+  const num = (key, def) => {
+    const el = $("pf-" + key);
+    const v = el ? +el.value : NaN;
+    return isFinite(v) && v > 0 ? v : def;
+  };
+  const d = C.DEFAULT_PARAMS;
+  return {
+    mu_o: num("mu_o", d.mu_o),
+    price_oil: num("price_oil", d.price_oil),
+    drill_cost: num("drill_cost", d.drill_cost) * 1e6,
+    lift_cost: num("lift_cost", d.lift_cost),
+    inj_cost: num("inj_cost", d.inj_cost),
+    horizon_days: Math.round(num("horizon_years", 10) * 365.25),
+    init_money: num("init_money", d.init_money) * 1e6,
+  };
+}
+function startGame() {
+  G.params = readParams();
+  G.sim = C.createSim(C.buildReservoir(G.params), G.params);
+  G.wellNames = { prod: 0, inj: 0 }; G.colorSeq = 0; G.done = false;
+  wellRows.clear(); renderWellTable(true);
+  show("screen-game");
+  setSpeed(0);
+  R.draw(G.sim); R.drawScale(G.sim);
+  drawAllCharts();
+  toast("Нажмите ▶ для запуска времени. Выберите инструмент и кликните по карте, чтобы бурить.");
+}
+
+// ---------------- инициализация ----------------
+R.init();
+initSettings();
+["lay-k", "lay-P", "lay-Sw"].forEach((id) => $(id).addEventListener("click", () => {
+  G.layer = id.slice(4);
+  ["lay-k", "lay-P", "lay-Sw"].forEach((x) => $(x).classList.toggle("active", x === id));
+  if (G.sim) { R.draw(G.sim); R.drawScale(G.sim); }
+}));
+[["tool-prod", "prod"], ["tool-inj", "inj"]].forEach(([id, tool]) => $(id).addEventListener("click", () => {
+  G.tool = G.tool === tool ? null : tool;
+  $("tool-prod").classList.toggle("active", G.tool === "prod");
+  $("tool-inj").classList.toggle("active", G.tool === "inj");
+  R.cv.style.cursor = G.tool ? "cell" : "crosshair";
+}));
+$("sp-pause").addEventListener("click", () => setSpeed(0));
+$("sp-1").addEventListener("click", () => setSpeed(2));
+$("sp-10").addEventListener("click", () => setSpeed(20));
+$("sp-50").addEventListener("click", () => setSpeed(100));
+$("btn-results").addEventListener("click", () => { setSpeed(0); showResults(); });
+$("btn-continue").addEventListener("click", () => { G.done = true; show("screen-game"); });
+$("btn-restart").addEventListener("click", () => { G.sim = null; show("screen-settings"); });
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
