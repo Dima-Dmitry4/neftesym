@@ -60,7 +60,8 @@
   #owc-bar input[type=number] { width:80px; }
   #owc-bar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
   .panel-title { color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; margin:8px 0 6px; font-weight:600; }
-  #wellpanel { padding:8px 10px; overflow:auto; }
+  #wellpanel { padding:8px 10px; overflow-x:auto; flex:none; }
+  #wells-modal .modal-body { overflow-x:hidden; }
   .w-stat { font-size:11.5px; color:var(--muted); white-space:normal; max-width:260px; line-height:1.3; }
   .w-stat.warn { color:var(--bad); }
   .w-off td { opacity:.55; }
@@ -227,7 +228,7 @@
       <span class="sub">время на паузе</span>
       <button id="wells-close" style="margin-left:auto">✕ Закрыть (Esc)</button>
     </div>
-    <div class="modal-body" style="flex-direction:column; overflow:auto">
+    <div class="modal-body" style="flex-direction:column; overflow-y:auto">
       <div id="field-ctl" class="row card" style="padding:6px 10px; margin-top:6px">
         <span title="Давление в сборной сети, на которое работают добывающие">Давление сбора:</span>
         <input id="fc-gather" type="range" min="5" max="40" step="1" value="12" style="width:110px"><b id="fc-gather-v">12</b> атм
@@ -239,6 +240,11 @@
         <thead><tr><th></th><th>Скв.</th><th>Режим</th><th>Параметр</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
         <tbody></tbody>
       </table></div>
+      <div class="row" style="margin-top:10px"><b>Графики по скважинам</b><span class="sub">скважина:</span><select id="wc-sel"></select>
+        <span class="sub">сплошные — добыча, пунктир — закачка</span></div>
+      <div id="wc-plots" style="display:flex; gap:8px; margin-top:6px; min-height:260px">
+        <div id="wc-liq" style="flex:1; min-width:0; height:260px"></div><div id="wc-oil" style="flex:1; min-width:0; height:260px"></div><div id="wc-pwf" style="flex:1; min-width:0; height:260px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1845,6 +1851,26 @@ function renderWellTable(force = false) {
   }
 }
 
+// ---------------- графики по скважинам (в окне «Скважины») ----------------
+function renderWellsCharts() {
+  const sim = G.sim; if (!sim || $("wells-modal").classList.contains("hidden")) return;
+  const sel = $("wc-sel"), want = sel.value || "all";
+  const opts = `<option value="all">Все скважины</option>` + sim.wells.map((w) => `<option value="${w.name}">${w.name}</option>`).join("");
+  if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; sel.value = sim.wells.some((w) => w.name === want) ? want : "all"; }
+  const list = sel.value === "all" ? sim.wells : sim.wells.filter((w) => w.name === sel.value);
+  const h = sim.history.days, step = Math.max(1, Math.ceil(h.length / 320)), xsY = [];
+  for (let k = 0; k < h.length; k += step) xsY.push(h[k].t / 365.25);
+  const xMax = Math.max(G.params.horizon_days, sim.t) / 365.25;
+  const series = (pick, only) => list.filter(only).map((w) => ({ type: "scatter", mode: "lines", name: w.name, x: xsY,
+    y: histSeries(sim, (d) => (d.wells[w.idx] ? pick(d.wells[w.idx]) : null), step), line: { color: w.color, width: 2, dash: w.type === "inj" ? "dash" : "solid" },
+    hovertemplate: `${w.name}: %{y:.1f}<extra></extra>` }));
+  const L = (t, extra = {}) => lay({ title: ttl(t), height: 260, showlegend: list.length > 1, legend: { orientation: "h", y: -0.22 }, margin: { l: 50, r: 10, t: 32, b: 56 },
+    xaxis: { range: [0, xMax], title: { text: "годы", standoff: 2 } }, ...extra });
+  Plotly.react("wc-liq", series((d) => d.q, () => true), L("Жидкость / закачка, м³/сут", { yaxis: { rangemode: "tozero" } }), CFG);
+  Plotly.react("wc-oil", series((d) => d.qo * 0.86, (w) => w.type === "prod" || w.wasProd), L("Нефть, т/сут", { yaxis: { rangemode: "tozero" } }), CFG);
+  Plotly.react("wc-pwf", series((d) => d.pwf, () => true), L("Забойное давление, атм", { yaxis: { rangemode: "tozero" } }), CFG);
+}
+
 // ---------------- итоги по годам ----------------
 function yearStats(sim) {
   const h = sim.history.days, out = [];
@@ -1879,7 +1905,7 @@ function updateTopbar() {
   $("btn-year").textContent = busy ? "Расчёт года…" : (!isL2() || !G.done && yr + 1 > total ? "▶ Следующий год" : `▶ Год ${yr + 1}`);
   $("year-bar").firstElementChild.style.width = busy ? `${Math.min(100, ((t - G.running.t0) / 365) * 100)}%` : "0";
 }
-function renderAll() { renderMap(); renderCharts(); renderWellTable(); renderYearTable(); updateTopbar(); G.dirty = false; }
+function renderAll() { renderMap(); renderCharts(); renderWellTable(); renderYearTable(); renderWellsCharts(); updateTopbar(); G.dirty = false; }
 
 // ---------------- время: год за годом и живой режим ----------------
 function startYear() {
@@ -1933,7 +1959,7 @@ function openModal(id) { G.modal = true; G.log.speedBefore = G.speed; setSpeed(0
 function openWells() {
   if (!G.sim) return;
   if (!G.modal) openModal("wells-modal"); else return;
-  renderWellTable(true);
+  renderWellTable(true); renderWellsCharts();
 }
 function closeModals() {
   if (!G.modal) return;
@@ -2288,7 +2314,7 @@ $("btn-continue").addEventListener("click", () => { G.done = true; applyLevelUI(
 $("btn-restart").addEventListener("click", () => { G.sim = null; closeModals(); show("screen-settings"); renderSettingsPreview(); });
 $("owc-input").addEventListener("change", (e) => setOwcGuess(e.target.value));
 $("owc-show").addEventListener("change", (e) => { G.showGuess = e.target.checked; G.dirty = true; renderMap(); });
-$("btn-wells").addEventListener("click", openWells); $("btn-wells-main").addEventListener("click", openWells); $("wells-close").addEventListener("click", closeModals);
+$("wc-sel").addEventListener("change", renderWellsCharts); $("btn-wells").addEventListener("click", openWells); $("btn-wells-main").addEventListener("click", openWells); $("wells-close").addEventListener("click", closeModals);
 $("btn-logs").addEventListener("click", () => openLog(null)); $("btn-pta").addEventListener("click", () => openPta(null));
 $("log-close").addEventListener("click", closeModals); $("pta-close").addEventListener("click", closeModals);
 for (const id of ["log-modal", "pta-modal", "wells-modal"]) $(id).addEventListener("click", (e) => { if (e.target.id === id) closeModals(); });
