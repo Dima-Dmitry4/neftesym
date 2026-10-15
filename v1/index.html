@@ -707,7 +707,7 @@ function createSim(reservoir, params) {
                      on: true,             // работает / остановлена
                      mode: "bhp",          // bhp | flow (фонтан, штуцер) | esp (ЭЦН) | choke (КНС, штуцер)
                      choke: type === "prod" ? 12 : 8, // диаметр штуцера, мм
-                     freq: 50, hasESP: false, kW: 0, eq: null,
+                     freq: 50, hasESP: false, pump: "M", kW: 0, eq: null,
                      depth: r.level === 2 ? r.zTop[c] + 5 + l2Altitude(c % r.nx, Math.floor(c / r.nx)) : 2450,
                      cum: { oil: 0, water: 0, inj: 0 } });
   };
@@ -828,16 +828,26 @@ function solvePressure(sim, dt) {
 // k = f/50); choke — нагнетательная: давление КНС минус перепад на штуцере. Забойное давление находится из
 // равенства притока по Писману (q = G·(P_яч − P_wf)) и пропускной способности подъёмника (бисекция по q).
 // Перепад на штуцере: ΔP = ρ·v²/2, v = q/(Cd·A), Cd = 0.8. Столб — по плотности смеси.
-const ATM_PA = 101325, ESP = { Q0: 450, H0: 2200, QB: 290, ETA: 0.62 }; // при 50 Гц: м³/сут, м
+const ATM_PA = 101325;
+// типоразмеры ЭЦН (при 50 Гц): Q0 — подача при нулевом напоре, H0 — напор при нулевой подаче, QB — подача в оптимуме,
+// ETA — максимальный КПД, cost — стоимость относительно базового (esp_cost)
+const PUMPS = {
+  S: { name: "ЭН-125", Q0: 250, H0: 2200, QB: 160, ETA: 0.58, cost: 0.67 },
+  M: { name: "ЭН-250", Q0: 450, H0: 2200, QB: 290, ETA: 0.62, cost: 1 },
+  L: { name: "ЭН-500", Q0: 800, H0: 2300, QB: 520, ETA: 0.65, cost: 1.6 },
+  XL: { name: "ЭН-800", Q0: 1200, H0: 2400, QB: 800, ETA: 0.67, cost: 2.4 },
+};
 const P_MIN_INTAKE = 20, P_MAX_INJ = 340; // атм: минимальное давление на приёме; предел по давлению закачки
 function chokeDpAtm(q, dmm, rho) {
   if (!(q > 0) || !(dmm > 0)) return 0;
   const A = Math.PI * (dmm / 1000) ** 2 / 4, v = q / 86400 / (0.8 * A);
   return (rho * v * v) / 2 / ATM_PA;
 }
-function espHeadM(q, f) { const k = f / 50; return ESP.H0 * k * k * (1 - (q / (ESP.Q0 * k)) ** 2); }
-function espEff(q, f) { const k = f / 50, x = (q - ESP.QB * k) / (ESP.QB * k); return Math.max(0.15, ESP.ETA * (1 - x * x)); }
-function espPowerKW(q, f, rho) { return (rho * 9.81 * (q / 86400) * Math.max(0, espHeadM(q, f))) / espEff(q, f) / 1000; }
+function espHeadM(q, f, pk = "M") { const P = PUMPS[pk], k = f / 50; return P.H0 * k * k * (1 - (q / (P.Q0 * k)) ** 2); }
+function espEff(q, f, pk = "M") { const P = PUMPS[pk], k = f / 50, x = (q - P.QB * k) / (P.QB * k); return Math.max(0.15, P.ETA * (1 - x * x)); }
+// загрузка насоса: подача / оптимальная подача при частоте f (норма 0.6–1.2)
+function espLoad(q, f, pk = "M") { return q / (PUMPS[pk].QB * (f / 50)); }
+function espPowerKW(q, f, rho, pk = "M") { return (rho * 9.81 * (q / 86400) * Math.max(0, espHeadM(q, f, pk))) / espEff(q, f, pk) / 1000; }
 function gatherPressure(sim) {
   let sq = 0;
   for (const w of sim.wells) if (w.type === "prod" && w.on !== false) sq += w.q;
@@ -858,11 +868,11 @@ function solveEquipment(sim, w) {
   if (w.type === "prod") {
     const rho = 860 * (1 - (w.fw || 0)) + 1000 * (w.fw || 0), hyd = (rho * 9.81 * L) / ATM_PA, pg = gatherPressure(sim);
     const pwhOf = (q) => pg + (w.mode === "flow" ? chokeDpAtm(q, w.choke, rho) : 0);
-    const req = (q) => pwhOf(q) + hyd - (w.mode === "esp" ? (rho * 9.81 * espHeadM(q, w.freq)) / ATM_PA : 0);
+    const req = (q) => pwhOf(q) + hyd - (w.mode === "esp" ? (rho * 9.81 * espHeadM(q, w.freq, w.pump || "M")) / ATM_PA : 0);
     const qMax = Math.max(0, G * (Pc - P_MIN_INTAKE)), f = (q) => Pc - q / G - req(q);
     out.q = bisectQ(f, qMax); out.dead = out.q === 0; out.capped = out.q >= qMax && qMax > 0;
     out.pwf = Pc - out.q / G; out.pwh = pwhOf(out.q);
-    if (w.mode === "esp") out.kW = espPowerKW(out.q, w.freq, rho);
+    if (w.mode === "esp") { out.kW = espPowerKW(out.q, w.freq, rho, w.pump || "M"); out.load = espLoad(out.q, w.freq, w.pump || "M"); }
   } else {
     const hydW = (1000 * 9.81 * L) / ATM_PA, head = sim.field.pKNS;
     const f = (q) => head - chokeDpAtm(q, w.choke, 1000) + hydW - Pc - q / G;
@@ -1477,6 +1487,11 @@ function equipmentTests() {
   t.push({ name: "оборудование: при низком давлении фонтан глохнет, ЭЦН поднимает; дебит растёт с частотой",
            pass: eD.q === 0 && eE.q > 5 && eE40.q < eE.q && eE.q < eE55.q && eE.kW > 0,
            details: `фонтан 0, ЭЦН 40/50/55 Гц: ${eE40.q.toFixed(0)}/${eE.q.toFixed(0)}/${eE55.q.toFixed(0)} м³/сут, ${eE.kW.toFixed(0)} кВт` });
+  // типоразмер насоса: на высокопродуктивной скважине больший ЭЦН даёт больше жидкости и меньшее забойное давление
+  const sp = mk(); sp.addWell(sp.r.explore[0].cell, "prod", 150); const wp = sp.wells[0]; wp.mode = "esp"; wp.freq = 50;
+  wp.pump = "M"; const pM = solveEquipment(sp, wp); wp.pump = "L"; const pL = solveEquipment(sp, wp); wp.pump = "S"; const pS = solveEquipment(sp, wp);
+  t.push({ name: "ЭЦН: больший типоразмер — больше дебит и ниже забойное давление (S < M < L)", pass: pS.q < pM.q && pM.q < pL.q && pL.pwf < pM.pwf && pM.pwf < pS.pwf,
+           details: `S ${pS.q.toFixed(0)}/${pS.pwf.toFixed(0)}, M ${pM.q.toFixed(0)}/${pM.pwf.toFixed(0)}, L ${pL.q.toFixed(0)}/${pL.pwf.toFixed(0)} (м³/сут / атм)` });
   // нагнетательная: штуцер и КНС
   sm.addWell(sm.r.explore[0].cell, "inj", 325);
   const wi = sm.wells[1]; wi.mode = "choke";
@@ -1520,7 +1535,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, espHeadM, chokeDpAtm, espPowerKW, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
+  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, espHeadM, chokeDpAtm, espPowerKW, espLoad, PUMPS, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, level2bTests,
   runSelfTests() {
@@ -1747,14 +1762,22 @@ function convertWell(w) {
   toast(toInj ? `${w.name} переведена под закачку (ППД), −${mln(G.params.conv_cost)}` : `${w.name} возвращена в добычу, −${mln(G.params.conv_cost)}`);
   renderWellTable(true); G.dirty = true; renderAll();
 }
+const pumpCost = (k) => G.params.esp_cost * C.PUMPS[k].cost;
 function setWellMode(w, mode) {
   if (guardRun()) return renderWellTable(true);
   if (mode === "esp" && !w.hasESP) {
-    G.sim.economy.spend(G.sim.t, G.params.esp_cost); w.hasESP = true;
-    toast(`${w.name}: установлен ЭЦН, −${mln(G.params.esp_cost)}`);
+    G.sim.economy.spend(G.sim.t, pumpCost(w.pump)); w.hasESP = true;
+    toast(`${w.name}: установлен ЭЦН ${C.PUMPS[w.pump].name}, −${mln(pumpCost(w.pump))}`);
   }
   w.mode = mode; G.sim._fluxValid = false;
   renderWellTable(true); G.dirty = true;
+}
+function setPump(w, key) {
+  if (guardRun() || key === w.pump) return renderWellTable(true);
+  const old = C.PUMPS[w.pump].name;
+  G.sim.economy.spend(G.sim.t, pumpCost(key)); w.pump = key; w.hasESP = true; G.sim._fluxValid = false;
+  toast(`${w.name}: насос заменён ${old} → ${C.PUMPS[key].name}, −${mln(pumpCost(key))}. Забойное давление и дебит пересчитаются`);
+  renderWellTable(true); G.dirty = true; renderAll();
 }
 function toggleWell(w) {
   if (guardRun()) return;
@@ -1818,7 +1841,7 @@ function wellStatus(sim, w) {
   const e = C.solveEquipment(sim, w);
   if (w.type === "prod") {
     if (e.dead) return { t: w.mode === "flow" ? "фонтан не идёт: давление пласта ниже давления столба — установите ЭЦН" : "ЭЦН не поднимает при текущей частоте/давлении", warn: true };
-    return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${w.mode === "esp" ? ` · ${e.kW.toFixed(0)} кВт` : ""}${e.capped ? " · упёрлись в P<sub>прием</sub> мин." : ""}`, warn: false };
+    return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${w.mode === "esp" ? ` · ${e.kW.toFixed(0)} кВт · загрузка ${(e.load * 100).toFixed(0)} %${e.load < 0.5 ? " (насос велик: низкий КПД)" : e.load > 1.3 ? " (перегруз — нужен больший типоразмер)" : ""}` : ""}${e.capped ? " · упёрлись в P<sub>прием</sub> мин." : ""}`, warn: false };
   }
   if (e.dead) return { t: "закачка не идёт: давление КНС мало для этого пластового давления", warn: true };
   return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${e.capped ? " · предел давления закачки" : ""}`, warn: false };
@@ -1842,7 +1865,7 @@ function renderWellTable(force = false) {
       const opts = MODES[w.type].map(([v, l]) => `<option value="${v}"${v === w.mode ? " selected" : ""}>${l}${v === "esp" && !w.hasESP ? ` (${(G.params.esp_cost / 1e6).toFixed(0)} млн руб)` : ""}</option>`).join("");
       tr.innerHTML = `<td><span class="w-dot" style="background:${w.color}"></span></td>` +
         `<td>${w.name}<div class="sub" style="font-size:11px">${w.type === "prod" ? "добыв." : "нагнет."}${w.hasESP ? " · ЭЦН" : ""}</div></td>` +
-        `<td><select>${opts}</select><div class="w-stat"></div></td>` +
+        `<td><select class="s-mode">${opts}</select>${w.type === "prod" && w.mode === "esp" ? `<select class="s-pump" title="Типоразмер насоса (замена платная)">${Object.entries(C.PUMPS).map(([k, P]) => `<option value="${k}"${k === w.pump ? " selected" : ""}>${P.name} (${P.Q0 / 2} м³/сут оптим.)${k === w.pump ? " — стоит" : ` — ${(pumpCost(k) / 1e6).toFixed(1)} млн`}</option>`).join("")}</select>` : ""}<div class="w-stat"></div></td>` +
         `<td class="w-pwf"><input type="range" min="${sp.min}" max="${sp.max}" step="${sp.step}" value="${cur}"> <span class="pwf-val">${(+cur).toFixed(sp.step < 1 ? 1 : 0)}</span> <span class="sub">${sp.unit}</span></td>` +
         `<td class="qo"></td><td class="qw"></td><td class="fw"></td><td><div class="wact">${acts}</div>${note}</td>`;
       const slider = tr.querySelector("input"), val = tr.querySelector(".pwf-val");
@@ -1850,7 +1873,8 @@ function renderWellTable(force = false) {
         const v = +slider.value; if (sp.key === "pwf") w.pwf = v; else w[sp.key] = v;
         val.textContent = v.toFixed(sp.step < 1 ? 1 : 0); sim._fluxValid = false; G.dirty = true;
       });
-      tr.querySelector("select").addEventListener("change", (e) => setWellMode(w, e.target.value));
+      tr.querySelector(".s-mode").addEventListener("change", (e) => setWellMode(w, e.target.value));
+      const sp2 = tr.querySelector(".s-pump"); if (sp2) sp2.addEventListener("change", (e) => setPump(w, e.target.value));
       const on = (cls, fn) => { const b = tr.querySelector("." + cls); if (b) b.addEventListener("click", fn); };
       on("a-con", () => openSchem("w", w.name)); on("a-on", () => toggleWell(w)); on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
       tb.appendChild(tr);
@@ -1987,7 +2011,7 @@ function drawConstruction() {
   const notes = [], arrow = (text, x, y, ax, ay) => notes.push({ xref: "x", yref: "y", x, y, ax, ay, axref: "pixel", ayref: "pixel", text, showarrow: true, arrowhead: 2, arrowwidth: 1, arrowcolor: "#64748b", font: { size: 11 }, align: "left", xanchor: "right", bgcolor: "rgba(255,255,255,.8)" });
   arrow("Эксплуатационная колонна Ø146 мм, цемент", -1.35, TD * 0.55, -70, 0);
   arrow("Кондуктор Ø245 мм (0–420 м)", -1.9, 380, -60, 10);
-  if (w) { arrow(`НКТ Ø73 мм (0–${Ltub.toFixed(0)} м)`, -0.4, Ltub * 0.4, -80, 0); if (esp) arrow(`ЭЦН ${w.freq} Гц, ${Lp.toFixed(0)} м`, -0.95, Lp + 12, -80, -10); if (!isProd) arrow("Пакер", -1.2, topPay - 26, -70, -10); }
+  if (w) { arrow(`НКТ Ø73 мм (0–${Ltub.toFixed(0)} м)`, -0.4, Ltub * 0.4, -80, 0); if (esp) arrow(`ЭЦН ${C.PUMPS[w.pump].name}, ${w.freq} Гц, ${Lp.toFixed(0)} м`, -0.95, Lp + 12, -80, -10); if (!isProd) arrow("Пакер", -1.2, topPay - 26, -70, -10); }
   notes.push({ xref: "x", yref: "y", x: 0, y: -75, text: w ? `<b>Устье</b> ${isProd ? (mode === "flow" ? `· штуцер ${w.choke} мм` : mode === "esp" ? "· ЭЦН, штуцер открыт" : "") : (mode === "choke" ? `· штуцер ${w.choke} мм` : "")}` : "<b>Разведочная скважина</b> (без оборудования)", showarrow: false, font: { size: 12 } });
   const data = [{ type: "scatter", mode: "markers", x: pay.filter((p) => p.kind !== "shale").flatMap((p) => { const n = Math.max(2, Math.round((p.b - p.a) / 1.2)); return Array.from({ length: n }, () => 1.4); }),
     y: pay.filter((p) => p.kind !== "shale").flatMap((p) => { const n = Math.max(2, Math.round((p.b - p.a) / 1.2)); return Array.from({ length: n }, (_, i) => p.a + ((i + 0.5) * (p.b - p.a)) / n); }),
@@ -2013,7 +2037,7 @@ function drawConstruction() {
   if (e && w.on !== false) {
     const g = (rho * 9.81) / ATM_PA_UI;
     const pwh = w.mode === "bhp" ? Math.max(0, e.pwf - g * (w.depth || TD)) : e.pwh;
-    if (esp) { const pd = pwh + g * Lp, pi = pd - (rho * 9.81 * C.espHeadM(e.q, w.freq)) / ATM_PA_UI; prof = { x: [pwh, pd, pi, pi + g * ((w.depth || TD) - Lp)], y: [0, Lp, Lp, w.depth || TD], pwh, pd, pi, pwf: e.pwf }; }
+    if (esp) { const pd = pwh + g * Lp, pi = pd - (rho * 9.81 * C.espHeadM(e.q, w.freq, w.pump)) / ATM_PA_UI; prof = { x: [pwh, pd, pi, pi + g * ((w.depth || TD) - Lp)], y: [0, Lp, Lp, w.depth || TD], pwh, pd, pi, pwf: e.pwf }; }
     else prof = { x: [pwh, pwh + (e.pwf - pwh)], y: [0, w.depth || TD], pwh, pwf: e.pwf };
     if (!esp) prof.x = [pwh, e.pwf];
     data.push({ type: "scatter", mode: "lines+markers", x: prof.x, y: prof.y, xaxis: "x2", yaxis: "y", line: { color: "#636efa", width: 3 }, marker: { size: 8, color: "#636efa" },
@@ -2034,7 +2058,7 @@ function drawConstruction() {
   if (w && e) {
     t += row("Режим", { bhp: "по забойному давлению", flow: "фонтан", esp: "ЭЦН", choke: "КНС (штуцер)" }[mode]) + row("Расход", `${e.q.toFixed(0)} м³/сут`) + row("P забойное", `${e.pwf.toFixed(0)} атм`) +
       row("Депрессия / репрессия", `${Math.abs(Pc - e.pwf).toFixed(0)} атм`) + row("P на устье", mode === "bhp" ? "условное" : `${e.pwh.toFixed(0)} атм`) + row("Плотность смеси", `${rho.toFixed(0)} кг/м³`);
-    if (esp && prof) t += row("P на приёме ЭЦН", `${prof.pi.toFixed(0)} атм`) + row("P на выкиде ЭЦН", `${prof.pd.toFixed(0)} атм`) + row("Напор", `${C.espHeadM(e.q, w.freq).toFixed(0)} м`) + row("Мощность", `${e.kW.toFixed(0)} кВт`);
+    if (esp && prof) t += row("P на приёме ЭЦН", `${prof.pi.toFixed(0)} атм`) + row("P на выкиде ЭЦН", `${prof.pd.toFixed(0)} атм`) + row("Насос", `${C.PUMPS[w.pump].name}, загрузка ${(e.load * 100).toFixed(0)} %`) + row("Напор", `${C.espHeadM(e.q, w.freq, w.pump).toFixed(0)} м`) + row("Мощность", `${e.kW.toFixed(0)} кВт`);
     if (e.dead) t += row("Состояние", `<span style="color:#ef553b">поток отсутствует</span>`);
   }
   t += `</tbody></table><div class="note">Схема показывает колонну, НКТ, оборудование и интервал пласта по РИГИС (оранжевый — нефть, синий — вода, серый — глина). ` +
