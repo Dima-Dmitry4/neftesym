@@ -60,8 +60,8 @@
   #owc-bar input[type=number] { width:80px; }
   #owc-bar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
   .panel-title { color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; margin:8px 0 6px; font-weight:600; }
-  #wellpanel { padding:8px 10px; max-height:340px; overflow:auto; }
-  .w-stat { font-size:11.5px; color:var(--muted); white-space:normal; max-width:210px; line-height:1.3; }
+  #wellpanel { padding:8px 10px; overflow:auto; }
+  .w-stat { font-size:11.5px; color:var(--muted); white-space:normal; max-width:260px; line-height:1.3; }
   .w-stat.warn { color:var(--bad); }
   .w-off td { opacity:.55; }
   #welltable select { font-size:12px; padding:2px 4px; }
@@ -160,6 +160,7 @@
     <div id="tb-date" class="tb-info">—</div>
     <div id="tb-money" class="tb-info">—</div>
     <div class="tb-right">
+      <button id="btn-wells" class="primary" title="Режимы работы, ЭЦН, штуцеры, ППД, остановка скважин">🛠 Скважины</button>
       <button id="btn-logs" class="lvl2-only" title="Каротажи и РИГИС всех скважин, схема корреляции">📈 Каротажи</button>
       <button id="btn-pta" class="lvl2-only" title="Гидродинамические исследования: КВД, проницаемость и скин">⏱ ГДИС</button>
       <button id="btn-results">Итоги</button>
@@ -181,17 +182,8 @@
         <span>м</span>
         <label><input type="checkbox" id="owc-show" checked> контуры на карте</label>
       </div>
-      <div id="field-ctl" class="row card" style="padding:6px 10px; margin-top:6px">
-        <span title="Давление в сборной сети, на которое работают добывающие">Давление сбора:</span>
-        <input id="fc-gather" type="range" min="5" max="40" step="1" value="12" style="width:110px"><b id="fc-gather-v">12</b> атм
-        <span style="margin-left:12px" title="Давление на выкиде КНС, из которого питаются нагнетательные">Давление КНС:</span>
-        <input id="fc-kns" type="range" min="60" max="200" step="5" value="130" style="width:110px"><b id="fc-kns-v">130</b> атм
-      </div>
-      <div class="panel-title">Скважины <span id="wellcount"></span></div>
-      <div id="wellpanel" class="card"><table id="welltable" class="t">
-        <thead><tr><th></th><th>Скв.</th><th>Режим</th><th>Параметр</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
-        <tbody></tbody>
-      </table></div>
+      <button id="btn-wells-main" class="primary" style="margin-top:10px; padding:10px; font-size:15px">🛠 Скважины и режимы работы (<span id="wellcount-n">0</span>)</button>
+      <div class="sub" style="font-size:12px; margin-top:4px">Режимы, штуцеры, ЭЦН, ППД, остановка, ГДИС — в панели «Скважины».</div>
     </section>
     <aside id="rightcol">
       <div class="chart-card card"><div id="chart-rate"></div></div>
@@ -228,6 +220,28 @@
   </div>
 </div>
 
+<div id="wells-modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>Скважины и режимы работы <span id="wellcount" class="sub"></span></b>
+      <span class="sub">время на паузе</span>
+      <button id="wells-close" style="margin-left:auto">✕ Закрыть (Esc)</button>
+    </div>
+    <div class="modal-body" style="flex-direction:column; overflow:auto">
+      <div id="field-ctl" class="row card" style="padding:6px 10px; margin-top:6px">
+        <span title="Давление в сборной сети, на которое работают добывающие">Давление сбора:</span>
+        <input id="fc-gather" type="range" min="5" max="40" step="1" value="12" style="width:110px"><b id="fc-gather-v">12</b> атм
+        <span style="margin-left:12px" title="Давление на выкиде КНС, из которого питаются нагнетательные">Давление КНС:</span>
+        <input id="fc-kns" type="range" min="60" max="200" step="5" value="130" style="width:110px"><b id="fc-kns-v">130</b> атм
+      </div>
+      
+      <div id="wellpanel" class="card"><table id="welltable" class="t">
+        <thead><tr><th></th><th>Скв.</th><th>Режим</th><th>Параметр</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
 <div id="log-modal" class="modal hidden">
   <div class="modal-box">
     <div class="modal-head">
@@ -1682,7 +1696,7 @@ function drillWell(cell) {
   const w = sim.wells[sim.wells.length - 1];
   w.name = name; w.color = PAL[G.colorSeq++ % PAL.length];
   if (isL2()) w.mode = "flow"; // на уровне 2 скважина стартует фонтаном через штуцер
-  let msg = `Пробурена ${name}, −${mln(G.params.drill_cost)}. Режим и назначение (добыча / ППД) меняются в таблице скважин`;
+  let msg = `Пробурена ${name}, −${mln(G.params.drill_cost)}. Режим и назначение (добыча / ППД) — кнопка «🛠 Скважины»`;
   if (isL2()) { const L = C.wellLog(r, cell); msg += `. ГИС: h нефть ${L.hOil.toFixed(1)} м, вода ${L.hWater.toFixed(1)} м`; }
   toast(msg); renderWellTable(true); G.dirty = true; renderAll();
 }
@@ -1820,13 +1834,14 @@ function renderWellTable(force = false) {
     });
     const np = sim.wells.filter((w) => w.type === "prod").length, ni = sim.wells.length - np;
     $("wellcount").textContent = `(${sim.wells.length}: доб. ${np}, наг. ${ni}${isL2() ? `, разв. ${G.expl.length}` : ""})`;
+    $("wellcount-n").textContent = sim.wells.length;
   }
   for (const w of sim.wells) {
     const row = wellRows.get(w); if (!row) continue;
     const cur = row.sp.key === "pwf" ? w.pwf : w[row.sp.key];
     if (document.activeElement !== row.slider && Math.abs(+row.slider.value - cur) > 0.01) { row.slider.value = cur; row.val.textContent = cur.toFixed(row.sp.step < 1 ? 1 : 0); }
     const st = wellStatus(sim, w); row.st.innerHTML = st.t; row.st.classList.toggle("warn", st.warn);
-    row.qo.textContent = (w.qo * 0.86).toFixed(1); row.qw.textContent = w.qw.toFixed(1); row.fw.textContent = (w.fw * 100).toFixed(0);
+    row.qo.textContent = (w.qo * 0.86).toFixed(1); row.qw.textContent = w.qw.toFixed(1); row.fw.textContent = isFinite(w.fw) ? (w.fw * 100).toFixed(0) : "—";
   }
 }
 
@@ -1915,9 +1930,14 @@ const KIND_RU = { expl: "разведочная", prod: "добывающая", 
 const SAT_RU = { oil: "нефть", water: "вода", shale: "неколлектор" };
 const RIGIS_COL = { oil: "#d97706", water: "#2563eb", shale: "#64748b" };
 function openModal(id) { G.modal = true; G.log.speedBefore = G.speed; setSpeed(0); $(id).classList.remove("hidden"); }
+function openWells() {
+  if (!G.sim) return;
+  if (!G.modal) openModal("wells-modal"); else return;
+  renderWellTable(true);
+}
 function closeModals() {
   if (!G.modal) return;
-  G.modal = false; G.log.open = false; $("log-modal").classList.add("hidden"); $("pta-modal").classList.add("hidden");
+  G.modal = false; G.log.open = false; for (const id of ["log-modal", "pta-modal", "wells-modal"]) $(id).classList.add("hidden");
   setSpeed(G.log.speedBefore); G.dirty = true;
 }
 function openLog(name) {
@@ -2268,9 +2288,10 @@ $("btn-continue").addEventListener("click", () => { G.done = true; applyLevelUI(
 $("btn-restart").addEventListener("click", () => { G.sim = null; closeModals(); show("screen-settings"); renderSettingsPreview(); });
 $("owc-input").addEventListener("change", (e) => setOwcGuess(e.target.value));
 $("owc-show").addEventListener("change", (e) => { G.showGuess = e.target.checked; G.dirty = true; renderMap(); });
+$("btn-wells").addEventListener("click", openWells); $("btn-wells-main").addEventListener("click", openWells); $("wells-close").addEventListener("click", closeModals);
 $("btn-logs").addEventListener("click", () => openLog(null)); $("btn-pta").addEventListener("click", () => openPta(null));
 $("log-close").addEventListener("click", closeModals); $("pta-close").addEventListener("click", closeModals);
-for (const id of ["log-modal", "pta-modal"]) $(id).addEventListener("click", (e) => { if (e.target.id === id) closeModals(); });
+for (const id of ["log-modal", "pta-modal", "wells-modal"]) $(id).addEventListener("click", (e) => { if (e.target.id === id) closeModals(); });
 $("log-tab-one").addEventListener("click", () => setLogMode("one")); $("log-tab-corr").addEventListener("click", () => setLogMode("corr"));
 $("pta-well").addEventListener("change", updatePtaCost); $("pta-days").addEventListener("change", updatePtaCost);
 $("pta-run").addEventListener("click", runPta); $("pta-hint").addEventListener("click", ptaHint); $("pta-accept").addEventListener("click", ptaAccept);
