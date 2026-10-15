@@ -4,97 +4,135 @@
 <meta charset="utf-8">
 <title>Разработка нефтяного месторождения — учебный симулятор</title>
 <style>
-  :root { --bg:#0f172a; --panel:#1e293b; --panel2:#162032; --line:#334155; --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --good:#34d399; --bad:#f87171; }
+  /* оформление в духе Plotly: белые карточки, серо-голубые поля графиков, акцент #636efa */
+  :root { --bg:#f3f6fb; --panel:#ffffff; --panel2:#f7f9fc; --line:#dfe6f1; --row:#eaeff7; --text:#2a3f5f; --muted:#6b7c93;
+          --accent:#636efa; --accent2:#4f5bd5; --good:#00a37a; --bad:#ef553b; }
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { height:100%; }
-  body { background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, sans-serif; overflow:hidden; }
-  button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
-  button:hover { border-color:var(--accent); }
-  button.active { background:var(--accent); color:#08203a; border-color:var(--accent); font-weight:600; }
+  body { background:var(--bg); color:var(--text); font:14px/1.45 "Open Sans", verdana, arial, sans-serif; overflow:hidden; }
+  button { background:#fff; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
+  button:hover:not(:disabled) { border-color:var(--accent); color:var(--accent2); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.active { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  button.primary:hover:not(:disabled) { background:var(--accent2); color:#fff; }
+  button.lock { color:var(--muted); border-style:dashed; }
   input[type=range] { accent-color:var(--accent); }
+  input[type=number], select { background:#fff; border:1px solid var(--line); color:var(--text); border-radius:5px; padding:4px 8px; font:inherit; }
   .screen { display:none; height:100%; } .screen.visible { display:flex; flex-direction:column; }
-  h1 { font-size:20px; margin-bottom:6px; }
-  h2 { font-size:14px; color:var(--muted); margin:10px 0 6px; text-transform:uppercase; letter-spacing:.04em; }
-  .sub { color:var(--muted); margin-bottom:16px; }
+  h1 { font-size:21px; margin-bottom:4px; }
+  h2 { font-size:12.5px; color:var(--muted); margin:12px 0 6px; text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+  .sub { color:var(--muted); }
   .hidden { display:none !important; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 1px 4px #2a3f5f12; }
 
-  /* ---------- экран настроек ---------- */
+  /* ---------- настройки ---------- */
   #screen-settings { overflow:auto; align-items:flex-start; justify-content:center; }
-  .settings-box { width:min(960px, 96vw); margin:24px auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px 24px; }
-  .settings-cols { display:flex; gap:28px; flex-wrap:wrap; }
-  .settings-cols > div { flex:1; min-width:320px; }
-  #preview-canvas { border-radius:6px; border:1px solid var(--line); image-rendering:pixelated; width:100%; }
+  .settings-box { width:min(1040px, 96vw); margin:22px auto; padding:20px 24px; }
+  .settings-cols { display:flex; gap:28px; flex-wrap:wrap; margin-top:10px; }
+  .settings-cols > div { flex:1; min-width:340px; }
   .prop-block div { padding:2px 0; }
   .form-grid { display:grid; grid-template-columns:1fr 110px; gap:8px 10px; align-items:center; }
-  .form-grid label { color:var(--text); }
-  .form-grid input { background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:5px; padding:5px 8px; width:100%; font:inherit; }
-  .form-grid .hint { color:var(--muted); font-size:12px; grid-column:1 / span 2; margin-top:-4px; }
+  .form-grid input { width:100%; }
   .settings-buttons { display:flex; gap:10px; margin-top:18px; }
-  button.primary { background:var(--accent); color:#08203a; border-color:var(--accent); font-weight:600; }
-  .selftest-out { margin-top:12px; background:#0b1120; border:1px solid var(--line); border-radius:6px; padding:10px; font:12px/1.5 ui-monospace, monospace; max-height:280px; overflow:auto; white-space:pre-wrap; }
+  .selftest-out { margin-top:12px; background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:10px; font:12px/1.5 ui-monospace, monospace; max-height:280px; overflow:auto; white-space:pre-wrap; }
+  .level-pick { display:flex; gap:8px; margin-bottom:6px; }
+  .level-pick button { flex:1; text-align:left; padding:8px 10px; line-height:1.3; }
+  .level-pick button small { display:block; font-weight:400; opacity:.85; font-size:12px; }
+  .level-desc { color:var(--muted); font-size:12.5px; margin:4px 0 6px; }
 
-  /* ---------- экран игры ---------- */
-  #topbar { display:flex; align-items:center; gap:16px; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--line); }
-  .tb-group { display:flex; gap:4px; }
+  /* ---------- игра ---------- */
+  #topbar { display:flex; align-items:center; gap:14px; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tb-group { display:flex; gap:4px; align-items:center; }
   .tb-info { font-size:15px; }
-  #tb-money.good { color:var(--good); font-weight:600; }
-  #tb-money.bad { color:var(--bad); font-weight:600; }
-  .tb-right { margin-left:auto; display:flex; gap:6px; }
+  #tb-money.good { color:var(--good); font-weight:600; } #tb-money.bad { color:var(--bad); font-weight:600; }
+  .tb-right { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  #year-bar { width:90px; height:6px; background:var(--row); border-radius:3px; overflow:hidden; }
+  #year-bar i { display:block; height:100%; width:0; background:var(--accent); }
   #gamemain { display:flex; gap:14px; padding:12px 14px; flex:1; min-height:0; }
-  #leftcol { flex:0 0 624px; display:flex; flex-direction:column; min-height:0; }
+  #leftcol { flex:0 0 660px; display:flex; flex-direction:column; min-height:0; overflow-y:auto; }
   #rightcol { flex:1; min-width:380px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
-  .layerbar { display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+  .layerbar { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
   .layerbar .lbl { color:var(--muted); margin-right:2px; }
-  .layerbar button { padding:4px 10px; font-size:13px; }
-  #mapwrap { position:relative; }
-  #map-canvas { border-radius:8px; border:1px solid var(--line); cursor:crosshair; display:block; width:600px; height:600px; }
-  #map-tooltip { position:absolute; pointer-events:none; background:#0b1120ee; border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:12px; line-height:1.5; z-index:5; }
-  #map-scale { display:block; margin:2px 0 10px; }
-  .panel-title { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin:4px 0 6px; }
-  #wellpanel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; max-height:180px; overflow-y:auto; }
+  .layerbar button { padding:4px 10px; font-size:13px; white-space:nowrap; }
+  #map { width:640px; height:640px; background:#fff; border:1px solid var(--line); border-radius:8px; }
+  #owc-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:8px 0; }
+  #owc-bar input[type=number] { width:80px; }
+  #owc-bar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+  .panel-title { color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; margin:8px 0 6px; font-weight:600; }
+  #wellpanel { padding:8px 10px; max-height:230px; overflow:auto; }
   .w-dot { width:11px; height:11px; border-radius:50%; display:inline-block; vertical-align:-1px; }
-  .w-pwf { width:130px; }
+  .w-pwf { width:140px; white-space:nowrap; }
+  .wact { display:flex; gap:3px; flex-wrap:nowrap; }
+  .wact button { padding:1px 6px; font-size:12px; }
+  .pta-note { font-size:11.5px; color:var(--muted); white-space:nowrap; }
+  .chart-card { padding:4px 4px 0; }
+  .chart-card > div { width:100%; height:175px; }
+  #year-card { padding:8px 12px; }
+  table.t { width:100%; border-collapse:collapse; font-size:13px; }
+  table.t th { text-align:left; color:var(--muted); font-weight:600; padding:3px 8px 6px 0; border-bottom:1px solid var(--line); }
+  table.t td { padding:5px 8px 5px 0; border-bottom:1px solid var(--row); white-space:nowrap; }
 
-  .chart-card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px 6px; }
-  .chart-title { font-size:12.5px; color:var(--muted); margin-bottom:4px; }
-  .chart-card canvas { display:block; width:100%; height:auto; }
-
-  /* ---------- экран итогов ---------- */
+  /* ---------- итоги ---------- */
   #screen-results { overflow:auto; align-items:flex-start; justify-content:center; }
-  .results-box { width:min(860px, 96vw); margin:24px auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px 24px; }
+  .results-box { width:min(1040px, 96vw); margin:22px auto; padding:20px 24px; }
   #res-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin:14px 0; }
   .kpi { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
   .kpi .k { color:var(--muted); font-size:12px; }
   .kpi .v { font-size:19px; font-weight:600; margin-top:2px; }
-  #res-wells { margin:8px 0 16px; }
-  #res-wells table, #welltable { width:100%; border-collapse:collapse; font-size:13px; }
-  #res-wells th, #welltable th { text-align:left; color:var(--muted); font-weight:500; padding:3px 8px 6px 0; border-bottom:1px solid var(--line); }
-  #res-wells td, #welltable td { padding:5px 8px 5px 0; border-bottom:1px solid #22304a; }
+  #reveal-plot { width:100%; height:620px; }
+  #res-bars { width:100%; height:260px; }
 
-  /* ---------- toast ---------- */
-  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#0b1120; border:1px solid var(--accent); color:var(--text); border-radius:8px; padding:9px 16px; z-index:50; transition:opacity .25s; }
+  /* ---------- модальные окна ---------- */
+  .modal { position:fixed; inset:0; background:#2a3f5f99; z-index:40; display:flex; align-items:center; justify-content:center; }
+  .modal-box { background:var(--panel); border:1px solid var(--line); border-radius:12px; width:min(1280px, 98vw); height:min(860px, 97vh); display:flex; flex-direction:column; }
+  .modal-head { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line); }
+  .modal-head b { font-size:15px; }
+  .modal-body { display:flex; gap:12px; padding:10px 14px; flex:1; min-height:0; }
+  #log-list { flex:0 0 112px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+  #log-list button { text-align:left; padding:4px 8px; font-size:13px; }
+  #log-list .grp { color:var(--muted); font-size:11px; text-transform:uppercase; margin:6px 0 2px; }
+  #log-plot { flex:1 1 auto; min-width:0; }
+  #log-side, #pta-side { flex:0 0 330px; overflow:auto; font-size:12.5px; }
+  #log-side table, #pta-side table { width:100%; border-collapse:collapse; margin:6px 0 10px; }
+  #log-side th, #pta-side th { text-align:left; color:var(--muted); font-weight:600; padding:2px 6px 4px 0; border-bottom:1px solid var(--line); }
+  #log-side td, #pta-side td { padding:3px 6px 3px 0; border-bottom:1px solid var(--row); white-space:nowrap; }
+  .sat { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:-1px; margin-right:4px; }
+  .sat.oil { background:#d97706; } .sat.water { background:#2563eb; } .sat.shale { background:#64748b; }
+  .note { background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:8px 10px; color:var(--muted); line-height:1.5; margin-top:8px; }
+  #pta-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+  #pta-plots { display:flex; gap:8px; flex:1; min-height:0; }
+  #pta-plots > div { flex:1; min-width:0; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#fff; border:1px solid var(--accent); box-shadow:0 4px 14px #2a3f5f2e; color:var(--text); border-radius:8px; padding:9px 16px; z-index:60; max-width:90vw; }
   #toast.warn { border-color:var(--bad); }
 </style>
 </head>
 <body>
 <div id="screen-settings" class="screen visible">
-  <div class="settings-box">
+  <div class="settings-box card">
     <h1>Разработка нефтяного месторождения</h1>
     <p class="sub">Учебный симулятор: IMPES-расчёт давления и насыщенности, скважины по Писману</p>
     <div class="settings-cols">
       <div>
-        <h2>Карта проницаемости</h2>
-        <canvas id="preview-canvas" width="300" height="300"></canvas>
+        <h2 id="preview-title">Карта проницаемости</h2>
+        <div id="preview-plot" style="width:100%; height:380px"></div>
         <div class="prop-block">
           <h2>Свойства пласта</h2>
           <div id="props-read"></div>
         </div>
       </div>
       <div>
+        <h2>Уровень сложности</h2>
+        <div class="level-pick">
+          <button id="lvl-1" class="active">Уровень 1<small>Геология известна заранее</small></button>
+          <button id="lvl-2">Уровень 2<small>Разведка, сейсмика, ГДИС, шаг по годам</small></button>
+        </div>
+        <p id="level-desc" class="level-desc"></p>
         <h2>Экономика и флюиды (можно менять)</h2>
         <div class="form-grid" id="params-form"></div>
         <div class="settings-buttons">
-          <button id="btn-selftest">Самотест физики (~5 с)</button>
+          <button id="btn-selftest">Самотест физики (~6 с)</button>
           <button id="btn-start" class="primary">Начать разработку</button>
         </div>
         <pre id="selftest-out" class="selftest-out hidden"></pre>
@@ -105,15 +143,21 @@
 
 <div id="screen-game" class="screen">
   <header id="topbar">
-    <div class="tb-group">
+    <div id="speed-group" class="tb-group">
       <button id="sp-pause" class="active" title="Пауза">⏸</button>
       <button id="sp-1" title="2 сут/с">×1</button>
       <button id="sp-10" title="20 сут/с">×10</button>
       <button id="sp-50" title="100 сут/с">×50</button>
     </div>
+    <div id="year-group" class="tb-group">
+      <button id="btn-year" class="primary" title="Рассчитать один год; после него можно бурить и менять скважины">▶ Следующий год</button>
+      <div id="year-bar"><i></i></div>
+    </div>
     <div id="tb-date" class="tb-info">—</div>
     <div id="tb-money" class="tb-info">—</div>
     <div class="tb-right">
+      <button id="btn-logs" class="lvl2-only" title="Каротажи и РИГИС всех скважин, схема корреляции">📈 Каротажи</button>
+      <button id="btn-pta" class="lvl2-only" title="Гидродинамические исследования: КВД, проницаемость и скин">⏱ ГДИС</button>
       <button id="btn-results">Итоги</button>
     </div>
   </header>
@@ -121,49 +165,110 @@
     <section id="leftcol">
       <div class="layerbar">
         <span class="lbl">Слой:</span>
-        <button id="lay-k" class="active">Проницаемость</button>
-        <button id="lay-P">Давление</button>
-        <button id="lay-Sw">Насыщенность</button>
+        <span id="layers" class="tb-group"></span>
         <span class="tb-right">
+          <button id="tool-expl" class="lvl2-only" title="Разведочная скважина: только каротаж, без добычи">◆ Разведочная</button>
           <button id="tool-prod">⛏ Добывающая</button>
           <button id="tool-inj">▲ Нагнетательная</button>
         </span>
       </div>
-      <div id="mapwrap">
-        <canvas id="map-canvas" width="600" height="600"></canvas>
-        <div id="map-tooltip" class="hidden"></div>
+      <div id="map"></div>
+      <div id="owc-bar" class="lvl2-only">
+        <span>Ваш ВНК: абс. −</span><input id="owc-input" type="number" min="2300" max="2600" step="0.5" placeholder="?">
+        <span>м</span>
+        <label><input type="checkbox" id="owc-show" checked> контуры на карте</label>
       </div>
-      <canvas id="map-scale" width="600" height="36"></canvas>
       <div class="panel-title">Скважины <span id="wellcount"></span></div>
-      <div id="wellpanel"><table id="welltable">
-        <thead><tr><th></th><th>Скв.</th><th>P<sub>wf</sub>, атм</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th></tr></thead>
+      <div id="wellpanel" class="card"><table id="welltable" class="t">
+        <thead><tr><th></th><th>Скв.</th><th>P<sub>wf</sub>, атм</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
         <tbody></tbody>
       </table></div>
     </section>
     <aside id="rightcol">
-      <div class="chart-card"><div class="chart-title">Дебит нефти, т/сут</div><canvas id="chart-rate" width="380" height="160"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Среднее пластовое давление, атм</div><canvas id="chart-p" width="380" height="160"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Забойные давления, атм</div><canvas id="chart-pwf" width="380" height="160"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Накопленная добыча нефти, тыс. т</div><canvas id="chart-cum" width="380" height="160"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Баланс, млн руб</div><canvas id="chart-money" width="380" height="160"></canvas></div>
+      <div class="chart-card card"><div id="chart-rate"></div></div>
+      <div class="chart-card card"><div id="chart-p"></div></div>
+      <div class="chart-card card"><div id="chart-pwf"></div></div>
+      <div class="chart-card card"><div id="chart-cum"></div></div>
+      <div class="chart-card card"><div id="chart-money"></div></div>
+      <div id="year-card" class="card">
+        <div class="panel-title" style="margin-top:0">Итоги по годам</div>
+        <table id="year-table" class="t"><thead><tr><th>Год</th><th>Нефть, тыс. т</th><th>Обводн., %</th><th>Закачка, тыс. м³</th><th>Δ баланса, млн руб</th></tr></thead><tbody></tbody></table>
+      </div>
     </aside>
   </main>
 </div>
 
 <div id="screen-results" class="screen">
-  <div class="results-box">
+  <div class="results-box card">
     <h1 id="res-title">Итоги разработки</h1>
     <div id="res-grid"></div>
+    <div id="res-reveal" class="lvl2-only">
+      <h2>Геология раскрыта</h2>
+      <div id="reveal-plot"></div>
+      <div id="reveal-text" class="sub" style="line-height:1.6; margin-top:6px"></div>
+    </div>
+    <h2>Добыча по годам</h2>
+    <div id="res-bars"></div>
     <h2>По скважинам</h2>
     <div id="res-wells"></div>
+    <div id="res-pta" class="lvl2-only"></div>
     <div class="settings-buttons">
       <button id="btn-continue" class="primary">Продолжить (песочница)</button>
       <button id="btn-restart">Начать заново</button>
     </div>
   </div>
 </div>
+
+<div id="log-modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b id="log-title">Каротаж</b>
+      <div class="tb-group">
+        <button id="log-tab-one" class="active">Планшет скважины</button>
+        <button id="log-tab-corr">Схема корреляции</button>
+      </div>
+      <span class="sub">время на паузе</span>
+      <button id="log-close" style="margin-left:auto">✕ Закрыть (Esc)</button>
+    </div>
+    <div class="modal-body">
+      <div id="log-list"></div>
+      <div id="log-plot"></div>
+      <div id="log-side"></div>
+    </div>
+  </div>
+</div>
+
+<div id="pta-modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>ГДИС — кривая восстановления давления (КВД)</b>
+      <span class="sub">время на паузе</span>
+      <button id="pta-close" style="margin-left:auto">✕ Закрыть (Esc)</button>
+    </div>
+    <div class="modal-body">
+      <div id="pta-main">
+        <div class="row" id="pta-setup">
+          <span>Скважина:</span><select id="pta-well"></select>
+          <span>Остановка, сут:</span>
+          <select id="pta-days"><option>3</option><option>7</option><option selected>14</option><option>30</option></select>
+          <button id="pta-run" class="primary">Провести КВД</button>
+          <span id="pta-cost" class="sub"></span>
+        </div>
+        <div id="pta-plots"><div id="pta-ll"></div><div id="pta-sl"></div></div>
+        <div class="row" id="pta-fit">
+          <span>Радиальный участок, сут: от</span><input id="pta-t1" type="number" step="any" style="width:90px">
+          <span>до</span><input id="pta-t2" type="number" step="any" style="width:90px">
+          <button id="pta-hint">Подсказка</button>
+          <button id="pta-accept" class="primary">Принять оценку</button>
+        </div>
+      </div>
+      <div id="pta-side"></div>
+    </div>
+  </div>
+</div>
 <div id="toast" class="hidden"></div>
 
+<script src="vendor/plotly-cartesian.min.js"></script>
 <script id="sim-core">
 "use strict";
 // =====================================================================
@@ -233,8 +338,238 @@ function buildReservoir(params) {
   for (let c = 0; c < nx * ny; c++)
     if (active[c]) { poreVol[c] = dx * dx * h * phi; cells.push(c); }
   const ooipM3 = cells.reduce((s, c) => s + poreVol[c] * (1 - 0.2), 0);
-  return { nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1,
-           Swc: 0.2, Sor: 0.25, rho_oil: 0.86, active, k, poreVol, ooipM3, cells };
+  return { level: 1, nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1,
+           Swc: 0.2, Sor: 0.25, SwMax: 1 - 0.25, rho_oil: 0.86, active, k, poreVol, ooipM3, cells };
+}
+
+// ---------- Уровень 2: скрытая геология (структура, ВНК, каротаж) ----------
+// Пласт — купол (антиклиналь) и небольшой купол-сателлит; ВНК горизонтален на
+// абс. отметке L2.OWC. Глубины z — абсолютные, положительные вниз (м ниже уровня
+// моря); на экран выводятся со знаком «−». Разрез в точке: кровля zTop, три
+// песчаные пачки с эффективными толщинами L2.SANDS (сумма = GRID.h) и два
+// глинистых прослоя между ними переменной толщины (местами выклиниваются).
+// Нефть — в коллекторе выше ВНК, ниже — вода. Двумерная модель усредняет разрез:
+// доля нефтенасыщенной толщины fo = hн/h задаёт начальную Sw ячейки (формула в Sw0).
+const L2 = {
+  OWC: 2420,              // абс. отметка ВНК, м (истина, игроку не показывается)
+  SANDS: [3.5, 3.5, 3.0], // эффективные толщины пачек, м (сумма = GRID.h = 10 м)
+  Rw: 0.05,               // сопротивление пластовой воды, Ом·м (Арчи: a = 1, m = n = 2)
+  TRANS: 0.35,            // масштаб капиллярной переходной зоны над ВНК, м (только для кривой Rt)
+  SEED: 20261015,
+  // разломы: ломаные в координатах ячеек (центр ячейки (i, j) — в точке (i, j)), заданы от
+  // севера к югу. shift — смещение кровли на стороне «слева по ходу» (на запад при ходе
+  // с севера на юг): +глубже, −выше. trans — множитель проводимости граней, пересекающих
+  // разлом (0 — полностью запечатан, 1 — проницаем). Игроку свойства разломов неизвестны.
+  FAULTS: [
+    { name: "F-1", pts: [[26.5, -2], [28.5, 14], [27.5, 30], [29.5, 52]], shift: -4, trans: 0 },
+    { name: "F-2", pts: [[13.5, -2], [15.5, 20], [13.5, 36], [16, 52]], shift: 3, trans: 0.3 },
+  ],
+  // стартовые разведочные скважины [имя, i — столбец, j — строка сетки]:
+  // свод (чистая нефть), западный блок за F-2 с ВНК в разрезе, восточный блок за F-1, ВНЗ, вода
+  EXPLORE: [["Р-1", 22, 26], ["Р-2", 10, 30], ["Р-3", 33, 22], ["Р-4", 40, 25], ["Р-5", 34, 10]],
+};
+// расстояние от точки до отрезка ab: {d — расстояние, side — знак стороны (+1 слева по ходу)}
+function segDist(px, py, a, b) {
+  const vx = b[0] - a[0], vy = b[1] - a[1], L = vx * vx + vy * vy;
+  const u = Math.max(0, Math.min(1, ((px - a[0]) * vx + (py - a[1]) * vy) / L));
+  const d = Math.hypot(px - (a[0] + u * vx), py - (a[1] + u * vy));
+  return { d, side: vx * (py - a[1]) - vy * (px - a[0]) >= 0 ? 1 : -1 };
+}
+// ближайшая точка ломаной: {d, side}
+function polyDist(px, py, pts) {
+  let best = null;
+  for (let n = 0; n + 1 < pts.length; n++) {
+    const q = segDist(px, py, pts[n], pts[n + 1]);
+    if (!best || q.d < best.d) best = q;
+  }
+  return best;
+}
+// отрезки ab и cd пересекаются
+function segCross(a, b, c, d) {
+  const o = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+}
+// ступенька кровли от разломов в точке (i, j), м (гладкая на ширине ~1 ячейки)
+function l2FaultShift(i, j) {
+  let sum = 0;
+  for (const F of L2.FAULTS) {
+    const q = polyDist(i, j, F.pts);
+    sum += F.shift * 0.5 * (1 + Math.tanh((q.side * q.d) / 0.8));
+  }
+  return sum;
+}
+// истинная абс. отметка кровли в точке (i, j) — координаты в ячейках, м
+function l2Top(i, j) { return l2TopSmooth(i, j) + l2FaultShift(i, j); }
+function l2TopSmooth(i, j) {
+  const th = 25 * Math.PI / 180, x = i - 22, y = j - 26;
+  const u = (x * Math.cos(th) + y * Math.sin(th)) / 22, v = (-x * Math.sin(th) + y * Math.cos(th)) / 15;
+  const zMain = 2400 + 22 * (u * u + v * v) + 2 * Math.sin(i / 4.3 + 0.8) * Math.cos(j / 5.1 - 0.4);
+  const zSat = 2409 + 22 * ((i - 41) ** 2 + (j - 9) ** 2) / 49;   // сателлит, свод −2409 м
+  const m = Math.min(zMain, zSat), s = 4;                          // гладкий минимум → седловина
+  return m - s * Math.log(Math.exp((m - zMain) / s) + Math.exp((m - zSat) / s));
+}
+// толщины двух глинистых прослоев, м (0 — прослой выклинился)
+function l2Shales(i, j) {
+  const t1 = 0.9 + 0.7 * Math.sin(i / 6.1 + 1.1) * Math.cos(j / 7.3 - 0.5);
+  const t2 = 0.5 + 0.8 * Math.sin(i / 5.3 - 0.7 + j / 9.1);
+  return [t1 < 0.35 ? 0 : t1, t2 < 0.3 ? 0 : t2];
+}
+// альтитуда стола ротора, м: MD = z + альтитуда (скважины вертикальные)
+function l2Altitude(i, j) { return 95 + 18 * Math.sin(i / 9 + 0.3) + 12 * Math.cos(j / 7 - 1.0); }
+// разрез пласта сверху вниз: [{top, base, sand}], абс. отметки
+function l2Column(i, j) {
+  const sh = l2Shales(i, j), out = [];
+  let z = l2Top(i, j);
+  L2.SANDS.forEach((hs, n) => {
+    out.push({ top: z, base: z + hs, sand: true }); z += hs;
+    if (n < sh.length && sh[n] > 0) { out.push({ top: z, base: z + sh[n], sand: false }); z += sh[n]; }
+  });
+  return out;
+}
+// эффективная нефтенасыщенная толщина разреза при ВНК owc, м
+function l2OilNet(col, owc) {
+  let hOil = 0;
+  for (const p of col) if (p.sand) hOil += Math.max(0, Math.min(p.base, owc) - p.top);
+  return hOil;
+}
+// ошибка сейсмической карты: гладкое поле, |δ| ≲ 4 м (scale = 1)
+function l2SeisError(seed = L2.SEED + 7, scale = 1) {
+  const rng = mulberry32(seed), u = () => rng() / 4294967296;
+  const waves = [1.8, 1.2, 0.8].map((a) => {
+    const L = 12 + 14 * u(), dir = 2 * Math.PI * u();
+    return { a: a * scale, kx: Math.cos(dir) * 2 * Math.PI / L, ky: Math.sin(dir) * 2 * Math.PI / L, ph: 2 * Math.PI * u() };
+  });
+  return (i, j) => waves.reduce((s, w) => s + w.a * Math.sin(w.kx * i + w.ky * j + w.ph), 0);
+}
+// Сейсморазведка 3D (покупается игроком): структурные карты кровли и подошвы, толщина
+// и разломы. Ошибки — гладкие поля: кровля |δ| ≲ 4 м, подошва ≲ 3 м (толщина = подошва −
+// кровля, относительная ошибка толщины велика); трассы разломов смещены на ≲ 1 ячейки,
+// сбросы оценены с ошибкой ≈ 25 %. Герметичность разломов сейсмикой не определяется.
+function buildSeismic(zTop, gross, nx, ny) {
+  const N = nx * ny, eTop = l2SeisError(L2.SEED + 7, 1), eBase = l2SeisError(L2.SEED + 19, 0.8);
+  const top = new Float64Array(N), base = new Float64Array(N), thick = new Float64Array(N);
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const c = j * nx + i;
+      top[c] = zTop[c] + eTop(i, j);
+      base[c] = zTop[c] + gross[c] + eBase(i, j);
+      thick[c] = base[c] - top[c];
+    }
+  const rng = mulberry32(L2.SEED + 31), u = () => rng() / 4294967296 - 0.5;
+  const faults = L2.FAULTS.map((F) => ({
+    name: F.name,
+    pts: F.pts.map(([x, y]) => [x + 1.4 * u(), y + 0.6 * u()]),   // координаты вершин, ячейки
+    throwEst: Math.round(Math.abs(F.shift) * (1 + 0.5 * u()) * 10) / 10,
+  }));
+  return { top, base, thick, faults };
+}
+function buildReservoir2(params) {
+  const { nx, ny, dx, h, phi } = GRID, N = nx * ny, Swc = 0.2;
+  const rng = mulberry32(L2.SEED);
+  const cy = (ny - 1) / 2;
+  const active = new Uint8Array(N).fill(1), k = new Float64Array(N);
+  const zTop = new Float64Array(N), gross = new Float64Array(N);
+  const hOil = new Float64Array(N), Sw0 = new Float64Array(N);
+  const river = (i) => cy + 6 * Math.sin((i / nx) * 2 * Math.PI) + 3 * Math.sin(i / 7.0);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const c = j * nx + i;
+      const kbg = Math.min(150, Math.max(15, 20 * Math.exp(0.7 * gauss(rng)))); // как на уровне 1
+      const kch = 300 + 500 * (rng() / 4294967296);
+      k[c] = Math.abs(j - river(i)) < 2.6 ? Math.max(kch, kbg) : kbg;
+      const col = l2Column(i, j);
+      zTop[c] = col[0].top;
+      gross[c] = col[col.length - 1].base - col[0].top;
+      hOil[c] = l2OilNet(col, L2.OWC);
+      // вертикальное усреднение: нефтяная часть при Swc, водяная — Sw = 1
+      const fo = hOil[c] / h;
+      Sw0[c] = fo * Swc + (1 - fo);
+    }
+  }
+  const poreVol = new Float64Array(N).fill(dx * dx * h * phi);
+  const cells = Array.from({ length: N }, (_, c) => c);
+  const ooipM3 = cells.reduce((s, c) => s + poreVol[c] * (1 - Sw0[c]), 0);
+  // проводимости граней: восток (c → c+1) и север (c → c+nx) режутся разломами
+  const tmE = new Float64Array(N).fill(1), tmN = new Float64Array(N).fill(1);
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const c = j * nx + i;
+      for (const F of L2.FAULTS)
+        for (let n = 0; n + 1 < F.pts.length; n++) {
+          if (i + 1 < nx && segCross([i, j], [i + 1, j], F.pts[n], F.pts[n + 1])) tmE[c] = Math.min(tmE[c], F.trans);
+          if (j + 1 < ny && segCross([i, j], [i, j + 1], F.pts[n], F.pts[n + 1])) tmN[c] = Math.min(tmN[c], F.trans);
+        }
+    }
+  const seis = buildSeismic(zTop, gross, nx, ny);
+  return { level: 2, nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1,
+           // SwMax > 1: перенос насыщенности (как и на уровне 1) относит упругий запас
+           // (Vp·ct·ΔP) к изменению Sw, и в водяной зоне (Sw = 1) при росте давления
+           // Sw слегка превышает 1 (на ct·ΔP ≈ 1 %). Кламп 1.05 — только страховка,
+           // иначе срезалась бы закачанная вода
+           Swc, Sor: 0.25, SwMax: 1.05, rho_oil: 0.86, active, k, poreVol, ooipM3, cells,
+           Sw0, zTop, zSeis: seis.top, gross, hOil, owc: L2.OWC, tmE, tmN, seis,
+           faults: L2.FAULTS.map((F) => ({ name: F.name, pts: F.pts, shift: F.shift, trans: F.trans })),
+           explore: L2.EXPLORE.map(([name, i, j]) => ({ name, cell: j * nx + i })) };
+}
+
+// Синтетический каротаж и РИГИС в ячейке cell (уровень 2). Кривые: ГК (мкР/ч),
+// сопротивление Rt (Ом·м, по Арчи: Rt = Rw/(Кп²·Sw²)), пористость Кп. РИГИС —
+// интервалы пласта: коллектор нефть / коллектор вода / неколлектор (прослой).
+// Шум детерминирован (seed от номера ячейки) — повторный вызов даёт тот же планшет.
+function wellLog(r, cell) {
+  const i = cell % r.nx, j = Math.floor(cell / r.nx);
+  const col = l2Column(i, j), owc = r.owc;
+  const rng = mulberry32((L2.SEED ^ Math.imul(cell + 1, 2654435761)) >>> 0);
+  const nz = () => gauss(rng);
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const alt = r1(l2Altitude(i, j));
+  const top = col[0].top, base = col[col.length - 1].base;
+  const z0 = Math.floor(top - 8), z1 = Math.ceil(base + 6), dz = 0.2;
+  const sandAt = (z) => col.some((p) => p.sand && z >= p.top && z < p.base);
+  const raw = [];
+  for (let n = 0; z0 + n * dz <= z1 + 1e-9; n++) {
+    const z = z0 + n * dz;
+    let gr, kp, rt;
+    if (sandAt(z)) {
+      kp = r.phi + 0.008 * nz();
+      const d = owc - z; // высота над ВНК, м
+      const sw = d <= 0 ? 1 : r.Swc + (1 - r.Swc) * Math.exp(-d / L2.TRANS);
+      gr = 5 + 0.6 * nz();
+      rt = L2.Rw / (kp * kp * sw * sw);
+    } else {
+      kp = 0.05 + 0.01 * nz(); gr = 13 + 1.0 * nz(); rt = 3.5 * (1 + 0.08 * nz());
+    }
+    raw.push({ z, gr, kp, lrt: Math.log10(rt * (1 + 0.05 * nz())) });
+  }
+  // сглаживание по 3 точкам (разрешение прибора)
+  const samples = raw.map((s, n) => {
+    const a = raw[Math.max(0, n - 1)], b = raw[Math.min(raw.length - 1, n + 1)];
+    return { z: s.z, md: s.z + alt, gr: (a.gr + s.gr + b.gr) / 3, kp: (a.kp + s.kp + b.kp) / 3,
+             rt: Math.pow(10, (a.lrt + s.lrt + b.lrt) / 3) };
+  });
+  // РИГИС: границы в MD с точностью 0.1 м; абс. отметка = −(MD − альтитуда)
+  const rigis = [];
+  const push = (zt, zb, kind) => {
+    const mdTop = r1(zt + alt), mdBase = r1(zb + alt);
+    if (mdBase - mdTop < 0.05) return;
+    const sand = kind !== "shale";
+    rigis.push({ mdTop, mdBase, absTop: -r1(mdTop - alt), absBase: -r1(mdBase - alt),
+                 h: r1(mdBase - mdTop), kind,
+                 kp: sand ? r.phi + 0.006 * nz() : null,
+                 kn: kind === "oil" ? 1 - r.Swc + 0.015 * nz() : kind === "water" ? 0 : null,
+                 kpr: sand ? Math.max(1, Math.round(r.k[cell] * (1 + 0.12 * nz()))) : null });
+  };
+  for (const p of col) {
+    if (!p.sand) { push(p.top, p.base, "shale"); continue; }
+    const cut = Math.min(Math.max(owc, p.top), p.base);
+    push(p.top, cut, "oil");
+    push(cut, p.base, "water");
+  }
+  const sum = (kind) => r1(rigis.filter((x) => x.kind === kind).reduce((s, x) => s + x.h, 0));
+  return { cell, i, j, alt, samples, rigis,
+           mdTop: r1(top + alt), absTop: -r1(r1(top + alt) - alt),
+           mdBase: r1(base + alt), absBase: -r1(r1(base + alt) - alt),
+           hGross: r1(r1(base + alt) - r1(top + alt)), hOil: sum("oil"), hWater: sum("water") };
 }
 
 // связность активной области по 4-соседям
@@ -285,7 +620,12 @@ function fw(Sw, r) {
 }
 function lambdaT(Sw, r) { return krw(Sw, r) / r.mu_w + kro(Sw, r) / r.mu_o; }
 // Писман: q = WI·λt·(P_яч − Pwf), re = 0.2·Δ = 8 м, rw = 0.1 м, skin = 0
-function wellIndex(k, r) { return CONV_K * 2 * Math.PI * k * r.h / Math.log(8 / 0.1); }
+function wellIndex(k, r, skin = 0) { return CONV_K * 2 * Math.PI * k * r.h / Math.max(0.5, Math.log(8 / 0.1) + skin); }
+// скин скважины уровня 2 (истина, игроку неизвестна): −1…7, большинство 0…3
+function l2Skin(cell) {
+  const u = mulberry32((L2.SEED ^ Math.imul(cell + 7, 40503)) >>> 0)() / 4294967296;
+  return Math.round((-1 + 8 * u * u) * 10) / 10;
+}
 
 // ---------- Симуляция: давление ----------
 const NB = (c, r) => [c % r.nx > 0 ? c - 1 : -1, c % r.nx < r.nx - 1 ? c + 1 : -1,
@@ -296,7 +636,7 @@ function createSim(reservoir, params) {
   const sim = {
     r, params,
     P: new Float64Array(r.nx * r.ny).fill(r.P0),
-    Sw: new Float64Array(r.nx * r.ny).fill(r.Swc),
+    Sw: r.Sw0 ? Float64Array.from(r.Sw0) : new Float64Array(r.nx * r.ny).fill(r.Swc),
     wells: [],
     t: 0, cumProdM3: 0,
     history: { days: [] },          // посуточные снимки (заполняется в advance)
@@ -316,7 +656,19 @@ function createSim(reservoir, params) {
     if (!r.active[c]) throw new Error("ячейка вне контура");
     if (sim.wells.some((w) => w.cell === c)) throw new Error("ячейка занята");
     sim.wells.push({ cell: c, type, pwf, q: 0, qo: 0, qw: 0,
+                     skin: r.level === 2 ? l2Skin(c) : 0, wasProd: type === "prod",
                      cum: { oil: 0, water: 0, inj: 0 } });
+  };
+  // перевод добывающей в нагнетательную (ППД): история добычи сохраняется
+  sim.convertToInjector = (w) => {
+    if (w.type !== "prod") throw new Error("только добывающую");
+    w.type = "inj"; w.pwf = 325; w.converted = true; sim._fluxValid = false;
+  };
+  // обработка призабойной зоны: скин снижается до −1 (если он был выше)
+  sim.stimulate = (w) => {
+    const before = w.skin || 0;
+    w.skin = Math.min(before, -1); w.stimulated = true; sim._fluxValid = false;
+    return before - w.skin;
   };
   sim.economy = createEconomy(params);
   sim.avgPressure = () => {
@@ -336,11 +688,11 @@ function buildFaceT(sim) {
     const e = c + 1, n = c + r.nx;
     if (r.nx > 0 && c % r.nx < r.nx - 1 && r.active[e]) {
       const kH = (2 * r.k[c] * r.k[e]) / (r.k[c] + r.k[e]);
-      Te[c] = CONV_K * kH * r.h * 0.5 * (lambdaT(Sw[c], r) + lambdaT(Sw[e], r));
+      Te[c] = CONV_K * kH * r.h * 0.5 * (lambdaT(Sw[c], r) + lambdaT(Sw[e], r)) * (r.tmE ? r.tmE[c] : 1);
     }
     if (n < r.nx * r.ny && r.active[n]) {
       const kH = (2 * r.k[c] * r.k[n]) / (r.k[c] + r.k[n]);
-      Tn[c] = CONV_K * kH * r.h * 0.5 * (lambdaT(Sw[c], r) + lambdaT(Sw[n], r));
+      Tn[c] = CONV_K * kH * r.h * 0.5 * (lambdaT(Sw[c], r) + lambdaT(Sw[n], r)) * (r.tmN ? r.tmN[c] : 1);
     }
   }
 }
@@ -365,7 +717,7 @@ function solvePressure(sim, dt) {
   }
   for (const w of sim.wells) {
     const idx = sim._rowOf[w.cell];
-    const G = wellIndex(r.k[w.cell], r) * lambdaT(sim.Sw[w.cell], r);
+    const G = wellIndex(r.k[w.cell], r, w.skin) * lambdaT(sim.Sw[w.cell], r);
     diag[idx] += G;
     b[idx] += G * w.pwf;
   }
@@ -415,7 +767,7 @@ function solvePressure(sim, dt) {
 function updateWellRates(sim) {
   const r = sim.r;
   for (const w of sim.wells) {
-    const G = wellIndex(r.k[w.cell], r) * lambdaT(sim.Sw[w.cell], r);
+    const G = wellIndex(r.k[w.cell], r, w.skin) * lambdaT(sim.Sw[w.cell], r);
     const dp = w.type === "prod" ? sim.P[w.cell] - w.pwf : w.pwf - sim.P[w.cell];
     const q = Math.max(0, G * dp);
     w.q = q;
@@ -466,7 +818,7 @@ function transportSubstep(sim, dt) {
     else dSw[w.cell] -= (w.qw * dt) / r.poreVol[w.cell];
   }
   for (const c of r.cells)
-    Sw[c] = Math.min(1 - r.Sor, Math.max(r.Swc, Sw[c] + dSw[c])); // кламп — страховка
+    Sw[c] = Math.min(r.SwMax, Math.max(r.Swc, Sw[c] + dSw[c])); // кламп — страховка (ур. 2: водяная зона Sw = 1)
 }
 function cflLimit(sim) {
   const r = sim.r, { _uE: uE, _uN: uN } = sim;
@@ -489,7 +841,7 @@ function recordHistory(sim) {
       t: h.length + 1, avgP: sim.avgPressure(),
       cumOilM3: sim.wells.reduce((s, w) => s + w.cum.oil, 0),
       money: sim.economy ? sim.economy.balance : null,
-      wells: sim.wells.map((w) => ({ qo: w.qo, qw: w.qw, q: w.q, fw: w.fw, pwf: w.pwf })),
+      wells: sim.wells.map((w) => ({ qo: w.qo, qw: w.qw, q: w.q, fw: w.fw, pwf: w.pwf, prod: w.type === "prod" })),
     });
   }
 }
@@ -691,7 +1043,7 @@ const RHO_OIL = 0.86; // т/м³ — используется и в геолог
 function createEconomy(params) {
   const eco = {
     balance: params.init_money,
-    revenue: 0, opex: 0, drillSpent: 0, drills: [], // drills — сутки бурений (для графика)
+    revenue: 0, opex: 0, drillSpent: 0, otherSpent: 0, drills: [], // drills — сутки решений (для графика)
     update(dt, wells) {
       for (const w of wells) {
         if (w.type === "prod") {
@@ -701,12 +1053,18 @@ function createEconomy(params) {
           eco.opex += w.q * params.inj_cost * dt;                 // закачка воды
         }
       }
-      eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent;
+      eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent - eco.otherSpent;
     },
-    drill(day) {
-      eco.drillSpent += params.drill_cost;
+    drill(day, cost = params.drill_cost) { // cost — для разведочной скважины уровня 2
+      eco.drillSpent += cost;
       eco.drills.push(day);
-      eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent;
+      eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent - eco.otherSpent;
+    },
+    // прочие затраты: сейсмика, ГДИС, ОПЗ, перевод в ППД, потери добычи при остановке
+    spend(day, cost) {
+      eco.otherSpent += cost;
+      eco.drills.push(day);
+      eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent - eco.otherSpent;
     },
   };
   return eco;
@@ -732,19 +1090,261 @@ function economyTests() {
   return t;
 }
 
+// ---------- ГДИС: кривая восстановления давления (КВД), уровень 2 ----------
+// Синтетическая КВД по добывающей скважине. Модель — однофазный радиальный приток с
+// постоянным дебитом до остановки (q = текущий дебит жидкости): давление на забое
+// p_ws(Δt) = p_wf0 + x(Δt), x = A·[E1(rw²/(4ηΔt)) + 2s (+ E1((2d)²/(4ηΔt)) — изображение
+// запечатанного разлома на расстоянии d)], A = qμ/(4π·K_Д·k·h), η = K_Д·k/(φ·μ·ct).
+// Подъём ограничен возможным p_wf0 + D (конечный пласт): rise = x/(1+(x/D)^6)^(1/6).
+// Влияние ствола — запаздывание первого порядка с постоянной τ, добавляется шум датчика.
+// Анализ — полулогарифмический (MDH): в радиальном режиме p_ws = a + m·lg Δt,
+// k = 2.303·q·μ/(4π·K_Д·h·m), s = ½[(a − p_wf0)/A − ln(4η/rw²) + 0.5772] (Δt в сутках).
+function E1(x) { // интегральная показательная функция −Ei(−x)
+  if (x <= 0) return Infinity;
+  if (x <= 1) {
+    let sum = 0, term = 1;
+    for (let n = 1; n <= 40; n++) { term *= -x / n; sum -= term / n; }
+    return -0.5772156649 - Math.log(x) + sum;
+  }
+  let b = x + 1, c = 1e30, d = 1 / b, h = d; // цепная дробь (Ленц)
+  for (let n = 1; n <= 100; n++) {
+    const an = -n * n; b += 2; d = 1 / (an * d + b); c = b + an / c;
+    const del = c * d; h *= del; if (Math.abs(del - 1) < 1e-12) break;
+  }
+  return h * Math.exp(-x);
+}
+// расстояние от скважины до ближайшего запечатанного разлома, м (null — нет рядом)
+function nearestSealFaultM(r, cell) {
+  if (!r.faults) return null;
+  const i = cell % r.nx, j = Math.floor(cell / r.nx);
+  let best = null;
+  for (const F of r.faults) {
+    if (F.trans > 0.5) continue;
+    const d = polyDist(i, j, F.pts).d * r.dx;
+    if (best === null || d < best) best = d;
+  }
+  return best;
+}
+function pressureBuildup(sim, w, days) {
+  const r = sim.r, k = r.k[w.cell], h = r.h, mu = r.mu_o, rw = 0.1, s = w.skin || 0;
+  const q = w.q, A = (q * mu) / (4 * Math.PI * CONV_K * k * h);
+  const eta = (CONV_K * k) / (r.phi * mu * r.ct);
+  const dF = nearestSealFaultM(r, w.cell), pwf0 = w.pwf;
+  const xf = (t) => A * (E1((rw * rw) / (4 * eta * t)) + 2 * s + (dF !== null && dF < 600 ? E1((2 * dF) ** 2 / (4 * eta * t)) : 0));
+  const D = 1.5 * xf(8); // граница конечного пласта: подъём насыщается, начиная примерно с 8 сут
+  const rise = (t) => { const x = xf(t); return x / Math.pow(1 + Math.pow(x / D, 6), 1 / 6); };
+  const tau = Math.min(0.05, Math.max(0.003, 0.008 * Math.sqrt(100 / ((k * h) / mu))));
+  const ppd = 24, n = Math.round(ppd * Math.log10(days / 0.001)) + 1;
+  const rng = mulberry32((L2.SEED ^ Math.imul(w.cell + 3, 2246822519)) >>> 0);
+  const t = [], p = [];
+  let pPrev = 0, tPrev = 0, rPrev = 0;
+  for (let m = 0; m < n; m++) {
+    const tm = 0.001 * Math.pow(10, m / ppd), rm = rise(tm), a = Math.exp(-(tm - tPrev) / tau);
+    pPrev = pPrev * a + (1 - a) * 0.5 * (rPrev + rm); tPrev = tm; rPrev = rm;
+    t.push(tm); p.push(pwf0 + pPrev + 0.01 * gauss(rng)); // шум датчика 0.01 атм
+  }
+  const deriv = bupDerivative(t, p);
+  return { wellName: w.name, cell: w.cell, t, p, deriv, q, pwf0, days,
+           truth: { k, s, dFaultM: dF, A, eta } };
+}
+// производная давления по ln Δt (Бурде, окно L = 0.2)
+function bupDerivative(t, p) {
+  const n = t.length, L = 0.2, out = new Array(n).fill(NaN), lt = t.map(Math.log);
+  for (let i = 1; i < n - 1; i++) {
+    let a = i - 1, b = i + 1;
+    while (a > 0 && lt[i] - lt[a] < L) a--;
+    while (b < n - 1 && lt[b] - lt[i] < L) b++;
+    const x1 = lt[i] - lt[a], x2 = lt[b] - lt[i];
+    out[i] = ((p[i] - p[a]) / x1 * x2 + (p[b] - p[i]) / x2 * x1) / (x1 + x2);
+  }
+  return out;
+}
+// интерпретация: линейная регрессия p по lg Δt в окне [t1, t2] (сутки)
+function interpretBuildup(bu, r, t1, t2) {
+  const idx = [];
+  for (let i = 0; i < bu.t.length; i++) if (bu.t[i] >= t1 && bu.t[i] <= t2) idx.push(i);
+  if (idx.length < 4) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const i of idx) { const x = Math.log10(bu.t[i]), y = bu.p[i]; sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  const n = idx.length, m = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - m * sx) / n;
+  if (!(m > 0)) return null;
+  const mu = r.mu_o, rw = 0.1;
+  const k = (2.303 * bu.q * mu) / (4 * Math.PI * CONV_K * r.h * m);
+  const A = m / 2.303, eta = (CONV_K * k) / (r.phi * mu * r.ct);
+  const s = 0.5 * ((a - bu.pwf0) / A - Math.log((4 * eta) / (rw * rw)) + 0.5772);
+  return { m, a, k, s, n };
+}
+// подсказка: самый длинный участок, где производная постоянна (±12 % от среднего)
+function suggestWindow(bu) {
+  const d = bu.deriv, n = d.length;
+  let best = null;
+  for (let i = 3; i < n - 1; i++) {
+    let sum = 0, cnt = 0;
+    for (let j = i; j < n - 1; j++) {
+      if (!isFinite(d[j])) break;
+      sum += d[j]; cnt++;
+      const mean = sum / cnt;
+      let ok = true;
+      for (let q = i; q <= j; q++) if (Math.abs(d[q] / mean - 1) > 0.12) { ok = false; break; }
+      if (!ok) break;
+      if (cnt >= 8 && (!best || cnt > best.cnt)) best = { i, j, cnt };
+    }
+  }
+  return best ? { t1: bu.t[best.i], t2: bu.t[best.j] } : null;
+}
+
+// ---------- Тесты уровня 2 ----------
+function level2Tests() {
+  const t = [];
+  const r = buildReservoir2(DEFAULT_PARAMS), N = r.nx * r.ny;
+  const r2 = buildReservoir2(DEFAULT_PARAMS);
+  let same = true;
+  for (let c = 0; c < N; c++) if (r.k[c] !== r2.k[c] || r.zSeis[c] !== r2.zSeis[c]) { same = false; break; }
+  t.push({ name: "ур.2: детерминизм, все ячейки активны", pass: same && r.cells.length === N });
+  let oil = 0, full = 0, ooip = 0, maxErr = 0;
+  for (const c of r.cells) {
+    if (r.hOil[c] > 0) oil++;
+    if (r.hOil[c] >= r.h - 1e-9) full++;
+    ooip += r.poreVol[c] * (1 - r.Sw0[c]);
+    maxErr = Math.max(maxErr, Math.abs(r.zSeis[c] - r.zTop[c]));
+  }
+  t.push({ name: "ур.2: нефтеносная площадь 30–55 %, чисто нефтяная зона > 8 %",
+           pass: oil / N > 0.3 && oil / N < 0.55 && full / N > 0.08,
+           details: `нефть ${(oil / N * 100).toFixed(0)} %, без воды ${(full / N * 100).toFixed(0)} %` });
+  t.push({ name: "ур.2: OOIP = Σ Vp·(1−Sw0)", pass: Math.abs(ooip - r.ooipM3) < 1e-6 * ooip && ooip > 0,
+           details: `OOIP=${(r.ooipM3 / 1e6).toFixed(2)} млн м³` });
+  t.push({ name: "ур.2: сейсмика отличается от истины на 1–4.5 м", pass: maxErr > 1 && maxErr < 4.5,
+           details: `max|δ|=${maxErr.toFixed(2)} м` });
+  // РИГИС разведочных скважин
+  const logs = r.explore.map((w) => wellLog(r, w.cell));
+  let netOk = true, foOk = true, owcOk = true, kinds = { oil: 0, mixed: 0, water: 0 };
+  for (const L of logs) {
+    if (Math.abs(L.hOil + L.hWater - r.h) > 0.15) netOk = false;
+    if (Math.abs(L.hOil - r.hOil[L.cell]) > 0.15) foOk = false;
+    if (L.hWater === 0) kinds.oil++; else if (L.hOil === 0) kinds.water++; else kinds.mixed++;
+    for (let n = 1; n < L.rigis.length; n++) // граница нефть→вода внутри пачки = ВНК
+      if (L.rigis[n - 1].kind === "oil" && L.rigis[n].kind === "water" &&
+          Math.abs(-L.rigis[n].absTop - r.owc) > 0.051) owcOk = false;
+  }
+  t.push({ name: "ур.2: РИГИС: hн + hв = h, hн совпадает с моделью", pass: netOk && foOk,
+           details: logs.map((L, n) => `${r.explore[n].name}: ${L.hOil}+${L.hWater}`).join(", ") });
+  t.push({ name: "ур.2: разведка: свод в нефти, ≥2 с ВНК в разрезе, есть водяная",
+           pass: kinds.oil >= 1 && kinds.mixed >= 2 && kinds.water >= 1,
+           details: `нефть ${kinds.oil}, нефть+вода ${kinds.mixed}, вода ${kinds.water}` });
+  t.push({ name: "ур.2: ВНК по РИГИС = истинный во всех скважинах, где вскрыт", pass: owcOk });
+  // кривая сопротивления: нефтенасыщенный коллектор ≫ водонасыщенный (Арчи)
+  const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)] || 0; };
+  const Lmix = logs.slice().sort((a, b) => b.hOil * b.hWater - a.hOil * a.hWater)[0];
+  const inK = (L, kind) => L.samples.filter((s) => L.rigis.some((x) => x.kind === kind &&
+    s.md > x.mdTop + 0.4 && s.md < x.mdBase - 0.4)).map((s) => s.rt);
+  const rtO = Lmix ? med(inK(Lmix, "oil")) : 0, rtW = Lmix ? med(inK(Lmix, "water")) : 1;
+  t.push({ name: "каротаж: Rt(нефть) > 8·Rt(вода)", pass: rtO > 8 * rtW,
+           details: `Rt нефть ≈ ${rtO.toFixed(1)}, вода ≈ ${rtW.toFixed(2)} Ом·м` });
+  // динамика: добывающие в своде и в водяной зоне, нагнетательная на крыле
+  const sim = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  const crest = r.explore[0].cell, wet = r.explore[4].cell;
+  sim.addWell(crest, "prod", 150);
+  sim.addWell(wet, "prod", 150);
+  advance(sim, 30);
+  const [wo, ww] = sim.wells;
+  t.push({ name: "ур.2: в своде — нефть (fw<1%), в водяной зоне — вода (fw>99%)",
+           pass: wo.fw < 0.01 && ww.fw > 0.99,
+           details: `свод fw=${(wo.fw * 100).toFixed(1)} %, вода fw=${(ww.fw * 100).toFixed(1)} %` });
+  const sim2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  sim2.addWell(r.explore[1].cell, "prod", 120);
+  sim2.addWell(crest, "inj", 330);
+  advance(sim2, 365);
+  let dW = 0;
+  for (const c of sim2.r.cells) dW += sim2.r.poreVol[c] * (sim2.Sw[c] - sim2.r.Sw0[c]);
+  const inj = sim2.wells[1].cum.inj, prodW = sim2.wells[0].cum.water;
+  const errW = (inj - dW - prodW) / Math.max(1, inj);
+  const mb = materialBalance(sim2);
+  t.push({ name: "ур.2: баланс воды < 0.1 %, давления < 1 %", pass: Math.abs(errW) < 1e-3 && Math.abs(mb.err) < 0.01,
+           details: `вода err=${(errW * 100).toFixed(3)} %, P err=${(mb.err * 100).toFixed(3)} %` });
+  return t;
+}
+
+// ---------- Тесты: разломы, сейсмика, скин, ГДИС, ППД ----------
+function level2bTests() {
+  const t = [];
+  const r = buildReservoir2(DEFAULT_PARAMS), N = r.nx * r.ny;
+  let sealE = 0, leakE = 0;
+  for (let c = 0; c < N; c++) { if (r.tmE[c] === 0 || r.tmN[c] === 0) sealE++; if (r.tmE[c] === 0.3 || r.tmN[c] === 0.3) leakE++; }
+  t.push({ name: "разломы: есть запечатанные и частично проницаемые грани", pass: sealE > 20 && leakE > 20,
+           details: `запечатано ${sealE}, проницаемо на 30 % ${leakE} граней` });
+  const sim = createSim(r, DEFAULT_PARAMS);
+  sim.addWell(26 * r.nx + 20, "inj", 340); // горст между разломами
+  sim.addWell(22 * r.nx + 33, "prod", 120); // восточный блок, за F-1
+  advance(sim, 365);
+  let flux = 0;
+  for (let c = 0; c < N; c++) { if (r.tmE[c] === 0) flux = Math.max(flux, Math.abs(sim._uE[c])); if (r.tmN[c] === 0) flux = Math.max(flux, Math.abs(sim._uN[c])); }
+  let dW = 0;
+  for (const c of r.cells) dW += r.poreVol[c] * (sim.Sw[c] - r.Sw0[c]);
+  const inj = sim.wells[0].cum.inj, errW = (inj - dW - sim.wells[1].cum.water) / Math.max(1, inj);
+  t.push({ name: "разломы: поток через запечатанные грани = 0, баланс воды < 0.1 %",
+           pass: flux === 0 && Math.abs(errW) < 1e-3, details: `max|поток|=${flux.toExponential(1)}, err=${(errW * 100).toFixed(3)} %` });
+  const sm = r.seis;
+  let eT = 0, eTh = 0;
+  for (let c = 0; c < N; c++) { eT = Math.max(eT, Math.abs(sm.top[c] - r.zTop[c])); eTh += Math.abs(sm.thick[c] - r.gross[c]); }
+  const shiftOk = sm.faults.every((F, n) => F.pts.every((q, m) => Math.abs(q[0] - r.faults[n].pts[m][0]) < 1.5));
+  t.push({ name: "сейсмика: кровля ±4 м, трассы разломов смещены < 1.5 ячейки, 2 разлома",
+           pass: eT < 4.5 && shiftOk && sm.faults.length === 2, details: `max|δкровли|=${eT.toFixed(1)} м, ср.|δh|=${(eTh / N).toFixed(1)} м` });
+  // скин: WI падает с ростом скина, ОПЗ снижает скин до −1 и повышает дебит
+  const k100 = 100;
+  t.push({ name: "скин: WI(s=5) < WI(0) < WI(−1)", pass: wellIndex(k100, r, 5) < wellIndex(k100, r, 0) && wellIndex(k100, r, 0) < wellIndex(k100, r, -1) });
+  const w2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  const cell = w2.r.explore[2].cell;
+  w2.addWell(cell, "prod", 150);
+  const wp = w2.wells[0]; wp.skin = 5;
+  advance(w2, 5); const q1 = wp.q;
+  w2.stimulate(wp); advance(w2, 5);
+  t.push({ name: "ОПЗ: скин 5 → −1, дебит растёт", pass: wp.skin === -1 && wp.q > 1.25 * q1, details: `q ${q1.toFixed(0)} → ${wp.q.toFixed(0)} м³/сут` });
+  // перевод в ППД
+  const w3 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  w3.addWell(w3.r.explore[0].cell, "prod", 150);
+  w3.addWell(w3.r.explore[1].cell, "prod", 150);
+  advance(w3, 200);
+  const oil0 = w3.wells[1].cum.oil;
+  w3.convertToInjector(w3.wells[1]); advance(w3, 100);
+  const cw = w3.wells[1];
+  t.push({ name: "ППД: после перевода скважина закачивает воду, добыча не растёт, история сохранена",
+           pass: cw.type === "inj" && cw.q > 0 && cw.cum.inj > 0 && cw.cum.oil === oil0 && cw.wasProd, details: `закачка ${cw.cum.inj.toFixed(0)} м³` });
+  // E1: табличные значения
+  const e = [[1, 0.2193839344], [0.1, 1.8229239584], [5, 0.0011482956], [0.01, 4.0379295766]];
+  t.push({ name: "ГДИС: E1(x) по таблице", pass: e.every(([x, v]) => Math.abs(E1(x) - v) < 1e-6 * Math.max(1, v)) });
+  // КВД: восстановление k и s в радиальном окне
+  let okK = true, okS = true, det = [];
+  for (const [ci, sk] of [[0, 0.5], [1, 4], [3, 8]]) {
+    const sm2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+    const ex = sm2.r.explore[ci].cell;
+    sm2.addWell(ex, "prod", 120); sm2.wells[0].skin = sk;
+    advance(sm2, 60);
+    const bu = pressureBuildup(sm2, sm2.wells[0], 14);
+    const win = suggestWindow(bu), res = win && interpretBuildup(bu, sm2.r, win.t1, win.t2);
+    const k0 = sm2.r.k[ex];
+    if (!res || Math.abs(res.k / k0 - 1) > 0.1) okK = false;
+    if (!res || Math.abs(res.s - sk) > 1.0) okS = false;
+    det.push(res ? `k ${res.k.toFixed(0)}/${k0.toFixed(0)}, s ${res.s.toFixed(1)}/${sk}` : "нет окна");
+  }
+  t.push({ name: "ГДИС: k по КВД в пределах 10 %", pass: okK, details: det.join("; ") });
+  t.push({ name: "ГДИС: скин по КВД в пределах ±1", pass: okS });
+  return t;
+}
+
 registerCore({
-  VERSION: "0.7.0",
+  VERSION: "0.9.0",
   DEFAULT_PARAMS, GRID, CONV_K,
   mulberry32, gauss, buildReservoir, isConnected,
+  L2, buildReservoir2, wellLog, l2Top, l2Column, l2OilNet, l2Altitude,
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  createEconomy, RHO_OIL,
+  createEconomy, RHO_OIL, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
-  saturationTests, breakthroughTests, economyTests,
+  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, level2bTests,
   runSelfTests() {
     return [...reservoirTests(), ...relPermTests(), ...pressureTests(), ...wellTests(),
-            ...saturationTests(), ...breakthroughTests(), ...economyTests()];
+            ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests()];
   },
 });
 </script>
@@ -752,307 +1352,263 @@ registerCore({
 <script id="app">
 "use strict";
 // =====================================================================
-// app: UI — рендер карты, графики, экраны, игровой цикл. Ядро: OILCORE.
+// app: интерфейс на Plotly (карты, графики, каротаж, ГДИС), экраны, игровой цикл.
+// Ядро: OILCORE. Уровень 2: геология скрыта, сейсмика и исследования — за деньги,
+// время идёт по годам; давление/проницаемость/насыщенность — только после итогов.
 // =====================================================================
 const C = globalThis.OILCORE;
 const $ = (id) => document.getElementById(id);
-const PALETTE = ["#f87171", "#fbbf24", "#34d399", "#60a5fa", "#c084fc", "#f472b6",
-                 "#a3e635", "#fb923c", "#22d3ee", "#e879f9"];
+if (typeof Plotly === "undefined") {
+  document.body.innerHTML = "<p style='padding:30px;font:16px sans-serif'>Не найден vendor/plotly-cartesian.min.js — " +
+    "папка vendor должна лежать рядом с index.html.</p>";
+  throw new Error("Plotly не загружен");
+}
+const PAL = ["#636efa", "#EF553B", "#00cc96", "#ab63fa", "#FFA15A", "#19d3f3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52"];
+const TXT = "#2a3f5f", PLOTBG = "#E5ECF6", FONT = "Open Sans, verdana, arial, sans-serif";
+const CFG = { displayModeBar: false, responsive: true };
+const DX = C.GRID.dx, NX = C.GRID.nx;
+
+// базовый макет в духе шаблона plotly: серо-голубое поле, белая сетка
+function lay(o = {}) {
+  const ax = { gridcolor: "#fff", linecolor: "#EBF0F8", zerolinecolor: "#fff", ticks: "outside", tickcolor: "#c8d4e3", automargin: true };
+  const out = { paper_bgcolor: "#fff", plot_bgcolor: PLOTBG, font: { family: FONT, color: TXT, size: 12 },
+                margin: { l: 52, r: 14, t: 34, b: 38 }, showlegend: false, hoverlabel: { font: { family: FONT } },
+                xaxis: { ...ax }, yaxis: { ...ax } };
+  for (const k of Object.keys(o)) out[k] = (/^(x|y)axis\d*$/.test(k) && out[k]) ? { ...out[k], ...o[k] } : (typeof o[k] === "object" && !Array.isArray(o[k]) && out[k] ? { ...out[k], ...o[k] } : o[k]);
+  return out;
+}
+const ttl = (t) => ({ text: t, x: 0.02, xanchor: "left", font: { size: 13 } });
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
 
 const G = {
-  params: null, sim: null,
-  speed: 0, layer: "k", tool: null,
-  wellNames: { prod: 0, inj: 0 }, colorSeq: 0,
-  done: false, frameLast: 0, uiLast: 0,
+  params: null, sim: null, level: 1, speed: 0, layer: "k", tool: null,
+  wellNames: { prod: 0, inj: 0 }, colorSeq: 0, done: false, frameLast: 0, uiLast: 0, dirty: true,
+  running: null,            // идёт расчёт года: {end, t0, snap}
+  expl: [],                 // разведочные скважины уровня 2 [{name, cell}]
+  seis: null,               // купленная сейсмика (данные ядра) или null
+  owcGuess: null, showGuess: true,
+  pta: {},                  // принятые интерпретации ГДИС по скважинам
+  bu: null,                 // последняя КВД
+  log: { open: false, mode: "one", sel: null, speedBefore: 0 },
+  modal: false,
 };
+const isL2 = () => G.level === 2;
+const revealed = () => !isL2() || G.done;
 
 function toast(msg, warn = false) {
   const el = $("toast");
-  el.textContent = msg;
-  el.classList.toggle("warn", warn);
-  el.classList.remove("hidden");
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.add("hidden"), 2600);
+  el.textContent = msg; el.classList.toggle("warn", warn); el.classList.remove("hidden");
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.add("hidden"), 3200);
 }
+const fmtAbs = (z) => `−${z.toFixed(1)}`;
+const mln = (v) => `${(v / 1e6).toFixed(1)} млн руб`;
 function fmtYears(days) {
   const y = Math.floor(days / 365.25), m = Math.round((days - y * 365.25) / 30.44);
   return m === 0 ? `${y} г` : `${y} г ${m} мес`;
 }
 
-// ---------------- цветовые шкалы ----------------
-function makeLut(stops) { // stops: [[r,g,b], ...] равномерно
-  const lut = new Uint8Array(256 * 3);
-  for (let i = 0; i < 256; i++) {
-    const t = i / 255 * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(t)), f = t - k;
-    for (let ch = 0; ch < 3; ch++)
-      lut[i * 3 + ch] = Math.round(stops[k][ch] + (stops[k + 1][ch] - stops[k][ch]) * f);
-  }
-  return lut;
+// ---------------- карта ----------------
+const LAYER_RU = { blank: "Участок", top: "Кровля", base: "Подошва", thick: "Толщина", k: "Проницаемость", P: "Давление", Sw: "Насыщенность", hOil: "h нефть (факт)" };
+function availableLayers() {
+  if (!isL2()) return ["k", "P", "Sw"];
+  const l = ["blank", "top", "base", "thick"];
+  return revealed() ? [...l, "k", "P", "Sw", "hOil"] : l;
 }
-const LUT_K = makeLut([[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]]);
-const LUT_P = makeLut([[59, 76, 192], [103, 169, 207], [247, 247, 247], [239, 138, 98], [180, 4, 38]]);
-const LUT_SW = makeLut([[180, 83, 9], [134, 99, 33], [58, 110, 82], [37, 84, 160], [29, 78, 216]]);
+function seisLocked(id) { return ["top", "base", "thick"].includes(id) && !G.seis; }
+function renderLayerBar() {
+  const box = $("layers"); box.innerHTML = "";
+  for (const id of availableLayers()) {
+    const b = document.createElement("button");
+    b.textContent = (seisLocked(id) ? "🔒 " : "") + LAYER_RU[id];
+    b.className = (id === G.layer ? "active " : "") + (seisLocked(id) ? "lock" : "");
+    b.addEventListener("click", () => {
+      if (seisLocked(id)) return toast(`Сейсмика не заказана — кнопка «Заказать сейсмику» (${mln(G.params.seis_cost)})`, true);
+      G.layer = id; renderLayerBar(); G.dirty = true; renderMap();
+    });
+    box.appendChild(b);
+  }
+  if (isL2() && !G.seis) {
+    const b = document.createElement("button");
+    b.className = "primary"; b.textContent = `🛰 Заказать сейсмику 3D (${(G.params.seis_cost / 1e6).toFixed(0)} млн руб)`;
+    b.addEventListener("click", buySeismic);
+    box.appendChild(b);
+  }
+}
+const xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX);
+const field2D = (fn) => Array.from({ length: NX }, (_, j) => Array.from({ length: NX }, (_, i) => fn(j * NX + i)));
+const logk = Math.log10;
 
-// ---------------- рендер карты ----------------
-const R = {
-  cv: null, ctx: null, off: null, octx: null, img: null, contour: null,
-  init() {
-    this.cv = $("map-canvas"); this.ctx = this.cv.getContext("2d");
-    this.off = document.createElement("canvas");
-    this.cv.addEventListener("mousemove", (e) => this.hover(e));
-    this.cv.addEventListener("mouseleave", () => $("map-tooltip").classList.add("hidden"));
-    this.cv.addEventListener("click", (e) => this.click(e));
-  },
-  prep(sim) {
-    const r = sim.r;
-    this.off.width = r.nx; this.off.height = r.ny;
-    this.octx = this.off.getContext("2d");
-    this.img = this.octx.createImageData(r.nx, r.ny);
-    // контур: рёбра между активными и неактивными ячейками (в координатах ячеек)
-    const seg = [];
-    for (const c of r.cells) {
-      const i = c % r.nx, j = Math.floor(c / r.nx);
-      if (i === 0 || !r.active[c - 1]) seg.push([i, j, i, j + 1]);
-      if (i === r.nx - 1 || !r.active[c + 1]) seg.push([i + 1, j, i + 1, j + 1]);
-      if (j === 0 || !r.active[c - r.nx]) seg.push([i, j, i + 1, j]);
-      if (j === r.ny - 1 || !r.active[c + r.nx]) seg.push([i, j + 1, i + 1, j + 1]);
-    }
-    this.contour = seg;
-  },
-  fieldRange(sim) {
-    const r = sim.r;
-    if (G.layer === "k") return { min: 15, max: 800, log: true, unit: "мД (log)" };
-    if (G.layer === "P") {
-      let mn = 1e9, mx = -1e9;
-      for (const c of r.cells) { mn = Math.min(mn, sim.P[c]); mx = Math.max(mx, sim.P[c]); }
-      return { min: Math.floor(mn / 10) * 10, max: Math.ceil(mx / 10) * 10, unit: "атм" };
-    }
-    return { min: r.Swc, max: 1 - r.Sor, unit: "доли ед." };
-  },
-  fillImage(sim) {
-    const r = sim.r, d = this.img.data, range = this.fieldRange(sim);
-    for (let j = 0; j < r.ny; j++) {
-      for (let i = 0; i < r.nx; i++) {
-        const c = j * r.nx + i, p = c * 4;
-        if (!r.active[c]) { d[p] = 28; d[p + 1] = 37; d[p + 2] = 48; d[p + 3] = 255; continue; }
-        let v;
-        if (G.layer === "k") v = (Math.log10(r.k[c]) - Math.log10(range.min)) / (Math.log10(range.max) - Math.log10(range.min));
-        else if (G.layer === "P") v = (sim.P[c] - range.min) / (range.max - range.min);
-        else v = (sim.Sw[c] - range.min) / (range.max - range.min);
-        v = Math.max(0, Math.min(1, v));
-        const q = Math.round(v * 255) * 3;
-        const lut = G.layer === "k" ? LUT_K : G.layer === "P" ? LUT_P : LUT_SW;
-        d[p] = lut[q]; d[p + 1] = lut[q + 1]; d[p + 2] = lut[q + 2]; d[p + 3] = 255;
-      }
-    }
-    this.octx.putImageData(this.img, 0, 0);
-  },
-  draw(sim) {
-    if (!this.octx) this.prep(sim);
-    this.fillImage(sim);
-    const s = this.cv.width / sim.r.nx, ctx = this.ctx;
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, this.cv.width, this.cv.height);
-    ctx.drawImage(this.off, 0, 0, this.cv.width, this.cv.height);
-    // контур
-    ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5; ctx.beginPath();
-    for (const [x1, y1, x2, y2] of this.contour) {
-      ctx.moveTo(x1 * s, y1 * s); ctx.lineTo(x2 * s, y2 * s);
-    }
-    ctx.stroke();
-    // скважины
-    ctx.font = "600 11px system-ui"; ctx.textAlign = "center";
-    for (const w of sim.wells) {
-      const i = w.cell % sim.r.nx, j = Math.floor(w.cell / sim.r.nx);
-      const x = (i + 0.5) * s, y = (j + 0.5) * s;
-      ctx.lineWidth = 3; ctx.strokeStyle = w.color || "#fff"; ctx.fillStyle = "#fff";
-      if (w.type === "prod") {
-        ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
-      } else {
-        ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + 7, y + 5); ctx.lineTo(x - 7, y + 5);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
-      }
-      ctx.fillStyle = "#fff";
-      ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.strokeText(w.name, x, y - 11);
-      ctx.fillText(w.name, x, y - 11);
-    }
-  },
-  drawScale(sim) {
-    const cv = $("map-scale"), ctx = cv.getContext("2d"), range = this.fieldRange(sim);
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    const x0 = 4, y0 = 8, w = cv.width - 8, h = 12;
-    const lut = G.layer === "k" ? LUT_K : G.layer === "P" ? LUT_P : LUT_SW;
-    for (let x = 0; x < w; x++) {
-      const q = Math.round((x / w) * 255) * 3;
-      ctx.fillStyle = `rgb(${lut[q]},${lut[q + 1]},${lut[q + 2]})`;
-      ctx.fillRect(x0 + x, y0, 1, h);
-    }
-    ctx.fillStyle = "#94a3b8"; ctx.font = "11px system-ui"; ctx.textAlign = "left";
-    const fmt = (v) => G.layer === "k" ? v.toFixed(0) : G.layer === "P" ? v.toFixed(0) : v.toFixed(2);
-    ctx.fillText(`${fmt(range.min)}`, x0, y0 + h + 12);
-    ctx.textAlign = "right"; ctx.fillText(`${fmt(range.max)} ${range.unit}`, x0 + w, y0 + h + 12);
-  },
-  cellAt(e) {
-    const rect = this.cv.getBoundingClientRect();
-    const i = Math.floor(((e.clientX - rect.left) / rect.width) * G.sim.r.nx);
-    const j = Math.floor(((e.clientY - rect.top) / rect.height) * G.sim.r.ny);
-    if (i < 0 || j < 0 || i >= G.sim.r.nx || j >= G.sim.r.ny) return -1;
-    return j * G.sim.r.nx + i;
-  },
-  hover(e) {
-    if (!G.sim) return;
-    const c = this.cellAt(e), tip = $("map-tooltip"), r = G.sim.r;
-    if (c < 0 || !r.active[c]) { tip.classList.add("hidden"); return; }
-    const i = c % r.nx, j = Math.floor(c / r.nx);
-    const w = G.sim.wells.find((x) => x.cell === c);
-    tip.innerHTML = `ячейка (${i}, ${j})<br>k = ${r.k[c].toFixed(0)} мД` +
-      `<br>P = ${G.sim.P[c].toFixed(1)} атм<br>Sw = ${G.sim.Sw[c].toFixed(2)} (So = ${(1 - G.sim.Sw[c]).toFixed(2)})` +
-      (w ? `<br><b>${w.name}</b>: Pwf = ${w.pwf.toFixed(0)} атм` : "");
-    tip.classList.remove("hidden");
-    const wrap = $("mapwrap").getBoundingClientRect();
-    let x = e.clientX - wrap.left + 14, y = e.clientY - wrap.top + 14;
-    if (x > wrap.width - 150) x -= 170;
-    if (y > wrap.height - 90) y -= 100;
-    tip.style.left = x + "px"; tip.style.top = y + "px";
-  },
-  click(e) {
-    if (!G.sim || !G.tool) { if (!G.tool) toast("Сначала выберите инструмент бурения"); return; }
-    drillWell(this.cellAt(e));
-  },
-};
+function cellText(c, r, sim) {
+  const i = c % NX, j = Math.floor(c / NX), L = [`ячейка (${i}, ${j})`];
+  if (r.level === 2 && G.seis) L.push(`кровля (сейсмика): ${fmtAbs(G.seis.top[c])} м`, `толщина (сейсмика): ${G.seis.thick[c].toFixed(1)} м`);
+  if (revealed()) {
+    L.push(`k = ${r.k[c].toFixed(0)} мД`);
+    if (r.level === 2) L.push(`факт: кровля ${fmtAbs(r.zTop[c])} м, h<sub>н</sub> = ${r.hOil[c].toFixed(1)} м`);
+    L.push(`P = ${sim.P[c].toFixed(1)} атм`, `Sw = ${Math.min(1, sim.Sw[c]).toFixed(2)}`);
+  }
+  return L.join("<br>");
+}
+function layerTrace(sim) {
+  const r = sim.r, id = G.layer, text = field2D((c) => cellText(c, r, sim));
+  const act = (c) => r.active[c];
+  const common = { x: xs, y: xs, text, hovertemplate: "%{text}<extra></extra>", hoverongaps: false };
+  const bar = (title, extra = {}) => ({ title: { text: title, side: "right" }, thickness: 14, len: 0.9, ...extra });
+  if (id === "k") return { type: "heatmap", ...common, z: field2D((c) => (act(c) ? logk(r.k[c]) : null)), zmin: logk(15), zmax: logk(800), colorscale: "Viridis",
+    colorbar: bar("k, мД", { tickvals: [logk(15), logk(50), logk(150), logk(400), logk(800)], ticktext: ["15", "50", "150", "400", "800"] }) };
+  if (id === "P") return { type: "heatmap", ...common, z: field2D((c) => (act(c) ? sim.P[c] : null)), colorscale: "RdBu", reversescale: true, colorbar: bar("P, атм") };
+  if (id === "Sw") return { type: "heatmap", ...common, z: field2D((c) => (act(c) ? Math.min(1, sim.Sw[c]) : null)), zmin: r.Swc, zmax: 1, colorscale: "Blues", reversescale: true, colorbar: bar("S<sub>w</sub>") };
+  if (id === "hOil") return { type: "heatmap", ...common, z: field2D((c) => r.hOil[c]), zmin: 0, zmax: r.h, colorscale: "YlOrBr", colorbar: bar("h нефть, м") };
+  if (id === "thick") return { type: "heatmap", ...common, z: field2D((c) => G.seis.thick[c]), colorscale: "Viridis", colorbar: bar("h общая, м") };
+  if (id === "top" || id === "base") {
+    const arr = id === "top" ? G.seis.top : G.seis.base, mn = Math.floor(Math.min(...arr) / 5) * 5, mx = Math.ceil(Math.max(...arr) / 5) * 5;
+    return { type: "contour", ...common, z: field2D((c) => arr[c]), colorscale: "Plasma", reversescale: true, zmin: mn, zmax: mx,
+      contours: { coloring: "heatmap", showlabels: true, start: mn, end: mx, size: 5, labelfont: { size: 10, color: "#fff" } },
+      line: { width: 0.8, color: "rgba(255,255,255,.7)" }, colorbar: bar("абс., м") };
+  }
+  return { type: "heatmap", ...common, z: field2D(() => 0), colorscale: [[0, "#f4f7fb"], [1, "#f4f7fb"]], showscale: false, hoverinfo: "skip" };
+}
+const line1 = (arr, v, color, dash, name) => ({ type: "contour", x: xs, y: xs, z: field2D((c) => arr[c]), showscale: false, hoverinfo: "skip", name,
+  contours: { start: v, end: v, size: 1, coloring: "none", showlabels: false }, line: { color, width: 3, dash } });
+function faultTraces(r, force = false) {
+  const out = [];
+  const draw = (pts, name, color, dash, label) => out.push({ type: "scatter", mode: "lines+text", x: pts.map((p) => (p[0] + 0.5) * DX), y: pts.map((p) => (p[1] + 0.5) * DX),
+    line: { color, width: 3, dash }, text: pts.map((_, n) => (n === 1 ? label : "")), textposition: "top right", textfont: { color, size: 12 },
+    hovertemplate: `${name}<extra></extra>`, showlegend: false });
+  if (isL2() && G.seis) G.seis.faults.forEach((F) => draw(F.pts, F.name, "#b00020", "dash", `${F.name} (сброс ≈ ${F.throwEst} м)`));
+  if (isL2() && (force || revealed())) r.faults.forEach((F) => draw(F.pts, F.name, "#111827", "solid", `${F.name}: ${F.trans === 0 ? "запечатан" : `проницаем ×${F.trans}`}`));
+  return out;
+}
+function wellTraces(sim) {
+  const r = sim.r, pos = (cell) => [((cell % NX) + 0.5) * DX, (Math.floor(cell / NX) + 0.5) * DX];
+  const mk = (list, symbol, fill, hover) => ({ type: "scatter", mode: "markers+text", x: list.map((w) => pos(w.cell)[0]), y: list.map((w) => pos(w.cell)[1]),
+    text: list.map((w) => w.name), textposition: "top center", textfont: { size: 11, color: TXT },
+    marker: { symbol: symbol, size: 14, color: list.map((w) => fill || w.color), line: { color: TXT, width: 2 } },
+    hovertemplate: list.map((w) => hover(w) + "<extra></extra>"), showlegend: false });
+  const out = [];
+  const prod = sim.wells.filter((w) => w.type === "prod"), inj = sim.wells.filter((w) => w.type === "inj");
+  if (G.expl.length) out.push(mk(G.expl, "diamond", "#ffffff", (w) => `<b>${w.name}</b> — разведочная<br>клик — каротаж`));
+  if (prod.length) out.push(mk(prod, "circle", null, (w) => `<b>${w.name}</b> добывающая<br>P<sub>wf</sub> = ${w.pwf.toFixed(0)} атм`));
+  if (inj.length) out.push(mk(inj, "triangle-up", null, (w) => `<b>${w.name}</b> нагнетательная${w.converted ? " (ППД)" : ""}<br>P<sub>wf</sub> = ${w.pwf.toFixed(0)} атм`));
+  return out;
+}
+function renderMap() {
+  const sim = G.sim; if (!sim || !$("screen-game").classList.contains("visible")) return;
+  const r = sim.r, data = [layerTrace(sim)];
+  if (!isL2()) data.push({ type: "contour", x: xs, y: xs, z: field2D((c) => r.active[c]), showscale: false, hoverinfo: "skip",
+                           contours: { start: 0.5, end: 0.5, size: 1, coloring: "none" }, line: { color: "#2a3f5f", width: 2 } });
+  if (isL2() && G.seis && G.owcGuess !== null && G.showGuess) {
+    data.push(line1(G.seis.top, G.owcGuess, "#00b8d4", "dash", "ВНК"), line1(G.seis.base, G.owcGuess, "#00b8d4", "dot", "ВНК"));
+  }
+  if (isL2() && revealed()) {
+    data.push(line1(r.zTop, r.owc, "#111827", "solid", "ВНК факт"), line1(r.zTop.map((z, c) => z + r.gross[c]), r.owc, "#111827", "dot", "ВНК факт"));
+  }
+  data.push(...faultTraces(r), ...wellTraces(sim));
+  const layout = lay({ height: 640, margin: { l: 56, r: 10, t: 10, b: 44 }, dragmode: false, hovermode: "closest",
+    xaxis: { range: [0, NX * DX], title: { text: "Восток, м" }, constrain: "domain" },
+    yaxis: { range: [NX * DX, 0], title: { text: "Север, м" }, scaleanchor: "x" } });
+  Plotly.react("map", data, layout, CFG);
+  if (!renderMap.bound) {
+    renderMap.bound = true;
+    $("map").on("plotly_click", (ev) => { const p = ev.points && ev.points[0]; if (p) onMapClick(Math.floor(p.x / DX), Math.floor(p.y / DX)); });
+  }
+}
+function onMapClick(i, j) {
+  if (!G.sim || i < 0 || j < 0 || i >= NX || j >= NX) return;
+  const cell = j * NX + i;
+  if (!G.tool) {
+    const hit = isL2() && logWells().find((w) => w.cell === cell);
+    return hit ? openLog(hit.name) : toast("Выберите инструмент бурения или кликните по скважине");
+  }
+  if (G.running) return toast("Идёт расчёт года — подождите", true);
+  if (G.tool === "expl") return drillExplore(cell);
+  drillWell(cell);
+}
 
-// ---------------- бурение ----------------
+// ---------------- действия игрока ----------------
+function guardRun() { if (G.running) { toast("Идёт расчёт года — подождите", true); return true; } return false; }
 function drillWell(cell) {
   const sim = G.sim, r = sim.r;
-  if (cell < 0) return;
+  if (guardRun()) return;
   if (!r.active[cell]) return toast("Вне контура нефтеносности", true);
   if (sim.wells.some((w) => w.cell === cell)) return toast("В этой ячейке уже есть скважина", true);
+  if (G.expl.some((e) => e.cell === cell)) return toast("Здесь разведочная скважина", true);
   const type = G.tool;
   sim.economy.drill(sim.t);
   const name = (type === "prod" ? "П" : "Н") + ++G.wellNames[type];
-  const color = PALETTE[G.colorSeq++ % PALETTE.length];
   sim.addWell(cell, type, type === "prod" ? 150 : 325);
   const w = sim.wells[sim.wells.length - 1];
-  w.name = name; w.color = color;
-  toast(`Пробурена ${name} (${type === "prod" ? "добывающая" : "нагнетательная"}), −${(G.params.drill_cost / 1e6).toFixed(0)} млн руб`);
-  renderWellTable(true);
-  drawAllCharts();
+  w.name = name; w.color = PAL[G.colorSeq++ % PAL.length];
+  let msg = `Пробурена ${name} (${type === "prod" ? "добывающая" : "нагнетательная"}), −${mln(G.params.drill_cost)}`;
+  if (isL2()) { const L = C.wellLog(r, cell); msg += `. ГИС: h нефть ${L.hOil.toFixed(1)} м, вода ${L.hWater.toFixed(1)} м`; }
+  toast(msg); renderWellTable(true); G.dirty = true; renderAll();
+}
+function drillExplore(cell) {
+  if (G.expl.some((e) => e.cell === cell)) return toast("Здесь уже есть разведочная скважина", true);
+  if (G.sim.wells.some((w) => w.cell === cell)) return toast("В этой ячейке скважина", true);
+  G.sim.economy.drill(G.sim.t, G.params.expl_cost);
+  const name = `Р-${G.expl.length + 1}`;
+  G.expl.push({ name, cell });
+  toast(`Пробурена разведочная ${name}, −${mln(G.params.expl_cost)}`);
+  G.dirty = true; renderAll(); openLog(name);
+}
+function buySeismic() {
+  if (guardRun() || G.seis) return;
+  G.sim.economy.spend(G.sim.t, G.params.seis_cost);
+  G.seis = G.sim.r.seis; G.layer = "top";
+  toast(`Сейсмика 3D получена, −${mln(G.params.seis_cost)}: карты кровли, подошвы, толщины и разломы`);
+  renderLayerBar(); G.dirty = true; renderAll();
+}
+function convertWell(w) {
+  if (guardRun() || w.type !== "prod") return;
+  G.sim.economy.spend(G.sim.t, G.params.conv_cost);
+  G.sim.convertToInjector(w);
+  toast(`${w.name} переведена под закачку (ППД), −${mln(G.params.conv_cost)}`);
+  renderWellTable(true); G.dirty = true; renderAll();
+}
+function stimWell(w) {
+  if (guardRun() || w.stimulated) return;
+  G.sim.economy.spend(G.sim.t, G.params.stim_cost);
+  G.sim.stimulate(w);
+  toast(`${w.name}: проведена обработка призабойной зоны, −${mln(G.params.stim_cost)}. Эффект проявится в дебите`);
+  renderWellTable(true); G.dirty = true; renderAll();
+}
+function setTool(tool) {
+  G.tool = tool;
+  for (const [id, t] of [["tool-prod", "prod"], ["tool-inj", "inj"], ["tool-expl", "expl"]]) $(id).classList.toggle("active", tool === t);
 }
 
 // ---------------- графики ----------------
-function lineChart(cv, cfg) {
-  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
-  ctx.clearRect(0, 0, W, H);
-  const mL = 46, mR = 8, mT = 8, mB = 20, pw = W - mL - mR, ph = H - mT - mB;
-  const n = cfg.series.length ? cfg.series[0].ys.length : 0;
-  ctx.font = "10px system-ui"; ctx.fillStyle = "#94a3b8";
-  if (!n) { ctx.textAlign = "center"; ctx.fillText("нет данных", W / 2, H / 2); return; }
-  let ymin = cfg.yMin, ymax = cfg.yMax;
-  if (ymin === undefined) {
-    ymin = Infinity; ymax = -Infinity;
-    for (const s of cfg.series) for (const v of s.ys) { if (v < ymin) ymin = v; if (v > ymax) ymax = v; }
-    if (!isFinite(ymin)) { ymin = 0; ymax = 1; }
-    if (ymax - ymin < 1e-9) { const c = ymax || 0; ymin = c - 1; ymax = c + 1; }
-    const pad = (ymax - ymin) * 0.08; ymin -= pad; ymax += pad;
-    if (cfg.y0 && ymin > 0) ymin = 0;
-  }
-  const xMax = cfg.xMax || n;
-  const X = (t) => mL + (t / xMax) * pw;
-  const Y = (v) => mT + ph - ((v - ymin) / (ymax - ymin)) * ph;
-  // сетка + подписи Y
-  ctx.textAlign = "right"; ctx.strokeStyle = "#26324a"; ctx.lineWidth = 1;
-  for (let k = 0; k <= 4; k++) {
-    const v = ymin + ((ymax - ymin) * k) / 4, y = Y(v);
-    ctx.beginPath(); ctx.moveTo(mL, y); ctx.lineTo(W - mR, y); ctx.stroke();
-    ctx.fillText(cfg.fmtY ? cfg.fmtY(v) : v.toFixed(0), mL - 4, y + 3);
-  }
-  // подписи X (годы)
-  ctx.textAlign = "center";
-  const yTicks = Math.max(1, Math.round(xMax / 365.25 / 4));
-  for (let yr = 0; yr * 365.25 <= xMax; yr += yTicks)
-    ctx.fillText(yr === 0 ? "0" : `${yr}`, X(yr * 365.25), H - 6);
-  if (xMax > 700) { ctx.textAlign = "left"; ctx.fillText("годы", W - mR - 34, H - 6); }
-  // отметки бурений
-  if (cfg.marks) {
-    ctx.strokeStyle = "#64748b"; ctx.setLineDash([2, 3]);
-    for (const m of cfg.marks) { const x = X(m); ctx.beginPath(); ctx.moveTo(x, mT); ctx.lineTo(x, mT + ph); ctx.stroke(); }
-    ctx.setLineDash([]);
-  }
-  // пунктир (например, P0)
-  if (cfg.dashed !== undefined) {
-    ctx.strokeStyle = "#94a3b8"; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(mL, Y(cfg.dashed)); ctx.lineTo(W - mR, Y(cfg.dashed)); ctx.stroke();
-    ctx.setLineDash([]);
-  }
-  // серии
-  const step = Math.max(1, Math.ceil(n / pw));
-  const idxs = [];
-  for (let k = 0; k < n; k += step) idxs.push(k);
-  if (idxs[idxs.length - 1] !== n - 1) idxs.push(n - 1);
-  if (cfg.stack) {
-    const cum = new Float64Array(n);
-    for (const s of cfg.series) {
-      ctx.beginPath();
-      let first = true;
-      for (const k of idxs) { const x = X(k + 1), y = Y(cum[k] + s.ys[k]); first ? ctx.moveTo(x, y) : ctx.lineTo(x, y); first = false; }
-      for (let q = idxs.length - 1; q >= 0; q--) { const k = idxs[q]; ctx.lineTo(X(k + 1), Y(cum[k])); }
-      ctx.closePath();
-      ctx.fillStyle = s.color + "8c"; ctx.fill();
-      for (let k = 0; k < n; k++) cum[k] += s.ys[k];
-    }
-    // суммарная линия
-    ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1.4; ctx.beginPath();
-    idxs.forEach((k, q) => { const x = X(k + 1), y = Y(cum[k]); q === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-    ctx.stroke();
-  } else {
-    for (const s of cfg.series) {
-      ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 1.3; ctx.beginPath();
-      idxs.forEach((k, q) => { const x = X(k + 1), y = Y(s.ys[k]); q === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-      ctx.stroke();
-    }
-  }
+function histSeries(sim, pick, step) {
+  const h = sim.history.days, out = [];
+  for (let k = 0; k < h.length; k += step) out.push(pick(h[k]));
+  return out;
 }
-function histSeries(sim, pick) {
-  const h = sim.history.days;
-  const n = sim.wells.length ? h.length : 0;
-  const ys = new Array(n);
-  for (let k = 0; k < n; k++) ys[k] = pick(h[k]);
-  return ys;
-}
-function drawAllCharts() {
+function renderCharts() {
   const sim = G.sim; if (!sim) return;
-  const h = sim.history.days, xMax = Math.max(G.params.horizon_days, sim.t);
-  const prods = sim.wells.filter((w) => w.type === "prod");
-  lineChart($("chart-rate"), {
-    stack: true, xMax,
-    series: prods.map((w) => ({ color: w.color, ys: histSeries(sim, (d) => (d.wells[w.idx] ? d.wells[w.idx].qo * 0.86 : 0)) })),
-    fmtY: (v) => v.toFixed(0), y0: true,
-  });
-  lineChart($("chart-p"), {
-    xMax, dashed: sim.r.P0,
-    series: [{ color: "#60a5fa", ys: h.map((d) => d.avgP), width: 1.6 }],
-    fmtY: (v) => v.toFixed(0),
-  });
-  lineChart($("chart-pwf"), {
-    xMax, yMin: 0, yMax: 390,
-    series: sim.wells.map((w) => ({ color: w.color, ys: histSeries(sim, (d) => (d.wells[w.idx] ? d.wells[w.idx].pwf : w.pwf)) })),
-    fmtY: (v) => v.toFixed(0),
-  });
-  lineChart($("chart-cum"), {
-    xMax,
-    series: [{ color: "#fbbf24", ys: h.map((d) => (d.cumOilM3 * 0.86) / 1000), width: 1.6 }],
-    fmtY: (v) => v.toFixed(0), y0: true,
-  });
-  const last = sim.economy.balance / 1e6;
-  lineChart($("chart-money"), {
-    xMax, marks: sim.economy.drills, y0: true,
-    series: [{ color: last >= 0 ? "#34d399" : "#f87171", ys: h.map((d) => d.money / 1e6), width: 1.6 }],
-    fmtY: (v) => v.toFixed(0),
-  });
+  const h = sim.history.days, step = Math.max(1, Math.ceil(h.length / 320));
+  const xsY = []; for (let k = 0; k < h.length; k += step) xsY.push(h[k].t / 365.25);
+  const xMax = Math.max(G.params.horizon_days, sim.t) / 365.25;
+  const common = (t, extra = {}) => lay({ title: ttl(t), height: 175, margin: { l: 46, r: 10, t: 30, b: 28 }, xaxis: { range: [0, xMax], title: { text: "годы", standoff: 2 } }, ...extra });
+  const ever = sim.wells.filter((w) => w.type === "prod" || w.wasProd);
+  Plotly.react("chart-rate", ever.map((w) => ({ type: "scatter", mode: "lines", x: xsY, name: w.name, stackgroup: "q", line: { width: 0.6, color: w.color },
+    fillcolor: rgba(w.color, 0.55), y: histSeries(sim, (d) => (d.wells[w.idx] ? d.wells[w.idx].qo * 0.86 : 0), step), hovertemplate: `${w.name}: %{y:.1f} т/сут<extra></extra>` })),
+    common("Дебит нефти, т/сут", { yaxis: { rangemode: "tozero" } }), CFG);
+  Plotly.react("chart-p", [{ type: "scatter", mode: "lines", x: xsY, y: histSeries(sim, (d) => d.avgP, step), line: { color: PAL[0], width: 2 }, hovertemplate: "%{y:.1f} атм<extra></extra>" }],
+    common("Среднее пластовое давление, атм", { shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: sim.r.P0, y1: sim.r.P0, line: { color: "#6b7c93", width: 1, dash: "dash" } }] }), CFG);
+  Plotly.react("chart-pwf", sim.wells.map((w) => ({ type: "scatter", mode: "lines", name: w.name, x: xsY, line: { color: w.color, width: 1.6 },
+    y: histSeries(sim, (d) => (d.wells[w.idx] ? d.wells[w.idx].pwf : w.pwf), step), hovertemplate: `${w.name}: %{y:.0f} атм<extra></extra>` })),
+    common("Забойные давления, атм", { yaxis: { range: [0, 390] } }), CFG);
+  Plotly.react("chart-cum", [{ type: "scatter", mode: "lines", x: xsY, y: histSeries(sim, (d) => (d.cumOilM3 * 0.86) / 1000, step), fill: "tozeroy",
+    fillcolor: rgba(PAL[4], 0.35), line: { color: PAL[4], width: 2 }, hovertemplate: "%{y:.1f} тыс. т<extra></extra>" }],
+    common("Накопленная добыча нефти, тыс. т", { yaxis: { rangemode: "tozero" } }), CFG);
+  const last = sim.economy.balance;
+  Plotly.react("chart-money", [{ type: "scatter", mode: "lines", x: xsY, y: histSeries(sim, (d) => d.money / 1e6, step), line: { color: last >= 0 ? PAL[2] : PAL[1], width: 2 },
+    hovertemplate: "%{y:.1f} млн руб<extra></extra>" }],
+    common("Баланс, млн руб (пунктир — решения и затраты)", { shapes: sim.economy.drills.map((d) => ({ type: "line", yref: "paper", y0: 0, y1: 1, x0: d / 365.25, x1: d / 365.25, line: { color: "#8a97ab", width: 1, dash: "dot" } })) }), CFG);
 }
 
 // ---------------- панель скважин ----------------
-const wellRows = new Map(); // well → {tr, tdPwf, tdOil, tdWat, tdFw, slider, val}
+const wellRows = new Map();
 function renderWellTable(force = false) {
   const sim = G.sim; if (!sim) return;
   const tb = $("welltable").tBodies[0];
@@ -1062,209 +1618,473 @@ function renderWellTable(force = false) {
       w.idx = idx;
       const tr = document.createElement("tr");
       const rng = w.type === "prod" ? [1, 225] : [250, 375];
-      tr.innerHTML =
-        `<td><span class="w-dot" style="background:${w.color}"></span></td>` +
-        `<td>${w.name}</td>` +
-        `<td class="w-pwf"><input type="range" min="${rng[0]}" max="${rng[1]}" step="1" value="${w.pwf}">` +
-        `<span class="pwf-val">${w.pwf.toFixed(0)}</span></td>` +
-        `<td class="qo"></td><td class="qw"></td><td class="fw"></td>`;
+      const btn = (cls, txt, title, dis) => `<button class="${cls}" title="${title}"${dis ? " disabled" : ""}>${txt}</button>`;
+      const acts = (isL2() ? btn("a-log", "📈", "Каротаж и РИГИС") : "") +
+        (isL2() && w.type === "prod" ? btn("a-pta", "⏱", "ГДИС: КВД") + btn("a-stim", "🧪", `Обработка призабойной зоны, ${(G.params.stim_cost / 1e6).toFixed(0)} млн руб${w.stimulated ? " (уже проведена)" : ""}`, w.stimulated) : "") +
+        (w.type === "prod" ? btn("a-conv", "💧→", `Перевести под закачку (ППД), ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб`) : "");
+      const p = G.pta[w.name], note = p ? `<div class="pta-note">ГДИС: k≈${p.k.toFixed(0)} мД, s≈${p.s.toFixed(1)}</div>` : "";
+      tr.innerHTML = `<td><span class="w-dot" style="background:${w.color}"></span></td><td>${w.name}${w.converted ? " <span class='sub'>(ППД)</span>" : ""}</td>` +
+        `<td class="w-pwf"><input type="range" min="${rng[0]}" max="${rng[1]}" step="1" value="${w.pwf}"> <span class="pwf-val">${w.pwf.toFixed(0)}</span></td>` +
+        `<td class="qo"></td><td class="qw"></td><td class="fw"></td><td><div class="wact">${acts}</div>${note}</td>`;
       const slider = tr.querySelector("input"), val = tr.querySelector(".pwf-val");
       slider.addEventListener("input", () => { w.pwf = +slider.value; val.textContent = w.pwf.toFixed(0); });
+      const on = (cls, fn) => { const b = tr.querySelector("." + cls); if (b) b.addEventListener("click", fn); };
+      on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
       tb.appendChild(tr);
       wellRows.set(w, { slider, val, qo: tr.querySelector(".qo"), qw: tr.querySelector(".qw"), fw: tr.querySelector(".fw") });
     });
-    $("wellcount").textContent = `(${sim.wells.length}: доб. ${sim.wells.filter((w) => w.type === "prod").length}, наг. ${sim.wells.filter((w) => w.type === "inj").length})`;
+    const np = sim.wells.filter((w) => w.type === "prod").length, ni = sim.wells.length - np;
+    $("wellcount").textContent = `(${sim.wells.length}: доб. ${np}, наг. ${ni}${isL2() ? `, разв. ${G.expl.length}` : ""})`;
   }
   for (const w of sim.wells) {
     const row = wellRows.get(w); if (!row) continue;
     if (+row.slider.value !== Math.round(w.pwf)) { row.slider.value = w.pwf; row.val.textContent = w.pwf.toFixed(0); }
-    row.qo.textContent = (w.qo * 0.86).toFixed(1);
-    row.qw.textContent = w.qw.toFixed(1);
-    row.fw.textContent = (w.fw * 100).toFixed(0);
+    row.qo.textContent = (w.qo * 0.86).toFixed(1); row.qw.textContent = w.qw.toFixed(1); row.fw.textContent = (w.fw * 100).toFixed(0);
   }
+}
+
+// ---------------- итоги по годам ----------------
+function yearStats(sim) {
+  const h = sim.history.days, out = [];
+  for (let n = 1; n * 365 <= h.length; n++) {
+    const a = (n - 1) * 365, b = n * 365 - 1;
+    let q = 0, qw = 0, inj = 0;
+    for (let d = a; d <= b; d++) for (const w of h[d].wells) if (w.prod) { q += w.q; qw += w.qw; }
+    const cum = (d) => (d < 0 ? 0 : h[d].cumOilM3), m0 = a === 0 ? G.params.init_money : h[a - 1].money;
+    out.push({ n, oil: ((cum(b) - cum(a - 1)) * 0.86) / 1000, wc: q > 0 ? qw / q : 0, dMoney: (h[b].money - m0) / 1e6 });
+  }
+  return out;
+}
+function renderYearTable() {
+  const sim = G.sim; if (!sim) return;
+  const tb = $("year-table").tBodies[0], rows = yearStats(sim);
+  const inj = G.yearInj || [];
+  tb.innerHTML = rows.map((y, i) => `<tr><td>${y.n}</td><td>${y.oil.toFixed(1)}</td><td>${(y.wc * 100).toFixed(0)}</td><td>${inj[i] === undefined ? "—" : inj[i].toFixed(0)}</td>` +
+    `<td style="color:${y.dMoney >= 0 ? "#00a37a" : "#ef553b"}">${y.dMoney >= 0 ? "+" : ""}${y.dMoney.toFixed(1)}</td></tr>`).join("") || `<tr><td colspan="5" class="sub">Нет данных — рассчитайте первый год</td></tr>`;
 }
 
 // ---------------- верхняя панель ----------------
 function updateTopbar() {
-  const sim = G.sim, p = G.params;
-  const elapsed = sim.t, total = p.horizon_days;
-  $("tb-date").textContent = G.done
-    ? `${fmtYears(elapsed)} (${Math.floor(elapsed)} сут) — песочница`
-    : `${fmtYears(elapsed)} (${Math.floor(elapsed)} / ${Math.floor(total)} сут)`;
-  const m = sim.economy.balance / 1e6;
-  const h = sim.history.days;
-  const d30 = h[Math.max(0, h.length - 31)];
-  const dm = d30 && d30.money !== null ? (sim.economy.balance - d30.money) / 1e6 : 0;
-  const el = $("tb-money");
+  const sim = G.sim, p = G.params, t = sim.t;
+  const yr = Math.floor(t / 365 + 1e-9), total = Math.round(p.horizon_days / 365.25);
+  $("tb-date").textContent = isL2() ? (G.done ? `Год ${yr} — песочница` : `Год ${yr} из ${total}`) : (G.done ? `${fmtYears(t)} — песочница` : `${fmtYears(t)} (${Math.floor(t)} / ${Math.floor(p.horizon_days)} сут)`);
+  const m = sim.economy.balance / 1e6, h = sim.history.days, d30 = h[Math.max(0, h.length - 31)];
+  const dm = d30 && d30.money !== null ? (sim.economy.balance - d30.money) / 1e6 : 0, el = $("tb-money");
   el.textContent = `${m.toFixed(1)} млн руб (${dm >= 0 ? "+" : ""}${dm.toFixed(1)}/мес)`;
   el.className = "tb-info " + (m >= 0 ? "good" : "bad");
+  const busy = !!G.running;
+  $("btn-year").disabled = busy || G.modal;
+  $("btn-year").textContent = busy ? "Расчёт года…" : (!isL2() || !G.done && yr + 1 > total ? "▶ Следующий год" : `▶ Год ${yr + 1}`);
+  $("year-bar").firstElementChild.style.width = busy ? `${Math.min(100, ((t - G.running.t0) / 365) * 100)}%` : "0";
 }
+function renderAll() { renderMap(); renderCharts(); renderWellTable(); renderYearTable(); updateTopbar(); G.dirty = false; }
 
-// ---------------- игровой цикл ----------------
+// ---------------- время: год за годом и живой режим ----------------
+function startYear() {
+  if (!G.sim || G.running || G.modal) return;
+  const sim = G.sim;
+  G.running = { t0: sim.t, end: sim.t + 365, inj0: sim.wells.reduce((s, w) => s + w.cum.inj, 0), oil0: sim.wells.reduce((s, w) => s + w.cum.oil, 0),
+                water0: sim.wells.reduce((s, w) => s + w.cum.water, 0), m0: sim.economy.balance };
+  setSpeed(0); setTool(null);
+}
+function finishYear() {
+  const sim = G.sim, R = G.running; G.running = null;
+  const inj = sim.wells.reduce((s, w) => s + w.cum.inj, 0) - R.inj0, oil = (sim.wells.reduce((s, w) => s + w.cum.oil, 0) - R.oil0) * 0.86 / 1000;
+  const water = sim.wells.reduce((s, w) => s + w.cum.water, 0) - R.water0;
+  (G.yearInj || (G.yearInj = [])).push(inj / 1000);
+  const dm = (sim.economy.balance - R.m0) / 1e6, yr = Math.round(sim.t / 365);
+  toast(`Год ${yr}: нефть ${oil.toFixed(1)} тыс. т, вода ${(water / 1000).toFixed(0)} тыс. м³, баланс ${dm >= 0 ? "+" : ""}${dm.toFixed(1)} млн руб. Можно вносить изменения.`);
+  G.dirty = true; renderAll();
+  if (!G.done && sim.t >= G.params.horizon_days - 1) showResults();
+}
 function gameLoop(ts) {
   requestAnimationFrame(gameLoop);
-  const dt = Math.min(0.1, Math.max(0, (ts - G.frameLast) / 1000));
-  G.frameLast = ts;
-  if (G.sim && G.speed > 0) {
-    C.advance(G.sim, Math.min(2.5, G.speed * dt));
-    if (!G.done && G.sim.t >= G.params.horizon_days - 1e-9) {
-      setSpeed(0); showResults();
+  const dt = Math.min(0.1, Math.max(0, (ts - G.frameLast) / 1000)); G.frameLast = ts;
+  const sim = G.sim;
+  if (sim && !G.modal) {
+    if (G.running) {
+      const step = Math.min(15, G.running.end - sim.t);
+      C.advance(sim, step); G.dirty = true;
+      if (sim.t >= G.running.end - 1e-6) finishYear();
+    } else if (G.speed > 0) {
+      C.advance(sim, Math.min(2.5, G.speed * dt)); G.dirty = true;
+      if (!G.done && sim.t >= G.params.horizon_days - 1e-9) { setSpeed(0); showResults(); }
     }
   }
-  if (G.sim) {
-    R.draw(G.sim); R.drawScale(G.sim); updateTopbar();
-    if (ts - G.uiLast > 250) { G.uiLast = ts; renderWellTable(); drawAllCharts(); }
-  }
+  if (sim && G.dirty && ts - G.uiLast > 250 && $("screen-game").classList.contains("visible")) { G.uiLast = ts; renderAll(); }
 }
 function setSpeed(v) {
   G.speed = v;
-  for (const [id, val] of [["sp-pause", 0], ["sp-1", 2], ["sp-10", 20], ["sp-50", 100]])
-    $(id).classList.toggle("active", G.speed === val);
+  for (const [id, val] of [["sp-pause", 0], ["sp-1", 2], ["sp-10", 20], ["sp-50", 100]]) $(id).classList.toggle("active", G.speed === val);
 }
 
-// ---------------- экраны ----------------
-function show(id) {
-  for (const s of ["screen-settings", "screen-game", "screen-results"])
-    $(s).classList.toggle("visible", s === id);
+// ---------------- каротаж ----------------
+function logWells() {
+  const out = G.expl.map((e) => ({ name: e.name, cell: e.cell, kind: "expl", color: "#8a97ab" }));
+  if (G.sim) for (const w of G.sim.wells) out.push({ name: w.name, cell: w.cell, kind: w.type, color: w.color });
+  return out;
 }
+const KIND_RU = { expl: "разведочная", prod: "добывающая", inj: "нагнетательная" };
+const SAT_RU = { oil: "нефть", water: "вода", shale: "неколлектор" };
+const RIGIS_COL = { oil: "#d97706", water: "#2563eb", shale: "#64748b" };
+function openModal(id) { G.modal = true; G.log.speedBefore = G.speed; setSpeed(0); $(id).classList.remove("hidden"); }
+function closeModals() {
+  if (!G.modal) return;
+  G.modal = false; G.log.open = false; $("log-modal").classList.add("hidden"); $("pta-modal").classList.add("hidden");
+  setSpeed(G.log.speedBefore); G.dirty = true;
+}
+function openLog(name) {
+  if (!G.log.open) { openModal("log-modal"); G.log.open = true; }
+  if (name) { G.log.sel = name; G.log.mode = "one"; }
+  if (!G.log.sel || !logWells().some((w) => w.name === G.log.sel)) G.log.sel = logWells()[0] ? logWells()[0].name : null;
+  renderLogList(); drawLog();
+}
+function setLogMode(mode) { G.log.mode = mode; renderLogList(); drawLog(); }
+function renderLogList() {
+  $("log-tab-one").classList.toggle("active", G.log.mode === "one"); $("log-tab-corr").classList.toggle("active", G.log.mode === "corr");
+  let html = "", grp = null;
+  for (const w of logWells()) {
+    const g = w.kind === "expl" ? "Разведочные" : "Пробуренные";
+    if (g !== grp) { html += `<div class="grp">${g}</div>`; grp = g; }
+    html += `<button class="${G.log.mode === "one" && w.name === G.log.sel ? "active" : ""}" data-name="${w.name}"><span class="w-dot" style="background:${w.color}"></span> ${w.name}</button>`;
+  }
+  $("log-list").innerHTML = html || `<div class="sub">нет скважин</div>`;
+  $("log-list").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { G.log.sel = b.dataset.name; G.log.mode = "one"; renderLogList(); drawLog(); }));
+}
+function drawLog() { if (G.log.open && G.sim) (G.log.mode === "corr" ? drawCorrelation : drawWellPanel)(); }
+function guessLine(yref, y, x1) {
+  return G.owcGuess === null ? [] : [{ type: "line", xref: "paper", x0: 0, x1, yref, y0: y, y1: y, line: { color: "#00b8d4", width: 2, dash: "dash" } }];
+}
+function drawWellPanel() {
+  const w = logWells().find((x) => x.name === G.log.sel);
+  if (!w) { $("log-side").innerHTML = ""; return; }
+  const L = C.wellLog(G.sim.r, w.cell), S = L.samples, alt = L.alt;
+  $("log-title").textContent = `Каротаж: ${w.name}`;
+  const md = S.map((s) => s.md), ab = S.map((s) => -s.z);
+  const dom = { gr: [0.0, 0.2], rt: [0.22, 0.52], kp: [0.54, 0.74], rg: [0.78, 0.96] }, trackEnd = 0.74;
+  const tr = (x, y, name, color, xaxis, fmt, fill) => ({ type: "scatter", mode: "lines", x, y, xaxis, yaxis: "y", name, line: { color, width: 1.6 },
+    customdata: ab, hovertemplate: `${name}: %{x:${fmt}}<extra></extra>`, ...(fill || {}) });
+  const data = [tr(S.map((s) => s.gr), md, "ГК, мкР/ч", "#00a37a", "x", ".1f"), tr(S.map((s) => s.rt), md, "Rt, Ом·м", "#ef553b", "x2", ".1f"),
+    tr(S.map((s) => s.kp), md, "Кп", "#636efa", "x3", ".3f"),
+    { type: "scatter", mode: "markers", x: [0], y: [md[0]], xaxis: "x4", yaxis: "y2", hoverinfo: "skip", marker: { opacity: 0 }, showlegend: false }];
+  const mdMin = md[0], mdMax = md[md.length - 1];
+  const shapes = [], notes = [];
+  for (const x of L.rigis) {
+    const col = RIGIS_COL[x.kind];
+    shapes.push({ type: "rect", xref: "paper", yref: "y", x0: 0, x1: trackEnd, y0: x.mdTop, y1: x.mdBase, fillcolor: rgba(col, 0.13), line: { width: 0 }, layer: "below" });
+    shapes.push({ type: "rect", xref: "paper", yref: "y", x0: dom.rg[0], x1: dom.rg[1], y0: x.mdTop, y1: x.mdBase, fillcolor: col, line: { color: "#fff", width: 1 } });
+    if (x.h > 0.5) notes.push({ xref: "paper", yref: "y", x: (dom.rg[0] + dom.rg[1]) / 2, y: (x.mdTop + x.mdBase) / 2, text: `${x.kind === "oil" ? "Н" : x.kind === "water" ? "В" : "гл"} ${x.h.toFixed(1)}`, showarrow: false, font: { color: "#fff", size: 11 } });
+  }
+  const heads = [["ГК, мкР/ч", dom.gr], ["Rt, Ом·м", dom.rt], ["Кп, д.ед.", dom.kp], ["РИГИС", dom.rg]].map(([t, d]) => ({ xref: "paper", yref: "paper", x: (d[0] + d[1]) / 2, y: 1.0, yshift: 24, yanchor: "bottom", text: `<b>${t}</b>`, showarrow: false, font: { size: 12 } }));
+  const guessMd = alt + (G.owcGuess === null ? 0 : G.owcGuess);
+  if (G.owcGuess !== null && guessMd > mdMin && guessMd < mdMax) {
+    shapes.push({ type: "line", xref: "paper", x0: 0, x1: trackEnd, yref: "y", y0: guessMd, y1: guessMd, line: { color: "#00b8d4", width: 2, dash: "dash" } });
+    notes.push({ xref: "paper", yref: "y", x: 0.005, y: guessMd, xanchor: "left", yanchor: "bottom", text: `ваш ВНК ${fmtAbs(G.owcGuess)}`, showarrow: false, font: { color: "#00859a", size: 11 } });
+  }
+  const layout = lay({ height: 700, margin: { l: 58, r: 66, t: 62, b: 12 }, hovermode: "y unified", showlegend: false, shapes, annotations: [...heads, ...notes],
+    yaxis: { range: [mdMax, mdMin], title: { text: "MD, м" }, domain: [0, 1], showspikes: true, spikemode: "across", spikethickness: 1, spikedash: "dot", spikecolor: "#2a3f5f" },
+    yaxis2: { overlaying: "y", side: "right", anchor: "x4", range: [alt - mdMax, alt - mdMin], title: { text: "абс. отметка, м" }, showgrid: false, ticks: "outside" },
+    xaxis: { domain: dom.gr, range: [0, 20], side: "top", showticklabels: true },
+    xaxis2: { domain: dom.rt, type: "log", range: [Math.log10(0.5), 2], side: "top", gridcolor: "#fff" },
+    xaxis3: { domain: dom.kp, range: [0.3, 0], side: "top", gridcolor: "#fff" },
+    xaxis4: { domain: dom.rg, range: [0, 1], visible: false } });
+  for (const k of ["xaxis2", "xaxis3"]) layout[k] = { ...layout.xaxis, ...layout[k] };
+  Plotly.react("log-plot", data, layout, CFG);
+  const rows = L.rigis.map((x, n) => `<tr><td>${n + 1}</td><td>${x.mdTop.toFixed(1)}–${x.mdBase.toFixed(1)}</td><td>${fmtAbs(-x.absTop)}…${fmtAbs(-x.absBase)}</td><td>${x.h.toFixed(1)}</td>` +
+    `<td><span class="sat ${x.kind}"></span>${SAT_RU[x.kind]}</td><td>${x.kp === null ? "—" : x.kp.toFixed(3)}</td><td>${x.kn === null ? "—" : x.kn.toFixed(2)}</td><td>${x.kpr === null ? "—" : x.kpr}</td></tr>`).join("");
+  $("log-side").innerHTML = `<div><b>${w.name}</b> · ${KIND_RU[w.kind]} · ячейка (${L.i}, ${L.j})</div>` +
+    `<div class="sub">Альтитуда стола ротора: ${alt.toFixed(1)} м · ствол вертикальный</div>` +
+    `<div style="margin-top:8px">Кровля: MD ${L.mdTop.toFixed(1)} м (абс. ${fmtAbs(-L.absTop)} м)<br>Подошва: MD ${L.mdBase.toFixed(1)} м (абс. ${fmtAbs(-L.absBase)} м)<br>` +
+    `h общая ${L.hGross.toFixed(1)} м · h эф. нефть <b>${L.hOil.toFixed(1)}</b> м · h эф. вода <b>${L.hWater.toFixed(1)}</b> м</div>` +
+    `<h2>РИГИС — результаты интерпретации ГИС</h2><table><thead><tr><th>№</th><th>MD, м</th><th>Абс., м</th><th>h, м</th><th>Насыщ.</th><th>Кп</th><th>Кн</th><th>Кпр</th></tr></thead><tbody>${rows}</tbody></table>` +
+    `<div class="note">Коллектор — низкий ГК; в нём высокое Rt — нефть, низкое — вода (закон Арчи). ВНК — граница «нефть → вода» внутри коллектора. ` +
+    `Сравнивайте скважины по <b>абсолютным отметкам</b>: абс. = −(MD − альтитуда). Наведите курсор на планшет — вертикальная линия покажет значения кривых на этой глубине.</div>`;
+}
+function drawCorrelation() {
+  const wells = logWells(), r = G.sim.r;
+  $("log-title").textContent = "Схема корреляции (по абсолютным отметкам)";
+  if (!wells.length) { Plotly.purge("log-plot"); return; }
+  const logs = wells.map((w) => ({ w, L: C.wellLog(r, w.cell) })), n = logs.length, cw = 1 / n;
+  const zMin = Math.min(...logs.map(({ L }) => -L.absTop)) - 4, zMax = Math.max(...logs.map(({ L }) => -L.absBase)) + 4;
+  const data = [], shapes = [], notes = [], layout = lay({ height: 700, margin: { l: 56, r: 10, t: 50, b: 12 }, hovermode: "y unified" });
+  logs.forEach(({ w, L }, i) => {
+    const a = i * cw, bar = [a + 0.06 * cw, a + 0.38 * cw], rt = [a + 0.42 * cw, a + 0.96 * cw], key = i === 0 ? "xaxis" : `xaxis${i + 1}`, ref = i === 0 ? "x" : `x${i + 1}`;
+    layout[key] = { domain: rt, type: "log", range: [Math.log10(0.5), 2], showticklabels: false, gridcolor: "#fff" };
+    data.push({ type: "scatter", mode: "lines", x: L.samples.map((s) => s.rt), y: L.samples.map((s) => s.z), xaxis: ref, yaxis: "y", line: { color: "#ef553b", width: 1.4 },
+      hovertemplate: `${w.name}: Rt %{x:.1f} Ом·м<extra></extra>` });
+    for (const x of L.rigis) shapes.push({ type: "rect", xref: "paper", yref: "y", x0: bar[0], x1: bar[1], y0: -x.absTop, y1: -x.absBase, fillcolor: RIGIS_COL[x.kind], line: { color: "#fff", width: 0.5 } });
+    notes.push({ xref: "paper", yref: "paper", x: a + 0.5 * cw, y: 1.0, yanchor: "bottom", text: `<b>${w.name}</b><br><span style="font-size:10px">альт. ${L.alt.toFixed(0)} м · Rt 0.5–100</span>`, showarrow: false, font: { size: 12, color: w.color === "#8a97ab" ? TXT : w.color } });
+  });
+  if (G.owcGuess !== null) {
+    shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: G.owcGuess, y1: G.owcGuess, line: { color: "#00b8d4", width: 2, dash: "dash" } });
+    notes.push({ xref: "paper", yref: "y", x: 0.002, y: G.owcGuess, xanchor: "left", yanchor: "bottom", text: `ваш ВНК ${fmtAbs(G.owcGuess)}`, showarrow: false, font: { color: "#00859a", size: 11 } });
+  }
+  layout.shapes = shapes; layout.annotations = notes;
+  layout.yaxis = { ...layout.yaxis, range: [zMax, zMin], title: { text: "абс. отметка, м (глубина вниз)" }, showspikes: true, spikemode: "across", spikethickness: 1, spikedash: "dot", spikecolor: "#2a3f5f",
+    tickvals: undefined, tickprefix: "−" };
+  Plotly.react("log-plot", data, layout, CFG);
+  const rows = logs.map(({ w, L }) => `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td><td>${L.alt.toFixed(1)}</td><td>${fmtAbs(-L.absTop)}</td><td>${fmtAbs(-L.absBase)}</td><td>${L.hOil.toFixed(1)}</td><td>${L.hWater.toFixed(1)}</td></tr>`).join("");
+  $("log-side").innerHTML = `<div>Колонки — РИГИС: <span class="sat oil"></span>нефть <span class="sat water"></span>вода <span class="sat shale"></span>неколлектор; красная кривая — Rt.</div>` +
+    `<table><thead><tr><th>Скв.</th><th>Альт.</th><th>Кровля</th><th>Подошва</th><th>h<sub>н</sub></th><th>h<sub>в</sub></th></tr></thead><tbody>${rows}</tbody></table>` +
+    `<div class="row">Ваш ВНК: абс. −<input id="owc-input2" type="number" step="0.5" style="width:80px" placeholder="?"> м</div>` +
+    `<div class="note">Найдите отметку, ниже которой во всех скважинах только вода, а выше — нефть. Введённый ВНК нарисуется пунктиром здесь и контурами на карте (нужна сейсмика). Сейсмика ошибается на несколько метров, скважины — точны.</div>`;
+  const inp = $("owc-input2"); inp.value = G.owcGuess === null ? "" : G.owcGuess;
+  inp.addEventListener("change", () => setOwcGuess(inp.value));
+}
+function setOwcGuess(v) {
+  const z = Math.abs(+v);
+  G.owcGuess = v === "" || !isFinite(z) || z < 1000 ? null : z;
+  const el = $("owc-input"); if (document.activeElement !== el) el.value = G.owcGuess === null ? "" : G.owcGuess;
+  G.dirty = true; renderMap(); if (G.log.open) drawLog();
+}
+
+// ---------------- ГДИС ----------------
+function ptaProducers() { return G.sim.wells.filter((w) => w.type === "prod"); }
+function openPta(name) {
+  const prods = ptaProducers();
+  if (!prods.length) return toast("Нет добывающих скважин для ГДИС", true);
+  openModal("pta-modal");
+  $("pta-well").innerHTML = prods.map((w) => `<option>${w.name}</option>`).join("");
+  if (name && prods.some((w) => w.name === name)) $("pta-well").value = name;
+  G.bu = null; Plotly.purge("pta-ll"); Plotly.purge("pta-sl");
+  updatePtaCost(); renderPtaSide(null);
+}
+function ptaWell() { return G.sim.wells.find((w) => w.name === $("pta-well").value); }
+function ptaLoss(w, days) { return w.qo * C.RHO_OIL * G.params.price_oil * days; }
+function updatePtaCost() {
+  const w = ptaWell(); if (!w) return;
+  const days = +$("pta-days").value;
+  $("pta-cost").textContent = `Стоимость: ${mln(G.params.pta_cost + ptaLoss(w, days))} (исследование ${mln(G.params.pta_cost)} + недобор нефти за ${days} сут ${mln(ptaLoss(w, days))})`;
+}
+function runPta() {
+  const w = ptaWell(); if (!w) return;
+  if (w.q < 0.5) return toast("Скважина не работала — сначала рассчитайте год добычи", true);
+  const days = +$("pta-days").value;
+  G.sim.economy.spend(G.sim.t, G.params.pta_cost + ptaLoss(w, days));
+  G.bu = C.pressureBuildup(G.sim, w, days);
+  G.bu.win = null; $("pta-t1").value = ""; $("pta-t2").value = "";
+  toast(`КВД по ${w.name} получена, −${mln(G.params.pta_cost + ptaLoss(w, days))}`);
+  G.dirty = true; drawPta();
+}
+function drawPta() {
+  const bu = G.bu; if (!bu) return;
+  const dp = bu.p.map((p) => p - bu.pwf0), t1 = +$("pta-t1").value, t2 = +$("pta-t2").value, hasWin = t1 > 0 && t2 > t1;
+  const shapes = hasWin ? [{ type: "rect", xref: "x", yref: "paper", x0: t1, x1: t2, y0: 0, y1: 1, fillcolor: "rgba(99,110,250,.15)", line: { width: 0 }, layer: "below" }] : [];
+  const dd = bu.deriv.map((v, i) => (isFinite(v) && v > 0 ? v : null));
+  Plotly.react("pta-ll", [
+    { type: "scatter", mode: "markers", x: bu.t, y: dp, name: "Δp", marker: { color: PAL[0], size: 6 }, hovertemplate: "Δt %{x:.3g} сут<br>Δp %{y:.2f} атм<extra>Δp</extra>" },
+    { type: "scatter", mode: "markers", x: bu.t, y: dd, name: "dΔp/dlnt", marker: { color: PAL[1], size: 6, symbol: "diamond" }, hovertemplate: "Δt %{x:.3g} сут<br>производная %{y:.2f}<extra>dΔp/dlnt</extra>" }],
+    lay({ title: ttl("Диагностика: Δp и производная (log-log)"), height: 430, showlegend: true, legend: { orientation: "h", y: -0.2 }, shapes,
+      xaxis: { type: "log", title: { text: "Δt, сут" } }, yaxis: { type: "log", title: { text: "Δp, атм" } }, margin: { l: 56, r: 10, t: 34, b: 60 } }), CFG);
+  const data = [{ type: "scatter", mode: "markers", x: bu.t, y: bu.p, name: "p<sub>ws</sub>", marker: { color: PAL[0], size: 6 }, hovertemplate: "Δt %{x:.3g} сут<br>p %{y:.2f} атм<extra></extra>" }];
+  const res = hasWin ? C.interpretBuildup(bu, G.sim.r, t1, t2) : null;
+  if (res) { const xa = [t1 / 2, t2 * 3]; data.push({ type: "scatter", mode: "lines", x: xa, y: xa.map((x) => res.a + res.m * Math.log10(x)), line: { color: PAL[1], width: 2.5 }, name: "прямая", hoverinfo: "skip" }); }
+  Plotly.react("pta-sl", data, lay({ title: ttl("Полулогарифмический анализ: p<sub>ws</sub> от lg Δt"), height: 430, shapes,
+    xaxis: { type: "log", title: { text: "Δt, сут" } }, yaxis: { title: { text: "p<sub>ws</sub>, атм" } }, margin: { l: 56, r: 10, t: 34, b: 60 } }), CFG);
+  G.bu.res = res; renderPtaSide(res);
+}
+function renderPtaSide(res) {
+  const bu = G.bu, doss = Object.entries(G.pta).map(([n, p]) => `<tr><td>${n}</td><td>${p.k.toFixed(0)}</td><td>${p.s.toFixed(1)}</td><td>${p.year}</td></tr>`).join("");
+  let h = "";
+  if (!bu) h += `<div class="note">Остановите добывающую скважину и запишите восстановление забойного давления. Скважина должна уже поработать (рассчитайте хотя бы год). Остановка — это недобор нефти, поэтому длинные тесты дороже.</div>`;
+  else {
+    h += `<div><b>${bu.wellName}</b> · дебит до остановки ${bu.q.toFixed(0)} м³/сут · P<sub>wf</sub> = ${bu.pwf0.toFixed(0)} атм</div>`;
+    h += `<div class="note"><b>Как анализировать.</b><br>1. На диагностическом графике найдите участок, где производная (красные ромбы) постоянна, — это радиальный приток. Ранние точки искажены влиянием ствола скважины, поздние — границами пласта и разломами.<br>` +
+      `2. Введите границы участка (или нажмите «Подсказка») — на правом графике через точки пройдёт прямая.<br>3. Наклон <i>m</i> даёт проницаемость, отсечка — скин.</div>`;
+    h += res ? `<h2>Результат</h2><table><tbody><tr><td>Наклон m</td><td><b>${res.m.toFixed(2)}</b> атм/цикл</td></tr><tr><td>Проницаемость k</td><td><b>${res.k.toFixed(0)}</b> мД</td></tr><tr><td>Скин s</td><td><b>${res.s.toFixed(1)}</b></td></tr><tr><td>Точек в окне</td><td>${res.n}</td></tr></tbody></table>` :
+      `<div class="sub" style="margin-top:8px">Задайте участок радиального притока (не менее 4 точек).</div>`;
+  }
+  h += `<h2>Досье ГДИС</h2>` + (doss ? `<table><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>Год</th></tr></thead><tbody>${doss}</tbody></table>` : `<div class="sub">Пока нет принятых оценок</div>`);
+  h += `<div class="note">Скин &gt; 3 — призабойная зона загрязнена: обработка (🧪) может заметно поднять дебит. Фактические k и скин будут показаны в итогах.</div>`;
+  $("pta-side").innerHTML = h;
+}
+function ptaHint() {
+  if (!G.bu) return;
+  const w = C.suggestWindow(G.bu);
+  if (!w) return toast("Устойчивого радиального участка не найдено — попробуйте дольше остановить скважину", true);
+  $("pta-t1").value = +w.t1.toPrecision(3); $("pta-t2").value = +w.t2.toPrecision(3); drawPta();
+}
+function ptaAccept() {
+  const res = G.bu && G.bu.res; if (!res) return toast("Сначала выберите радиальный участок", true);
+  G.pta[G.bu.wellName] = { k: res.k, s: res.s, year: Math.round(G.sim.t / 365) };
+  toast(`Оценка по ${G.bu.wellName}: k ≈ ${res.k.toFixed(0)} мД, скин ≈ ${res.s.toFixed(1)} — занесено в досье`);
+  renderWellTable(true); renderPtaSide(res);
+}
+
+// ---------------- итоги ----------------
 function showResults() {
-  const sim = G.sim, st = C.simStats(sim), e = sim.economy;
-  const kpi = [
-    ["Накопленная добыча нефти", `${(st.cumOilM3 * 0.86 / 1e3).toFixed(1)} тыс. т`],
-    ["Извлечение от OOIP", `${(st.recovery * 100).toFixed(1)} %`],
-    ["Конечный баланс", `${(e.balance / 1e6).toFixed(1)} млн руб`],
-    ["Добыто воды", `${(st.cumWatM3 / 1e3).toFixed(0)} тыс. м³`],
-    ["Закачано воды", `${(st.cumInjM3 / 1e3).toFixed(0)} тыс. м³`],
-    ["Обводнённость (тек.)", `${(st.waterCut * 100).toFixed(0)} %`],
-    ["Среднее давление", `${st.avgP.toFixed(0)} атм`],
-    ["Скважин", `${sim.wells.length} (доб. ${sim.wells.filter((w) => w.type === "prod").length} / наг. ${sim.wells.filter((w) => w.type === "inj").length})`],
-  ];
+  const sim = G.sim, st = C.simStats(sim), e = sim.economy, r = sim.r, np = sim.wells.filter((w) => w.type === "prod").length;
+  const kpi = [["Накопленная добыча нефти", `${(st.cumOilM3 * 0.86 / 1e3).toFixed(1)} тыс. т`], ["Извлечение от OOIP", `${(st.recovery * 100).toFixed(1)} %`],
+    ["Конечный баланс", mln(e.balance)], ["Добыто воды", `${(st.cumWatM3 / 1e3).toFixed(0)} тыс. м³`], ["Закачано воды", `${(st.cumInjM3 / 1e3).toFixed(0)} тыс. м³`],
+    ["Обводнённость (тек.)", `${(st.waterCut * 100).toFixed(0)} %`], ["Среднее давление", `${st.avgP.toFixed(0)} атм`], ["Скважин", `${sim.wells.length} (доб. ${np} / наг. ${sim.wells.length - np})`]];
+  if (r.level === 2) {
+    kpi.push(["Разведочных скважин", `${G.expl.length}`], ["Сейсмика", G.seis ? "заказана" : "не заказывали"], ["ВНК: факт / ваша оценка", `${fmtAbs(r.owc)} / ${G.owcGuess === null ? "—" : fmtAbs(G.owcGuess)} м`]);
+  }
   $("res-grid").innerHTML = kpi.map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  const zone = (c) => (r.level !== 2 ? "" : r.hOil[c] >= r.h - 1e-6 ? "нефтяная" : r.hOil[c] > 0 ? "водонефтяная" : "водяная");
   let rows = "";
   for (const w of sim.wells) {
-    rows += `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td>` +
-      `<td>${w.type === "prod" ? "добывающая" : "нагнетательная"}</td>` +
-      `<td>${(w.cum.oil * 0.86).toFixed(0)} т</td><td>${w.cum.water.toFixed(0)} м³</td>` +
-      `<td>${w.cum.inj.toFixed(0)} м³</td><td>${(w.fw * 100).toFixed(0)} %</td></tr>`;
+    rows += `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td><td>${w.type === "prod" ? "добывающая" : w.converted ? "нагнетательная (из добывающей)" : "нагнетательная"}</td>` +
+      (r.level === 2 ? `<td>${zone(w.cell)}</td><td>${w.skin.toFixed(1)}${w.stimulated ? " (после ОПЗ)" : ""}</td>` : "") +
+      `<td>${(w.cum.oil * 0.86).toFixed(0)} т</td><td>${w.cum.water.toFixed(0)} м³</td><td>${w.cum.inj.toFixed(0)} м³</td><td>${(w.fw * 100).toFixed(0)} %</td></tr>`;
   }
-  $("res-wells").innerHTML = rows
-    ? `<table id="welltable2"><thead><tr><th>Скв.</th><th>Тип</th><th>Нефть, т</th><th>Вода, м³</th><th>Закачка, м³</th><th>Обзв.</th></tr></thead><tbody>${rows}</tbody></table>`
-    : "<p class='sub'>Скважины не пробурены</p>";
+  $("res-wells").innerHTML = rows ? `<table class="t"><thead><tr><th>Скв.</th><th>Тип</th>${r.level === 2 ? "<th>Зона</th><th>Скин (факт)</th>" : ""}<th>Нефть</th><th>Вода</th><th>Закачка</th><th>Обзв.</th></tr></thead><tbody>${rows}</tbody></table>` : "<p class='sub'>Скважины не пробурены</p>";
+  const ys = yearStats(sim);
+  Plotly.react("res-bars", [{ type: "bar", x: ys.map((y) => `Год ${y.n}`), y: ys.map((y) => y.oil), marker: { color: PAL[0] }, name: "Нефть", hovertemplate: "%{y:.1f} тыс. т<extra></extra>" },
+    { type: "scatter", mode: "lines+markers", x: ys.map((y) => `Год ${y.n}`), y: ys.map((y) => y.wc * 100), yaxis: "y2", name: "Обводнённость, %", line: { color: PAL[1] }, hovertemplate: "%{y:.0f} %<extra></extra>" }],
+    lay({ height: 260, showlegend: true, legend: { orientation: "h", y: 1.15 }, margin: { l: 52, r: 52, t: 24, b: 30 }, yaxis: { title: { text: "тыс. т" } },
+      yaxis2: { overlaying: "y", side: "right", range: [0, 100], title: { text: "%" }, showgrid: false } }), CFG);
+  if (r.level === 2) {
+    drawReveal(sim);
+    const pr = Object.entries(G.pta).map(([n, p]) => { const w = sim.wells.find((x) => x.name === n), k0 = r.k[w.cell]; return `<tr><td>${n}</td><td>${p.k.toFixed(0)} / ${k0.toFixed(0)}</td><td>${p.s.toFixed(1)} / ${(w.stimulated ? "—" : w.skin.toFixed(1))}</td><td>${(Math.abs(p.k / k0 - 1) * 100).toFixed(0)} %</td></tr>`; }).join("");
+    $("res-pta").innerHTML = `<h2>ГДИС: оценка / факт</h2>` + (pr ? `<table class="t"><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>Ошибка k</th></tr></thead><tbody>${pr}</tbody></table>` : "<p class='sub'>ГДИС не проводились</p>");
+  }
   show("screen-results");
 }
+function drawReveal(sim) {
+  const r = sim.r;
+  const mk = (z, cs, title, extra = {}) => ({ type: "heatmap", x: xs, y: xs, z, colorscale: cs, hovertemplate: "%{z:.2f}<extra></extra>", colorbar: { title: { text: title, side: "right" }, thickness: 14, len: 0.85 }, visible: false, ...extra });
+  const layers = [["h нефть, м", mk(field2D((c) => r.hOil[c]), "YlOrBr", "h нефть, м", { zmin: 0, zmax: r.h })],
+    ["Проницаемость", mk(field2D((c) => logk(r.k[c])), "Viridis", "lg k", { zmin: logk(15), zmax: logk(800) })],
+    ["Насыщенность Sw", mk(field2D((c) => Math.min(1, sim.Sw[c])), "Blues", "S<sub>w</sub>", { zmin: r.Swc, zmax: 1, reversescale: true })],
+    ["Давление, атм", mk(field2D((c) => sim.P[c]), "RdBu", "P, атм", { reversescale: true })]];
+  layers[0][1].visible = true;
+  const over = [line1(r.zTop, r.owc, "#111827", "solid", "ВНК"), line1(r.zTop.map((z, c) => z + r.gross[c]), r.owc, "#111827", "dot", "ВНК")];
+  if (G.seis && G.owcGuess !== null) over.push(line1(G.seis.top, G.owcGuess, "#00b8d4", "dash", "ВНК игрока"));
+  const saved = G.tool; // маркеры и разломы
+  const wasLayer = G.layer;
+  const tr = [...layers.map((l) => l[1]), ...over, ...faultTraces(r, true), ...wellTraces(sim)];
+  const nL = layers.length;
+  const buttons = layers.map(([name], i) => ({ label: name, method: "update", args: [{ visible: tr.map((_, q) => (q < nL ? q === i : true)) }] }));
+  Plotly.react("reveal-plot", tr.map((t, q) => ({ ...t, visible: q < nL ? q === 0 : true })), lay({ height: 620, margin: { l: 56, r: 10, t: 46, b: 44 }, dragmode: false,
+    xaxis: { range: [0, NX * DX], title: { text: "Восток, м" }, constrain: "domain" }, yaxis: { range: [NX * DX, 0], title: { text: "Север, м" }, scaleanchor: "x" },
+    updatemenus: [{ type: "buttons", direction: "right", x: 0, y: 1.1, xanchor: "left", yanchor: "bottom", buttons, bgcolor: "#fff", bordercolor: "#dfe6f1" }] }), CFG);
+  G.layer = wasLayer; G.tool = saved;
+  let oil = 0, full = 0;
+  for (const c of r.cells) { if (r.hOil[c] > 0) oil++; if (r.hOil[c] >= r.h - 1e-6) full++; }
+  const prods = sim.wells.filter((w) => w.type === "prod" || w.wasProd), cnt = (f) => prods.filter((w) => f(r.hOil[w.cell])).length;
+  const err = G.owcGuess === null ? null : G.owcGuess - r.owc;
+  const faults = r.faults.map((F) => `${F.name} — ${F.trans === 0 ? "запечатан" : `проницаем на ${Math.round(F.trans * 100)} %`}, сброс ${Math.abs(F.shift)} м`).join("; ");
+  $("reveal-text").innerHTML = `Переключайте слой кнопками над картой. Чёрные линии — фактический ВНК (внешний и внутренний контур), красный пунктир — разломы по сейсмике, чёрные — фактические.<br>` +
+    `Фактический ВНК: <b>${fmtAbs(r.owc)} м</b>${err === null ? " — вы его не оценивали." : `, ваша оценка ${fmtAbs(G.owcGuess)} м (ошибка ${err >= 0 ? "+" : "−"}${Math.abs(err).toFixed(1)} м).`}<br>` +
+    `Запасы OOIP: ${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т. Нефтеносная площадь ${(oil / r.cells.length * 100).toFixed(0)} %, без подошвенной воды — ${(full / Math.max(1, oil) * 100).toFixed(0)} % от неё.<br>` +
+    `Разломы: ${faults}.<br>Добывающие (включая переведённые): в нефтяной зоне ${cnt((h) => h >= r.h - 1e-6)}, в водонефтяной ${cnt((h) => h > 0 && h < r.h - 1e-6)}, в водяной ${cnt((h) => h <= 0)}.`;
+}
 
-// ---------------- экран настроек ----------------
-const FORM_FIELDS = [
-  ["mu_o", "Вязкость нефти, сП", 5, 1, 50, 0.5],
-  ["price_oil", "Цена нефти (netback), руб/т", 10000, 1000, 30000, 500],
-  ["drill_cost", "Стоимость скважины, млн руб", 10, 1, 100, 1],
-  ["lift_cost", "Подъём жидкости, руб/м³", 500, 50, 2000, 10],
-  ["inj_cost", "Закачка воды, руб/м³", 300, 50, 2000, 10],
-  ["horizon_years", "Горизонт, лет", 10, 1, 30, 1],
-  ["init_money", "Стартовый капитал, млн руб", 50, 5, 500, 5],
+// ---------------- настройки ----------------
+const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, мин, макс, шаг, только ур. 2]
+  ["mu_o", "Вязкость нефти, сП", 5, 1, 50, 0.5], ["price_oil", "Цена нефти (netback), руб/т", 10000, 1000, 30000, 500],
+  ["drill_cost", "Стоимость скважины, млн руб", 10, 1, 100, 1], ["conv_cost", "Перевод в ППД, млн руб", 2, 0.5, 20, 0.5],
+  ["expl_cost", "Разведочная скважина, млн руб", 4, 0.5, 50, 0.5, true], ["seis_cost", "Сейсмика 3D, млн руб", 12, 1, 100, 1, true],
+  ["pta_cost", "ГДИС (КВД), млн руб", 1, 0.1, 10, 0.1, true], ["stim_cost", "Обработка призабойной зоны, млн руб", 3, 0.5, 30, 0.5, true],
+  ["lift_cost", "Подъём жидкости, руб/м³", 500, 50, 2000, 10], ["inj_cost", "Закачка воды, руб/м³", 300, 50, 2000, 10],
+  ["horizon_years", "Горизонт, лет", 10, 1, 30, 1], ["init_money", "Стартовый капитал, млн руб", 50, 5, 500, 5],
 ];
-function initSettings() {
-  const form = $("params-form");
-  form.innerHTML = FORM_FIELDS.map(([key, label, def, min, max, step]) =>
-    `<label for="pf-${key}">${label}</label>` +
-    `<input id="pf-${key}" type="number" value="${def}" min="${min}" max="${max}" step="${step}">`).join("");
-  // превью карты проницаемости (k не зависит от μ — можно строить с дефолтами)
-  const r = C.buildReservoir(C.DEFAULT_PARAMS);
-  const pv = document.createElement("canvas"); pv.width = r.nx; pv.height = r.ny;
-  const pctx = pv.getContext("2d"), img = pctx.createImageData(r.nx, r.ny), d = img.data;
-  const kMin = Math.log10(15), kMax = Math.log10(800);
-  for (let c = 0; c < r.nx * r.ny; c++) {
-    const p = c * 4;
-    if (!r.active[c]) { d[p] = 28; d[p + 1] = 37; d[p + 2] = 48; d[p + 3] = 255; continue; }
-    const v = Math.round(Math.max(0, Math.min(1, (Math.log10(r.k[c]) - kMin) / (kMax - kMin))) * 255) * 3;
-    d[p] = LUT_K[v]; d[p + 1] = LUT_K[v + 1]; d[p + 2] = LUT_K[v + 2]; d[p + 3] = 255;
+const LEVEL_DESC = {
+  1: "Карта проницаемости и контур нефтеносности известны заранее — сразу бурите и управляйте разработкой. Время можно крутить непрерывно или по годам.",
+  2: "Геология скрыта. Есть только 5 разведочных скважин с каротажом и РИГИС. Сейсмику 3D (кровля, подошва, толщина и разломы) нужно заказать за деньги; " +
+     "ГДИС даёт проницаемость и скин. Время идёт по годам: после каждого года можно бурить, переводить скважины в ППД, обрабатывать их. " +
+     "Карты давления, проницаемости и насыщенности откроются только после итогов.",
+};
+function renderSettingsPreview() {
+  const l2 = G.level === 2;
+  $("lvl-1").classList.toggle("active", !l2); $("lvl-2").classList.toggle("active", l2);
+  $("level-desc").textContent = LEVEL_DESC[G.level];
+  document.querySelectorAll("#params-form .lvl2-only").forEach((el) => el.classList.toggle("hidden", !l2));
+  if (!l2) {
+    $("preview-title").textContent = "Карта проницаемости";
+    const r = C.buildReservoir(C.DEFAULT_PARAMS);
+    Plotly.react("preview-plot", [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.active[c] ? logk(r.k[c]) : null)), colorscale: "Viridis", zmin: logk(15), zmax: logk(800),
+      hovertemplate: "%{z:.2f}<extra>lg k</extra>", colorbar: { title: { text: "lg k", side: "right" }, thickness: 12 } }],
+      lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
+    $("props-read").innerHTML = [["Начальное давление", "250 атм"], ["Сетка", "50×50, ячейка 40×40 м"], ["Толщина пласта", "10 м"], ["Пористость", "0.20"],
+      ["Связанная вода / остаточная нефть", "0.20 / 0.25"], ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"], ["Плотность нефти", "0.86 т/м³"],
+      ["Запасы OOIP", `${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т`]].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
+  } else {
+    $("preview-title").textContent = "Лицензионный участок: разведочные скважины";
+    const r = C.buildReservoir2(C.DEFAULT_PARAMS);
+    Plotly.react("preview-plot", [{ type: "scatter", mode: "markers+text", x: r.explore.map((e) => ((e.cell % NX) + 0.5) * DX), y: r.explore.map((e) => (Math.floor(e.cell / NX) + 0.5) * DX),
+      text: r.explore.map((e) => e.name), textposition: "top center", marker: { symbol: "diamond", size: 14, color: "#fff", line: { color: TXT, width: 2 } }, hovertemplate: "%{text}<extra></extra>" }],
+      lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
+    $("props-read").innerHTML = [["Начальное давление", "250 атм"], ["Сетка", "50×50, ячейка 40×40 м"], ["Эффективная толщина", "≈ 10 м (три пачки, глинистые прослои)"],
+      ["Строение", "неизвестно — сейсмика не заказана"], ["Разломы", "неизвестны"], ["Проницаемость и скин", "известны только по ГДИС"], ["ВНК", "определите по каротажу"],
+      ["Запасы OOIP", "неизвестны"]].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
   }
-  pctx.putImageData(img, 0, 0);
-  const dst = $("preview-canvas").getContext("2d");
-  dst.imageSmoothingEnabled = false;
-  dst.drawImage(pv, 0, 0, 300, 300);
-  $("props-read").innerHTML = [
-    ["Начальное давление", "250 атм"], ["Сетка", "50×50, ячейка 40×40 м"],
-    ["Толщина пласта", "10 м"], ["Пористость", "0.20"],
-    ["Связанная вода / остаточная нефть", "0.20 / 0.25"],
-    ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"],
-    ["Плотность нефти", "0.86 т/м³"],
-    ["Запасы OOIP", `${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т`],
-  ].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
-  $("btn-start").addEventListener("click", startGame);
-  $("btn-selftest").addEventListener("click", runSelfTestBrowser);
+}
+function setLevel(lvl) {
+  const m = $("pf-init_money");
+  if (m) { if (lvl === 2 && +m.value === 50) m.value = 80; if (lvl === 1 && +m.value === 80) m.value = 50; }
+  G.level = lvl; renderSettingsPreview();
+}
+function initSettings() {
+  $("params-form").innerHTML = FORM_FIELDS.map(([key, label, def, min, max, step, l2]) => {
+    const cls = l2 ? ` class="lvl2-only"` : "";
+    return `<label for="pf-${key}"${cls}>${label}</label><input id="pf-${key}"${cls} type="number" value="${def}" min="${min}" max="${max}" step="${step}">`;
+  }).join("");
+  renderSettingsPreview();
+  $("lvl-1").addEventListener("click", () => setLevel(1)); $("lvl-2").addEventListener("click", () => setLevel(2));
+  $("btn-start").addEventListener("click", startGame); $("btn-selftest").addEventListener("click", runSelfTestBrowser);
 }
 async function runSelfTestBrowser() {
-  const out = $("selftest-out");
-  out.classList.remove("hidden");
-  out.textContent = "Запуск самотеста физики…\n";
-  const groups = ["reservoirTests", "relPermTests", "pressureTests", "wellTests", "saturationTests", "breakthroughTests", "economyTests"];
+  const out = $("selftest-out"); out.classList.remove("hidden"); out.textContent = "Запуск самотеста физики…\n";
+  const groups = ["reservoirTests", "relPermTests", "pressureTests", "wellTests", "saturationTests", "breakthroughTests", "economyTests", "level2Tests", "level2bTests"];
   let pass = 0, total = 0;
-  for (const gname of groups) {
-    out.textContent += `▶ ${gname}…\n`;
-    out.scrollTop = out.scrollHeight;
-    await new Promise((r) => setTimeout(r, 30)); // отдать кадр браузеру
-    const res = C[gname]();
-    for (const r of res) {
-      out.textContent += `${r.pass ? "PASS" : "FAIL"}  ${r.name}${r.details ? " — " + r.details : ""}\n`;
-      if (r.pass) pass++;
-      total++;
-    }
+  for (const g of groups) {
+    out.textContent += `▶ ${g}…\n`; out.scrollTop = out.scrollHeight;
+    await new Promise((r) => setTimeout(r, 30));
+    for (const r of C[g]()) { out.textContent += `${r.pass ? "PASS" : "FAIL"}  ${r.name}${r.details ? " — " + r.details : ""}\n`; if (r.pass) pass++; total++; }
     out.scrollTop = out.scrollHeight;
   }
-  out.textContent += `\n${pass}/${total} проверок пройдено\n`;
-  out.scrollTop = out.scrollHeight;
+  out.textContent += `\n${pass}/${total} проверок пройдено\n`; out.scrollTop = out.scrollHeight;
 }
 function readParams() {
-  const num = (key, def) => {
-    const el = $("pf-" + key);
-    const v = el ? +el.value : NaN;
-    return isFinite(v) && v > 0 ? v : def;
-  };
-  const d = C.DEFAULT_PARAMS;
-  return {
-    mu_o: num("mu_o", d.mu_o),
-    price_oil: num("price_oil", d.price_oil),
-    drill_cost: num("drill_cost", d.drill_cost) * 1e6,
-    lift_cost: num("lift_cost", d.lift_cost),
-    inj_cost: num("inj_cost", d.inj_cost),
-    horizon_days: Math.round(num("horizon_years", 10) * 365.25),
-    init_money: num("init_money", d.init_money) * 1e6,
-  };
+  const num = (key, def) => { const el = $("pf-" + key), v = el ? +el.value : NaN; return isFinite(v) && v > 0 ? v : def; };
+  const d = C.DEFAULT_PARAMS, years = num("horizon_years", 10);
+  return { level: G.level, mu_o: num("mu_o", d.mu_o), price_oil: num("price_oil", d.price_oil), drill_cost: num("drill_cost", d.drill_cost) * 1e6,
+    conv_cost: num("conv_cost", 2) * 1e6, expl_cost: num("expl_cost", 4) * 1e6, seis_cost: num("seis_cost", 12) * 1e6, pta_cost: num("pta_cost", 1) * 1e6,
+    stim_cost: num("stim_cost", 3) * 1e6, lift_cost: num("lift_cost", d.lift_cost), inj_cost: num("inj_cost", d.inj_cost),
+    horizon_days: G.level === 2 ? Math.round(years) * 365 : Math.round(years * 365.25), init_money: num("init_money", d.init_money) * 1e6 };
+}
+function show(id) { for (const s of ["screen-settings", "screen-game", "screen-results"]) $(s).classList.toggle("visible", s === id); }
+function applyLevelUI() {
+  document.querySelectorAll(".lvl2-only").forEach((el) => { if (!el.closest("#params-form")) el.classList.toggle("hidden", !isL2()); });
+  $("speed-group").classList.toggle("hidden", isL2());
+  renderLayerBar();
 }
 function startGame() {
   G.params = readParams();
-  G.sim = C.createSim(C.buildReservoir(G.params), G.params);
-  G.wellNames = { prod: 0, inj: 0 }; G.colorSeq = 0; G.done = false;
-  wellRows.clear(); renderWellTable(true);
-  show("screen-game");
-  setSpeed(0);
-  R.draw(G.sim); R.drawScale(G.sim);
-  drawAllCharts();
-  toast("Нажмите ▶ для запуска времени. Выберите инструмент и кликните по карте, чтобы бурить.");
+  const res = G.level === 2 ? C.buildReservoir2(G.params) : C.buildReservoir(G.params);
+  G.sim = C.createSim(res, G.params);
+  Object.assign(G, { wellNames: { prod: 0, inj: 0 }, colorSeq: 0, done: false, running: null, seis: null, owcGuess: null, pta: {}, bu: null, yearInj: [], dirty: true });
+  G.expl = G.level === 2 ? res.explore.map((e) => ({ ...e })) : [];
+  G.layer = G.level === 2 ? "blank" : "k";
+  $("owc-input").value = ""; G.log.sel = null; G.log.mode = "one"; setTool(null); setSpeed(0);
+  applyLevelUI(); wellRows.clear(); renderWellTable(true);
+  show("screen-game"); renderAll();
+  toast(G.level === 2 ? "Уровень 2: у вас 5 разведочных скважин (◆) — кликните по ним, чтобы посмотреть каротаж. Сейсмику можно заказать за деньги. Время идёт по кнопке «Следующий год»."
+                      : "Нажмите ▶ для запуска времени или «Следующий год». Выберите инструмент и кликните по карте, чтобы бурить.");
 }
 
 // ---------------- инициализация ----------------
-R.init();
 initSettings();
-["lay-k", "lay-P", "lay-Sw"].forEach((id) => $(id).addEventListener("click", () => {
-  G.layer = id.slice(4);
-  ["lay-k", "lay-P", "lay-Sw"].forEach((x) => $(x).classList.toggle("active", x === id));
-  if (G.sim) { R.draw(G.sim); R.drawScale(G.sim); }
-}));
-[["tool-prod", "prod"], ["tool-inj", "inj"]].forEach(([id, tool]) => $(id).addEventListener("click", () => {
-  G.tool = G.tool === tool ? null : tool;
-  $("tool-prod").classList.toggle("active", G.tool === "prod");
-  $("tool-inj").classList.toggle("active", G.tool === "inj");
-  R.cv.style.cursor = G.tool ? "cell" : "crosshair";
-}));
-$("sp-pause").addEventListener("click", () => setSpeed(0));
-$("sp-1").addEventListener("click", () => setSpeed(2));
-$("sp-10").addEventListener("click", () => setSpeed(20));
-$("sp-50").addEventListener("click", () => setSpeed(100));
+for (const [id, tool] of [["tool-prod", "prod"], ["tool-inj", "inj"], ["tool-expl", "expl"]]) $(id).addEventListener("click", () => setTool(G.tool === tool ? null : tool));
+$("sp-pause").addEventListener("click", () => setSpeed(0)); $("sp-1").addEventListener("click", () => setSpeed(2));
+$("sp-10").addEventListener("click", () => setSpeed(20)); $("sp-50").addEventListener("click", () => setSpeed(100));
+$("btn-year").addEventListener("click", startYear);
 $("btn-results").addEventListener("click", () => { setSpeed(0); showResults(); });
-$("btn-continue").addEventListener("click", () => { G.done = true; show("screen-game"); });
-$("btn-restart").addEventListener("click", () => { G.sim = null; show("screen-settings"); });
+$("btn-continue").addEventListener("click", () => { G.done = true; applyLevelUI(); show("screen-game"); G.dirty = true; renderAll();
+  if (isL2()) toast("Геология раскрыта: открыты слои проницаемости, давления и насыщенности"); });
+$("btn-restart").addEventListener("click", () => { G.sim = null; closeModals(); show("screen-settings"); renderSettingsPreview(); });
+$("owc-input").addEventListener("change", (e) => setOwcGuess(e.target.value));
+$("owc-show").addEventListener("change", (e) => { G.showGuess = e.target.checked; G.dirty = true; renderMap(); });
+$("btn-logs").addEventListener("click", () => openLog(null)); $("btn-pta").addEventListener("click", () => openPta(null));
+$("log-close").addEventListener("click", closeModals); $("pta-close").addEventListener("click", closeModals);
+for (const id of ["log-modal", "pta-modal"]) $(id).addEventListener("click", (e) => { if (e.target.id === id) closeModals(); });
+$("log-tab-one").addEventListener("click", () => setLogMode("one")); $("log-tab-corr").addEventListener("click", () => setLogMode("corr"));
+$("pta-well").addEventListener("change", updatePtaCost); $("pta-days").addEventListener("change", updatePtaCost);
+$("pta-run").addEventListener("click", runPta); $("pta-hint").addEventListener("click", ptaHint); $("pta-accept").addEventListener("click", ptaAccept);
+$("pta-t1").addEventListener("change", drawPta); $("pta-t2").addEventListener("change", drawPta);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModals(); });
 requestAnimationFrame(gameLoop);
 </script>
 </body>
