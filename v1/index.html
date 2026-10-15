@@ -254,6 +254,7 @@
       <div class="tb-group">
         <button id="sc-tab-g" class="active">Система сбора и закачки</button>
         <button id="sc-tab-w">Конструкция скважины</button>
+        <button id="sc-tab-p">Характеристика насоса</button>
       </div>
       <span id="sc-wellwrap">скважина: <select id="sc-well"></select></span>
       <span class="sub">время на паузе</span>
@@ -1535,7 +1536,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, espHeadM, chokeDpAtm, espPowerKW, espLoad, PUMPS, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
+  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, level2bTests,
   runSelfTests() {
@@ -1841,7 +1842,7 @@ function wellStatus(sim, w) {
   const e = C.solveEquipment(sim, w);
   if (w.type === "prod") {
     if (e.dead) return { t: w.mode === "flow" ? "фонтан не идёт: давление пласта ниже давления столба — установите ЭЦН" : "ЭЦН не поднимает при текущей частоте/давлении", warn: true };
-    return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${w.mode === "esp" ? ` · ${e.kW.toFixed(0)} кВт · загрузка ${(e.load * 100).toFixed(0)} %${e.load < 0.5 ? " (насос велик: низкий КПД)" : e.load > 1.3 ? " (перегруз — нужен больший типоразмер)" : ""}` : ""}${e.capped ? " · упёрлись в P<sub>прием</sub> мин." : ""}`, warn: false };
+    return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${w.mode === "esp" ? ` · ${e.kW.toFixed(0)} кВт · загрузка ${(e.load * 100).toFixed(0)} %${e.load < 0.6 ? " (левее оптимума: насос велик, низкий КПД)" : e.load > 1.2 ? " (правее оптимума: перегруз — нужен больший типоразмер)" : " (оптимум)"}` : ""}${e.capped ? " · упёрлись в P<sub>прием</sub> мин." : ""}`, warn: false };
   }
   if (e.dead) return { t: "закачка не идёт: давление КНС мало для этого пластового давления", warn: true };
   return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${e.capped ? " · предел давления закачки" : ""}`, warn: false };
@@ -1858,7 +1859,7 @@ function renderWellTable(force = false) {
       const btn = (cls, txt, title, dis) => `<button class="${cls}" title="${title}"${dis ? " disabled" : ""}>${txt}</button>`;
       const acts = btn("a-on", w.on === false ? "▶" : "⏸", w.on === false ? "Запустить скважину" : "Остановить скважину") +
         btn("a-conv", w.type === "prod" ? "💧→" : "⛏→", w.type === "prod" ? `Перевести под закачку (ППД), ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб` : `Вернуть в добычу, ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб`) +
-        btn("a-con", "🏗", "Конструкция скважины") +
+        btn("a-con", "🏗", "Конструкция скважины") + (w.type === "prod" && w.mode === "esp" ? btn("a-pump", "📊", "Характеристика насоса: рабочая точка") : "") +
         (isL2() ? btn("a-log", "📈", "Каротаж и РИГИС") : "") +
         (isL2() && w.type === "prod" ? btn("a-pta", "⏱", "ГДИС: КВД") + btn("a-stim", "🧪", `Обработка призабойной зоны, ${(G.params.stim_cost / 1e6).toFixed(0)} млн руб${w.stimulated ? " (уже проведена)" : ""}`, w.stimulated) : "");
       const p = G.pta[w.name], note = p ? `<div class="pta-note">ГДИС: k≈${p.k.toFixed(0)} мД, s≈${p.s.toFixed(1)}</div>` : "";
@@ -1876,7 +1877,7 @@ function renderWellTable(force = false) {
       tr.querySelector(".s-mode").addEventListener("change", (e) => setWellMode(w, e.target.value));
       const sp2 = tr.querySelector(".s-pump"); if (sp2) sp2.addEventListener("change", (e) => setPump(w, e.target.value));
       const on = (cls, fn) => { const b = tr.querySelector("." + cls); if (b) b.addEventListener("click", fn); };
-      on("a-con", () => openSchem("w", w.name)); on("a-on", () => toggleWell(w)); on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
+      on("a-con", () => openSchem("w", w.name)); on("a-pump", () => openSchem("p", w.name)); on("a-on", () => toggleWell(w)); on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
       tb.appendChild(tr);
       wellRows.set(w, { slider, val, sp, st: tr.querySelector(".w-stat"), qo: tr.querySelector(".qo"), qw: tr.querySelector(".qw"), fw: tr.querySelector(".fw") });
     });
@@ -1936,9 +1937,16 @@ function openSchem(tab, name) {
 }
 function drawSchem() {
   if (!G.sim || $("schem-modal").classList.contains("hidden")) return;
-  $("sc-tab-g").classList.toggle("active", SCH.tab === "g"); $("sc-tab-w").classList.toggle("active", SCH.tab === "w");
-  $("sc-wellwrap").classList.toggle("hidden", SCH.tab !== "w");
-  if (SCH.tab === "w") {
+  $("sc-tab-g").classList.toggle("active", SCH.tab === "g"); $("sc-tab-w").classList.toggle("active", SCH.tab === "w"); $("sc-tab-p").classList.toggle("active", SCH.tab === "p");
+  $("sc-wellwrap").classList.toggle("hidden", SCH.tab === "g");
+  if (SCH.tab === "p") {
+    const esp = G.sim.wells.filter((w) => w.type === "prod" && w.mode === "esp"), sel = $("sc-well");
+    if (!esp.length) { Plotly.purge("sch-plot"); sel.innerHTML = ""; sel.dataset.sig = ""; $("sch-side").innerHTML = "<div class='note'>Нет добывающих скважин на ЭЦН. Переведите скважину в режим «ЭЦН (частота)» в окне «Скважины» — тогда здесь появится характеристика насоса.</div>"; return; }
+    const names = esp.map((w) => w.name);
+    if (sel.dataset.sig !== names.join()) { sel.innerHTML = names.map((n) => `<option>${n}</option>`).join(""); sel.dataset.sig = names.join(); }
+    if (!names.includes(SCH.well)) SCH.well = names[0];
+    sel.value = SCH.well; drawPumpChar();
+  } else if (SCH.tab === "w") {
     const names = logWells().map((w) => w.name), sel = $("sc-well");
     if (!names.length) { Plotly.purge("sch-plot"); $("sch-side").innerHTML = "<div class='note'>Скважин пока нет.</div>"; return; }
     if (sel.dataset.sig !== names.join()) { sel.innerHTML = names.map((n) => `<option>${n}</option>`).join(""); sel.dataset.sig = names.join(); }
@@ -2066,6 +2074,54 @@ function drawConstruction() {
   $("sch-side").innerHTML = t;
 }
 const ATM_PA_UI = 101325;
+
+function drawPumpChar() {
+  const sim = G.sim, r = sim.r, w = sim.wells.find((x) => x.name === SCH.well); if (!w) return;
+  const pk = w.pump || "M", P = C.PUMPS[pk], f = w.freq, k = f / 50, e = C.solveEquipment(sim, w);
+  const rho = 860 * (1 - (w.fw || 0)) + 1000 * (w.fw || 0), Pc = sim.P[w.cell], Gi = C.wellIndex(r.k[w.cell], r, w.skin) * C.lambdaT(sim.Sw[w.cell], r);
+  const qmax = P.Q0 * k * 1.02, n = 90, q = [], H = [], eta = [], kw = [], Hreq = [];
+  const hyd = (rho * 9.81 * w.depth) / C.ATM_PA, pg = C.gatherPressure(sim);
+  for (let i = 0; i <= n; i++) {
+    const x = (qmax * i) / n; q.push(x); H.push(C.espHeadM(x, f, pk)); eta.push(C.espEff(x, f, pk) * 100); kw.push(C.espPowerKW(x, f, rho, pk));
+    Hreq.push(((pg + hyd - (Pc - x / Gi)) * C.ATM_PA) / (rho * 9.81));   // потребный напор: подъём столба и приток (характеристика скважины)
+  }
+  const qb = P.QB * k, lo = 0.6 * qb, hi = 1.2 * qb, load = e.load, zone = load < 0.6 ? "left" : load > 1.2 ? "right" : "ok";
+  const zc = { ok: "#16a34a", left: "#d97706", right: "#dc2626" }[zone], Hop = C.espHeadM(e.q, f, pk), etaOp = C.espEff(e.q, f, pk) * 100;
+  const faint = [40, 60].filter((x) => x !== f).map((x) => ({ type: "scatter", mode: "lines", x: q, y: q.map((v) => C.espHeadM(v, x, pk)), name: `${x} Гц`, line: { color: "#9aa7ff", width: 1.5, dash: "dash" }, hovertemplate: `${x} Гц: %{y:.0f} м<extra></extra>` }));
+  const data = [
+    ...faint,
+    { type: "scatter", mode: "lines", x: q, y: H, name: `Напор, ${f} Гц`, line: { color: "#636efa", width: 3 }, hovertemplate: "H %{y:.0f} м<extra></extra>" },
+    { type: "scatter", mode: "lines", x: q, y: Hreq, name: "Потребный напор (скважина)", line: { color: "#8a97ab", width: 2, dash: "dot" }, hovertemplate: "потребный %{y:.0f} м<extra></extra>" },
+    { type: "scatter", mode: "markers+text", x: [e.q], y: [Hop], text: [`режим: ${e.q.toFixed(0)} м³/сут`], textposition: "top right", marker: { symbol: "star", size: 16, color: zc, line: { color: "#fff", width: 1.5 } }, name: "Режим", hovertemplate: "режим: H %{y:.0f} м<extra></extra>" },
+    { type: "scatter", mode: "lines", x: q, y: eta, name: "КПД, %", yaxis: "y2", line: { color: "#16a34a", width: 3 }, hovertemplate: "КПД %{y:.0f} %<extra></extra>" },
+    { type: "scatter", mode: "lines", x: q, y: kw, name: "Мощность, кВт", yaxis: "y3", line: { color: "#dc2626", width: 2.5 }, hovertemplate: "%{y:.0f} кВт<extra></extra>" },
+    { type: "scatter", mode: "markers", x: [e.q], y: [etaOp], yaxis: "y2", marker: { symbol: "star", size: 14, color: zc, line: { color: "#fff", width: 1.5 } }, showlegend: false, hoverinfo: "skip" }];
+  const grid = { gridcolor: "#eef1f6", zerolinecolor: "#dfe5ee", linecolor: "#cfd8e6" };
+  const layout = { paper_bgcolor: "#fff", plot_bgcolor: "#fff", font: { family: FONT, color: TXT, size: 12 }, height: 660, margin: { l: 66, r: 70, t: 40, b: 50 }, hovermode: "x unified",
+    title: { text: `${w.name}: насос ${P.name} на ${f} Гц — рабочая зона (зелёная) ${lo.toFixed(0)}–${hi.toFixed(0)} м³/сут`, x: 0.02, xanchor: "left", font: { size: 14 } },
+    legend: { orientation: "h", x: 0, y: -0.12 },
+    shapes: [{ type: "rect", xref: "x", yref: "paper", x0: lo, x1: hi, y0: 0, y1: 1, fillcolor: "rgba(22,163,74,.10)", line: { width: 0 }, layer: "below" }],
+    xaxis: { ...grid, title: { text: "подача, м³/сут" }, range: [0, qmax], anchor: "y2" },
+    yaxis: { ...grid, title: { text: "напор, м" }, range: [-0.05 * P.H0, P.H0 * Math.max(k * k, 1.44) * 1.08], domain: [0.52, 1], anchor: "x" },
+    yaxis2: { ...grid, title: { text: "КПД, %" }, range: [0, 80], domain: [0, 0.44] },
+    yaxis3: { overlaying: "y2", side: "right", title: { text: "мощность, кВт" }, rangemode: "tozero", showgrid: false } };
+  Plotly.react("sch-plot", data, layout, CFG);
+  const txt = { ok: "в оптимальной области", left: "левее оптимума: низкая загрузка, перегрев и низкий КПД", right: "правее оптимума: перегруз и износ, насос мал" }[zone];
+  let adv = "";
+  if (zone !== "ok") {
+    let best = pk, bl = 9;
+    for (const kk of Object.keys(C.PUMPS)) { const l = C.espLoad(e.q, f, kk); if (Math.abs(l - 0.9) < bl) { bl = Math.abs(l - 0.9); best = kk; } }
+    adv = best !== pk ? `Рекомендация: ${C.PUMPS[best].name} (загрузка при этом дебите ≈ ${(C.espLoad(e.q, f, best) * 100).toFixed(0)} %).` : `Подберите частоту: загрузка сдвигается с частотой (подача и напор растут как f и f²).`;
+  }
+  const row = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
+  $("sch-side").innerHTML = `<div><b>${w.name}</b> · ${P.name}, ${f} Гц</div><div style="margin:8px 0; padding:8px 10px; border-radius:6px; background:${zc}22; border:1px solid ${zc}"><b style="color:${zc}">${txt}</b></div>` +
+    `<table class="t"><tbody>` + row("Подача (режим)", `${e.q.toFixed(0)} м³/сут`) + row("Оптимум при этой частоте", `${qb.toFixed(0)} м³/сут`) + row("Загрузка", `${(load * 100).toFixed(0)} %`) +
+    row("Напор насоса", `${Hop.toFixed(0)} м`) + row("КПД", `${etaOp.toFixed(0)} %`) + row("Мощность", `${e.kW.toFixed(0)} кВт`) +
+    row("Удельный расход", `${e.q > 0 ? ((e.kW * 24) / e.q).toFixed(1) : "—"} кВт·ч/м³`) + row("P на приёме", `${e.pwf.toFixed(0)} атм`) + `</tbody></table>` +
+    (adv ? `<div class="note">${adv}</div>` : "") +
+    `<div class="note">Режим работы — пересечение напора насоса (синяя линия) и потребного напора скважины (серый пунктир: подъём столба жидкости за вычетом притока из пласта). ` +
+    `Звезда на графике напора и на графике КПД показывает режим. Рабочая зона — 60–120 % от оптимальной подачи; штриховые линии — напор на 40 и 60 Гц.</div>`;
+}
 
 // ---------------- итоги по годам ----------------
 function yearStats(sim) {
@@ -2512,7 +2568,7 @@ $("owc-input").addEventListener("change", (e) => setOwcGuess(e.target.value));
 $("owc-show").addEventListener("change", (e) => { G.showGuess = e.target.checked; G.dirty = true; renderMap(); });
 $("wc-sel").addEventListener("change", renderWellsCharts); $("btn-wells").addEventListener("click", openWells); $("btn-wells-main").addEventListener("click", openWells); $("wells-close").addEventListener("click", closeModals);
 $("btn-schem").addEventListener("click", () => openSchem("g")); $("sc-close").addEventListener("click", closeModals);
-$("sc-tab-g").addEventListener("click", () => { SCH.tab = "g"; drawSchem(); }); $("sc-tab-w").addEventListener("click", () => { SCH.tab = "w"; drawSchem(); });
+$("sc-tab-g").addEventListener("click", () => { SCH.tab = "g"; drawSchem(); }); $("sc-tab-w").addEventListener("click", () => { SCH.tab = "w"; drawSchem(); }); $("sc-tab-p").addEventListener("click", () => { SCH.tab = "p"; drawSchem(); });
 $("sc-well").addEventListener("change", (e) => { SCH.well = e.target.value; drawSchem(); });
 $("btn-logs").addEventListener("click", () => openLog(null)); $("btn-pta").addEventListener("click", () => openPta(null));
 $("log-close").addEventListener("click", closeModals); $("pta-close").addEventListener("click", closeModals);
