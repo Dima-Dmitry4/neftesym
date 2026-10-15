@@ -241,10 +241,8 @@
         <tbody></tbody>
       </table></div>
       <div class="row" style="margin-top:10px"><b>Графики по скважинам</b><span class="sub">скважина:</span><select id="wc-sel"></select>
-        <span class="sub">сплошные — добыча, пунктир — закачка</span></div>
-      <div id="wc-plots" style="display:flex; gap:8px; margin-top:6px; min-height:260px">
-        <div id="wc-liq" style="flex:1; min-width:0; height:260px"></div><div id="wc-oil" style="flex:1; min-width:0; height:260px"></div><div id="wc-pwf" style="flex:1; min-width:0; height:260px"></div>
-      </div>
+        <span class="sub">«Все» — суммарные дебиты и среднее P<sub>wf</sub> добывающих</span></div>
+      <div id="wc-one" style="width:100%; height:360px; margin-top:6px"></div>
     </div>
   </div>
 </div>
@@ -1857,18 +1855,31 @@ function renderWellsCharts() {
   const sel = $("wc-sel"), want = sel.value || "all";
   const opts = `<option value="all">Все скважины</option>` + sim.wells.map((w) => `<option value="${w.name}">${w.name}</option>`).join("");
   if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; sel.value = sim.wells.some((w) => w.name === want) ? want : "all"; }
-  const list = sel.value === "all" ? sim.wells : sim.wells.filter((w) => w.name === sel.value);
-  const h = sim.history.days, step = Math.max(1, Math.ceil(h.length / 320)), xsY = [];
-  for (let k = 0; k < h.length; k += step) xsY.push(h[k].t / 365.25);
+  const all = sel.value === "all", list = all ? sim.wells : sim.wells.filter((w) => w.name === sel.value);
+  const h = sim.history.days, step = Math.max(1, Math.ceil(h.length / 320)), x = [], liq = [], oil = [], pwf = [];
+  for (let k = 0; k < h.length; k += step) {
+    let q = 0, qo = 0, pp = 0, np = 0;
+    for (const w of list) {
+      const d = h[k].wells[w.idx]; if (!d) continue;
+      q += d.q; qo += d.qo * 0.86;
+      if (!all || d.prod) { pp += d.pwf; np++; }
+    }
+    x.push(h[k].t / 365.25); liq.push(q); oil.push(qo); pwf.push(np ? pp / np : null);
+  }
   const xMax = Math.max(G.params.horizon_days, sim.t) / 365.25;
-  const series = (pick, only) => list.filter(only).map((w) => ({ type: "scatter", mode: "lines", name: w.name, x: xsY,
-    y: histSeries(sim, (d) => (d.wells[w.idx] ? pick(d.wells[w.idx]) : null), step), line: { color: w.color, width: 2, dash: w.type === "inj" ? "dash" : "solid" },
-    hovertemplate: `${w.name}: %{y:.1f}<extra></extra>` }));
-  const L = (t, extra = {}) => lay({ title: ttl(t), height: 260, showlegend: list.length > 1, legend: { orientation: "h", y: -0.22 }, margin: { l: 50, r: 10, t: 32, b: 56 },
-    xaxis: { range: [0, xMax], title: { text: "годы", standoff: 2 } }, ...extra });
-  Plotly.react("wc-liq", series((d) => d.q, () => true), L("Жидкость / закачка, м³/сут", { yaxis: { rangemode: "tozero" } }), CFG);
-  Plotly.react("wc-oil", series((d) => d.qo * 0.86, (w) => w.type === "prod" || w.wasProd), L("Нефть, т/сут", { yaxis: { rangemode: "tozero" } }), CFG);
-  Plotly.react("wc-pwf", series((d) => d.pwf, () => true), L("Забойное давление, атм", { yaxis: { rangemode: "tozero" } }), CFG);
+  const grid = { gridcolor: "#eef1f6", zerolinecolor: "#dfe5ee", linecolor: "#cfd8e6", ticks: "outside", tickcolor: "#cfd8e6" };
+  const line = (name, y, color, extra = {}) => ({ type: "scatter", mode: "lines", name, x, y, line: { color, width: 3, shape: "spline", smoothing: 0.5 }, ...extra });
+  const title = all ? "Все скважины: суммарные дебиты и среднее забойное давление добывающих" : `${sel.value}: дебиты и забойное давление`;
+  Plotly.react("wc-one", [
+    line("Жидкость, м³/сут", liq, "#16a34a", { fill: "tozeroy", fillcolor: "rgba(22,163,74,.10)", hovertemplate: "жидкость %{y:.1f} м³/сут<extra></extra>" }),
+    line("Нефть, т/сут", oil, "#dc2626", { hovertemplate: "нефть %{y:.1f} т/сут<extra></extra>" }),
+    line("Забойное давление, атм", pwf, "#64748b", { yaxis: "y2", line: { color: "#64748b", width: 2, dash: "dot", shape: "spline", smoothing: 0.5 }, hovertemplate: "P<sub>wf</sub> %{y:.0f} атм<extra></extra>" })],
+    { paper_bgcolor: "#fff", plot_bgcolor: "#fff", font: { family: FONT, color: TXT, size: 12 }, height: 360, hovermode: "x unified",
+      margin: { l: 64, r: 64, t: 46, b: 72 }, title: { text: title, x: 0.02, xanchor: "left", font: { size: 14 } },
+      legend: { orientation: "h", x: 0, y: -0.26 },
+      xaxis: { ...grid, range: [0, xMax], title: { text: "годы" } },
+      yaxis: { ...grid, rangemode: "tozero", title: { text: "дебит: жидкость м³/сут, нефть т/сут" } },
+      yaxis2: { overlaying: "y", side: "right", rangemode: "tozero", showgrid: false, title: { text: "P<sub>wf</sub>, атм" }, linecolor: "#cfd8e6" } }, CFG);
 }
 
 // ---------------- итоги по годам ----------------
