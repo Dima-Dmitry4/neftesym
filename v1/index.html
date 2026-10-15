@@ -60,9 +60,13 @@
   #owc-bar input[type=number] { width:80px; }
   #owc-bar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
   .panel-title { color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; margin:8px 0 6px; font-weight:600; }
-  #wellpanel { padding:8px 10px; max-height:230px; overflow:auto; }
+  #wellpanel { padding:8px 10px; max-height:340px; overflow:auto; }
+  .w-stat { font-size:11.5px; color:var(--muted); white-space:normal; max-width:210px; line-height:1.3; }
+  .w-stat.warn { color:var(--bad); }
+  .w-off td { opacity:.55; }
+  #welltable select { font-size:12px; padding:2px 4px; }
   .w-dot { width:11px; height:11px; border-radius:50%; display:inline-block; vertical-align:-1px; }
-  .w-pwf { width:140px; white-space:nowrap; }
+  .w-pwf { width:150px; white-space:nowrap; }
   .wact { display:flex; gap:3px; flex-wrap:nowrap; }
   .wact button { padding:1px 6px; font-size:12px; }
   .pta-note { font-size:11.5px; color:var(--muted); white-space:nowrap; }
@@ -168,8 +172,7 @@
         <span id="layers" class="tb-group"></span>
         <span class="tb-right">
           <button id="tool-expl" class="lvl2-only" title="Разведочная скважина: только каротаж, без добычи">◆ Разведочная</button>
-          <button id="tool-prod">⛏ Добывающая</button>
-          <button id="tool-inj">▲ Нагнетательная</button>
+          <button id="tool-well" title="Пробурить скважину: потом можно выбрать режим, перевести под закачку (ППД), остановить">⛏ Скважина</button>
         </span>
       </div>
       <div id="map"></div>
@@ -178,9 +181,15 @@
         <span>м</span>
         <label><input type="checkbox" id="owc-show" checked> контуры на карте</label>
       </div>
+      <div id="field-ctl" class="row card" style="padding:6px 10px; margin-top:6px">
+        <span title="Давление в сборной сети, на которое работают добывающие">Давление сбора:</span>
+        <input id="fc-gather" type="range" min="5" max="40" step="1" value="12" style="width:110px"><b id="fc-gather-v">12</b> атм
+        <span style="margin-left:12px" title="Давление на выкиде КНС, из которого питаются нагнетательные">Давление КНС:</span>
+        <input id="fc-kns" type="range" min="60" max="200" step="5" value="130" style="width:110px"><b id="fc-kns-v">130</b> атм
+      </div>
       <div class="panel-title">Скважины <span id="wellcount"></span></div>
       <div id="wellpanel" class="card"><table id="welltable" class="t">
-        <thead><tr><th></th><th>Скв.</th><th>P<sub>wf</sub>, атм</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
+        <thead><tr><th></th><th>Скв.</th><th>Режим</th><th>Параметр</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
         <tbody></tbody>
       </table></div>
     </section>
@@ -292,6 +301,7 @@ const DEFAULT_PARAMS = {
   inj_cost: 300,      // руб/м³ закачки
   horizon_days: 3650, // 10 лет
   init_money: 50e6,   // стартовый капитал, руб
+  elec_cost: 5,       // руб/кВт·ч (ЭЦН)
 };
 
 // ---------- ГПСЧ (детерминированный seed) ----------
@@ -657,12 +667,24 @@ function createSim(reservoir, params) {
     if (sim.wells.some((w) => w.cell === c)) throw new Error("ячейка занята");
     sim.wells.push({ cell: c, type, pwf, q: 0, qo: 0, qw: 0,
                      skin: r.level === 2 ? l2Skin(c) : 0, wasProd: type === "prod",
+                     on: true,             // работает / остановлена
+                     mode: "bhp",          // bhp | flow (фонтан, штуцер) | esp (ЭЦН) | choke (КНС, штуцер)
+                     choke: type === "prod" ? 12 : 8, // диаметр штуцера, мм
+                     freq: 50, hasESP: false, kW: 0, eq: null,
+                     depth: r.level === 2 ? r.zTop[c] + 5 + l2Altitude(c % r.nx, Math.floor(c / r.nx)) : 2450,
                      cum: { oil: 0, water: 0, inj: 0 } });
+  };
+  sim.field = { pGather: 12, pKNS: 130 }; // давление сбора и давление КНС, атм
+  // смена назначения скважины в обе стороны (добывающая ⇄ нагнетательная); история сохраняется
+  sim.convertWell = (w) => {
+    if (w.type === "prod") { w.type = "inj"; w.pwf = 325; w.mode = r.level === 2 ? "choke" : "bhp"; w.choke = 8; }
+    else { w.type = "prod"; w.wasProd = true; w.pwf = 150; w.mode = r.level === 2 ? "flow" : "bhp"; w.choke = 12; }
+    w.converted = true; sim._fluxValid = false;
   };
   // перевод добывающей в нагнетательную (ППД): история добычи сохраняется
   sim.convertToInjector = (w) => {
     if (w.type !== "prod") throw new Error("только добывающую");
-    w.type = "inj"; w.pwf = 325; w.converted = true; sim._fluxValid = false;
+    sim.convertWell(w);
   };
   // обработка призабойной зоны: скин снижается до −1 (если он был выше)
   sim.stimulate = (w) => {
@@ -716,6 +738,7 @@ function solvePressure(sim, dt) {
     b[idx] = acc * Pold[c];
   }
   for (const w of sim.wells) {
+    if (w.on === false) continue;
     const idx = sim._rowOf[w.cell];
     const G = wellIndex(r.k[w.cell], r, w.skin) * lambdaT(sim.Sw[w.cell], r);
     diag[idx] += G;
@@ -761,12 +784,75 @@ function solvePressure(sim, dt) {
   for (let idx = 0; idx < N; idx++) sim.P[r.cells[idx]] = x[idx];
 }
 
+// ---------- Наземное и скважинное оборудование (узловой анализ) ----------
+// Упрощённый перенос идей unfpy (esp/pump, choke, pipe): однофазная гидравлика без свободного газа.
+// Режимы: bhp — заданное забойное давление (ползунок); flow — фонтан: давление на устье =
+// давление сбора + перепад на штуцере; esp — ЭЦН с частотой f (законы подобия, напор H(q)=H0·k²·(1−(q/(Q0·k))²),
+// k = f/50); choke — нагнетательная: давление КНС минус перепад на штуцере. Забойное давление находится из
+// равенства притока по Писману (q = G·(P_яч − P_wf)) и пропускной способности подъёмника (бисекция по q).
+// Перепад на штуцере: ΔP = ρ·v²/2, v = q/(Cd·A), Cd = 0.8. Столб — по плотности смеси.
+const ATM_PA = 101325, ESP = { Q0: 450, H0: 2200, QB: 290, ETA: 0.62 }; // при 50 Гц: м³/сут, м
+const P_MIN_INTAKE = 20, P_MAX_INJ = 340; // атм: минимальное давление на приёме; предел по давлению закачки
+function chokeDpAtm(q, dmm, rho) {
+  if (!(q > 0) || !(dmm > 0)) return 0;
+  const A = Math.PI * (dmm / 1000) ** 2 / 4, v = q / 86400 / (0.8 * A);
+  return (rho * v * v) / 2 / ATM_PA;
+}
+function espHeadM(q, f) { const k = f / 50; return ESP.H0 * k * k * (1 - (q / (ESP.Q0 * k)) ** 2); }
+function espEff(q, f) { const k = f / 50, x = (q - ESP.QB * k) / (ESP.QB * k); return Math.max(0.15, ESP.ETA * (1 - x * x)); }
+function espPowerKW(q, f, rho) { return (rho * 9.81 * (q / 86400) * Math.max(0, espHeadM(q, f))) / espEff(q, f) / 1000; }
+function gatherPressure(sim) {
+  let sq = 0;
+  for (const w of sim.wells) if (w.type === "prod" && w.on !== false) sq += w.q;
+  return sim.field.pGather + 2e-5 * sq * sq; // потери в сборной сети растут с суммарным расходом
+}
+function bisectQ(f, qMax) {
+  if (!(qMax > 0) || f(0) <= 0) return 0;
+  if (f(qMax) >= 0) return qMax;
+  let a = 0, b = qMax;
+  for (let n = 0; n < 50; n++) { const m = 0.5 * (a + b); if (f(m) > 0) a = m; else b = m; }
+  return 0.5 * (a + b);
+}
+// режим скважины по оборудованию без изменения состояния: {q, pwf, pwh, kW, dead, capped}
+function solveEquipment(sim, w) {
+  const r = sim.r, Pc = sim.P[w.cell], G = wellIndex(r.k[w.cell], r, w.skin) * lambdaT(sim.Sw[w.cell], r);
+  const L = w.depth, out = { q: 0, pwf: Pc, pwh: 0, kW: 0, dead: false, capped: false };
+  if (w.on === false) return out;
+  if (w.type === "prod") {
+    const rho = 860 * (1 - (w.fw || 0)) + 1000 * (w.fw || 0), hyd = (rho * 9.81 * L) / ATM_PA, pg = gatherPressure(sim);
+    const pwhOf = (q) => pg + (w.mode === "flow" ? chokeDpAtm(q, w.choke, rho) : 0);
+    const req = (q) => pwhOf(q) + hyd - (w.mode === "esp" ? (rho * 9.81 * espHeadM(q, w.freq)) / ATM_PA : 0);
+    const qMax = Math.max(0, G * (Pc - P_MIN_INTAKE)), f = (q) => Pc - q / G - req(q);
+    out.q = bisectQ(f, qMax); out.dead = out.q === 0; out.capped = out.q >= qMax && qMax > 0;
+    out.pwf = Pc - out.q / G; out.pwh = pwhOf(out.q);
+    if (w.mode === "esp") out.kW = espPowerKW(out.q, w.freq, rho);
+  } else {
+    const hydW = (1000 * 9.81 * L) / ATM_PA, head = sim.field.pKNS;
+    const f = (q) => head - chokeDpAtm(q, w.choke, 1000) + hydW - Pc - q / G;
+    const qMax = Math.max(0, G * (P_MAX_INJ - Pc));
+    out.q = bisectQ(f, qMax); out.dead = out.q === 0; out.capped = out.q >= qMax && qMax > 0;
+    out.pwf = Pc + out.q / G; out.pwh = head - chokeDpAtm(out.q, w.choke, 1000);
+  }
+  return out;
+}
+// перед каждым решением давления: режимы flow/esp/choke задают забойное давление скважин
+function applyEquipment(sim) {
+  for (const w of sim.wells) {
+    if (w.on === false) { w.kW = 0; continue; }
+    if (!w.mode || w.mode === "bhp") { w.kW = 0; continue; }
+    const e = solveEquipment(sim, w);
+    w.eq = e; w.kW = e.kW;
+    w.pwf = e.dead ? sim.P[w.cell] : 0.5 * w.pwf + 0.5 * e.pwf; // демпфирование от колебаний между сутками
+  }
+}
+
 // ---------- Дебиты скважин (Писман, клампы направления) ----------
 // Соглашение о знаках: для добывающей w.q>0 — отбор жидкости; для нагнетательной
 // w.q>0 — закачка воды. Расщепление фаз — по подвижностям ячейки.
 function updateWellRates(sim) {
   const r = sim.r;
   for (const w of sim.wells) {
+    if (w.on === false) { w.q = w.qo = w.qw = w.fw = 0; continue; }
     const G = wellIndex(r.k[w.cell], r, w.skin) * lambdaT(sim.Sw[w.cell], r);
     const dp = w.type === "prod" ? sim.P[w.cell] - w.pwf : w.pwf - sim.P[w.cell];
     const q = Math.max(0, G * dp);
@@ -852,6 +938,7 @@ function advance(sim, days) {
     const sinceSolve = sim.t - (sim._lastSolveT ?? -1e9);
     if (!sim._fluxValid || sinceSolve >= 1 - 1e-9) {
       const dtP = sim._fluxValid ? sinceSolve : Math.min(1, remaining);
+      applyEquipment(sim);
       solvePressure(sim, Math.max(1e-9, dtP));
       sim._lastSolveT = sim.t;
       sim._fluxValid = true;
@@ -1046,6 +1133,7 @@ function createEconomy(params) {
     revenue: 0, opex: 0, drillSpent: 0, otherSpent: 0, drills: [], // drills — сутки решений (для графика)
     update(dt, wells) {
       for (const w of wells) {
+        if (w.kW) eco.opex += w.kW * 24 * dt * (params.elec_cost || 0); // электроэнергия ЭЦН
         if (w.type === "prod") {
           eco.revenue += w.qo * RHO_OIL * params.price_oil * dt; // нефть: м³→т→руб
           eco.opex += w.q * params.lift_cost * dt;                // подъём всей жидкости
@@ -1331,20 +1419,76 @@ function level2bTests() {
   return t;
 }
 
+// ---------- Тесты: режимы работы скважин и оборудование ----------
+function equipmentTests() {
+  const t = [];
+  const mk = () => { const sm = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS); return sm; };
+  const sm = mk(), cell = sm.r.explore[2].cell;
+  sm.addWell(cell, "prod", 150);
+  const w = sm.wells[0];
+  w.mode = "flow"; w.choke = 12;
+  const eF = solveEquipment(sm, w);
+  t.push({ name: "оборудование: фонтан при начальном давлении работает (0 < q, P_wf < P_пл)", pass: eF.q > 1 && eF.pwf < sm.P[cell] && eF.pwf > 150,
+           details: `q=${eF.q.toFixed(0)} м³/сут, P_wf=${eF.pwf.toFixed(0)}, P_уст=${eF.pwh.toFixed(0)} атм` });
+  w.choke = 3; const eS = solveEquipment(sm, w); w.choke = 12;
+  t.push({ name: "оборудование: уменьшение штуцера снижает дебит", pass: eS.q < eF.q, details: `3 мм: ${eS.q.toFixed(0)} < 12 мм: ${eF.q.toFixed(0)}` });
+  const Psave = sm.P[cell]; sm.P[cell] = 200;
+  const eD = solveEquipment(sm, w);
+  w.mode = "esp"; w.freq = 50; const eE = solveEquipment(sm, w);
+  w.freq = 40; const eE40 = solveEquipment(sm, w); w.freq = 55; const eE55 = solveEquipment(sm, w);
+  sm.P[cell] = Psave;
+  t.push({ name: "оборудование: при низком давлении фонтан глохнет, ЭЦН поднимает; дебит растёт с частотой",
+           pass: eD.q === 0 && eE.q > 5 && eE40.q < eE.q && eE.q < eE55.q && eE.kW > 0,
+           details: `фонтан 0, ЭЦН 40/50/55 Гц: ${eE40.q.toFixed(0)}/${eE.q.toFixed(0)}/${eE55.q.toFixed(0)} м³/сут, ${eE.kW.toFixed(0)} кВт` });
+  // нагнетательная: штуцер и КНС
+  sm.addWell(sm.r.explore[0].cell, "inj", 325);
+  const wi = sm.wells[1]; wi.mode = "choke";
+  wi.choke = 4; const i4 = solveEquipment(sm, wi); wi.choke = 12; const i12 = solveEquipment(sm, wi);
+  sm.field.pKNS = 170; const i170 = solveEquipment(sm, wi); sm.field.pKNS = 130;
+  t.push({ name: "оборудование: нагнетательная — закачка растёт с диаметром штуцера и давлением КНС", pass: i4.q < i12.q && i12.q < i170.q && i12.q > 0,
+           details: `4 мм ${i4.q.toFixed(0)}, 12 мм ${i12.q.toFixed(0)}, КНС 170: ${i170.q.toFixed(0)} м³/сут` });
+  // год работы в смешанных режимах: балансы и остановка
+  const s2 = mk(), r2 = s2.r;
+  s2.addWell(r2.explore[2].cell, "prod", 150); s2.addWell(r2.explore[1].cell, "prod", 150); s2.addWell(r2.explore[0].cell, "prod", 150); s2.addWell(r2.explore[3].cell, "prod", 150);
+  const [a, b, c, d] = s2.wells;
+  a.mode = "esp"; b.mode = "flow"; s2.convertWell(c); c.mode = "choke"; d.on = false;
+  advance(s2, 365);
+  let dW = 0;
+  for (const q of r2.cells) dW += r2.poreVol[q] * (s2.Sw[q] - r2.Sw0[q]);
+  const inj = s2.wells.reduce((x, y) => x + y.cum.inj, 0), pw = s2.wells.reduce((x, y) => x + y.cum.water, 0), errW = (inj - dW - pw) / Math.max(1, inj);
+  const mb = materialBalance(s2);
+  t.push({ name: "режимы: год при ЭЦН + фонтан + нагнетательной со штуцером + остановленной — баланс воды < 0.1 %, давления < 1 %",
+           pass: Math.abs(errW) < 1e-3 && Math.abs(mb.err) < 0.01, details: `вода ${(errW * 100).toFixed(3)} %, P ${(mb.err * 100).toFixed(3)} %` });
+  t.push({ name: "режимы: остановленная скважина не работает; ЭЦН даёт расход, расходует электроэнергию",
+           pass: d.cum.oil === 0 && d.cum.water === 0 && d.q === 0 && a.cum.oil > 0 && a.kW > 0, details: `ЭЦН ${a.kW.toFixed(0)} кВт, добыча ${(a.cum.oil * 0.86).toFixed(0)} т` });
+  // смена назначения в обе стороны
+  const s3 = mk(); s3.addWell(s3.r.explore[2].cell, "prod", 150); const x = s3.wells[0];
+  s3.convertWell(x); const toInj = x.type === "inj"; s3.convertWell(x);
+  t.push({ name: "скважина: смена назначения добывающая → нагнетательная → добывающая", pass: toInj && x.type === "prod" && x.wasProd && x.converted });
+  // электроэнергия в экономике
+  const s4 = mk(); s4.addWell(s4.r.explore[2].cell, "prod", 150); const y = s4.wells[0]; y.mode = "esp"; y.hasESP = true;
+  advance(s4, 60);
+  const p0 = s4.economy.opex;
+  const s5 = createSim(buildReservoir2({ ...DEFAULT_PARAMS, elec_cost: 0 }), { ...DEFAULT_PARAMS, elec_cost: 0 });
+  s5.addWell(s5.r.explore[2].cell, "prod", 150); s5.wells[0].mode = "esp"; advance(s5, 60);
+  t.push({ name: "экономика: электроэнергия ЭЦН входит в затраты", pass: p0 > s5.economy.opex, details: `${((p0 - s5.economy.opex) / 1e3).toFixed(0)} тыс. руб за 60 сут` });
+  return t;
+}
+
 registerCore({
-  VERSION: "0.9.0",
+  VERSION: "0.10.0",
   DEFAULT_PARAMS, GRID, CONV_K,
   mulberry32, gauss, buildReservoir, isConnected,
   L2, buildReservoir2, wellLog, l2Top, l2Column, l2OilNet, l2Altitude,
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  createEconomy, RHO_OIL, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
+  createEconomy, RHO_OIL, solveEquipment, applyEquipment, espHeadM, chokeDpAtm, espPowerKW, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
-  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, level2bTests,
+  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, level2bTests,
   runSelfTests() {
     return [...reservoirTests(), ...relPermTests(), ...pressureTests(), ...wellTests(),
-            ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests()];
+            ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests(), ...equipmentTests()];
   },
 });
 </script>
@@ -1482,13 +1626,13 @@ function wellTraces(sim) {
   const r = sim.r, pos = (cell) => [((cell % NX) + 0.5) * DX, (Math.floor(cell / NX) + 0.5) * DX];
   const mk = (list, symbol, fill, hover) => ({ type: "scatter", mode: "markers+text", x: list.map((w) => pos(w.cell)[0]), y: list.map((w) => pos(w.cell)[1]),
     text: list.map((w) => w.name), textposition: "top center", textfont: { size: 11, color: TXT },
-    marker: { symbol: symbol, size: 14, color: list.map((w) => fill || w.color), line: { color: TXT, width: 2 } },
+    marker: { symbol: symbol, size: 14, color: list.map((w) => (w.on === false ? "#b8c2d1" : fill || w.color)), line: { color: TXT, width: 2 } },
     hovertemplate: list.map((w) => hover(w) + "<extra></extra>"), showlegend: false });
   const out = [];
   const prod = sim.wells.filter((w) => w.type === "prod"), inj = sim.wells.filter((w) => w.type === "inj");
   if (G.expl.length) out.push(mk(G.expl, "diamond", "#ffffff", (w) => `<b>${w.name}</b> — разведочная<br>клик — каротаж`));
-  if (prod.length) out.push(mk(prod, "circle", null, (w) => `<b>${w.name}</b> добывающая<br>P<sub>wf</sub> = ${w.pwf.toFixed(0)} атм`));
-  if (inj.length) out.push(mk(inj, "triangle-up", null, (w) => `<b>${w.name}</b> нагнетательная${w.converted ? " (ППД)" : ""}<br>P<sub>wf</sub> = ${w.pwf.toFixed(0)} атм`));
+  if (prod.length) out.push(mk(prod, "circle", null, (w) => `<b>${w.name}</b> добывающая${w.on === false ? " (остановлена)" : ""}<br>P<sub>wf</sub> = ${w.pwf.toFixed(0)} атм`));
+  if (inj.length) out.push(mk(inj, "triangle-up", null, (w) => `<b>${w.name}</b> нагнетательная${w.on === false ? " (остановлена)" : ""}<br>P<sub>wf</sub> = ${w.pwf.toFixed(0)} атм`));
   return out;
 }
 function renderMap() {
@@ -1532,13 +1676,13 @@ function drillWell(cell) {
   if (!r.active[cell]) return toast("Вне контура нефтеносности", true);
   if (sim.wells.some((w) => w.cell === cell)) return toast("В этой ячейке уже есть скважина", true);
   if (G.expl.some((e) => e.cell === cell)) return toast("Здесь разведочная скважина", true);
-  const type = G.tool;
   sim.economy.drill(sim.t);
-  const name = (type === "prod" ? "П" : "Н") + ++G.wellNames[type];
-  sim.addWell(cell, type, type === "prod" ? 150 : 325);
+  const name = "С" + ++G.wellNames.prod;
+  sim.addWell(cell, "prod", 150);
   const w = sim.wells[sim.wells.length - 1];
   w.name = name; w.color = PAL[G.colorSeq++ % PAL.length];
-  let msg = `Пробурена ${name} (${type === "prod" ? "добывающая" : "нагнетательная"}), −${mln(G.params.drill_cost)}`;
+  if (isL2()) w.mode = "flow"; // на уровне 2 скважина стартует фонтаном через штуцер
+  let msg = `Пробурена ${name}, −${mln(G.params.drill_cost)}. Режим и назначение (добыча / ППД) меняются в таблице скважин`;
   if (isL2()) { const L = C.wellLog(r, cell); msg += `. ГИС: h нефть ${L.hOil.toFixed(1)} м, вода ${L.hWater.toFixed(1)} м`; }
   toast(msg); renderWellTable(true); G.dirty = true; renderAll();
 }
@@ -1559,11 +1703,27 @@ function buySeismic() {
   renderLayerBar(); G.dirty = true; renderAll();
 }
 function convertWell(w) {
-  if (guardRun() || w.type !== "prod") return;
+  if (guardRun()) return;
+  const toInj = w.type === "prod";
   G.sim.economy.spend(G.sim.t, G.params.conv_cost);
-  G.sim.convertToInjector(w);
-  toast(`${w.name} переведена под закачку (ППД), −${mln(G.params.conv_cost)}`);
+  G.sim.convertWell(w);
+  toast(toInj ? `${w.name} переведена под закачку (ППД), −${mln(G.params.conv_cost)}` : `${w.name} возвращена в добычу, −${mln(G.params.conv_cost)}`);
   renderWellTable(true); G.dirty = true; renderAll();
+}
+function setWellMode(w, mode) {
+  if (guardRun()) return renderWellTable(true);
+  if (mode === "esp" && !w.hasESP) {
+    G.sim.economy.spend(G.sim.t, G.params.esp_cost); w.hasESP = true;
+    toast(`${w.name}: установлен ЭЦН, −${mln(G.params.esp_cost)}`);
+  }
+  w.mode = mode; G.sim._fluxValid = false;
+  renderWellTable(true); G.dirty = true;
+}
+function toggleWell(w) {
+  if (guardRun()) return;
+  w.on = w.on === false; G.sim._fluxValid = false;
+  toast(w.on ? `${w.name}: скважина запущена` : `${w.name}: скважина остановлена`);
+  renderWellTable(true); G.dirty = true;
 }
 function stimWell(w) {
   if (guardRun() || w.stimulated) return;
@@ -1574,7 +1734,7 @@ function stimWell(w) {
 }
 function setTool(tool) {
   G.tool = tool;
-  for (const [id, t] of [["tool-prod", "prod"], ["tool-inj", "inj"], ["tool-expl", "expl"]]) $(id).classList.toggle("active", tool === t);
+  for (const [id, t] of [["tool-well", "well"], ["tool-expl", "expl"]]) $(id).classList.toggle("active", tool === t);
 }
 
 // ---------------- графики ----------------
@@ -1609,6 +1769,23 @@ function renderCharts() {
 
 // ---------------- панель скважин ----------------
 const wellRows = new Map();
+const MODES = { prod: [["bhp", "Забойное давление"], ["flow", "Фонтан (штуцер)"], ["esp", "ЭЦН (частота)"]], inj: [["bhp", "Забойное давление"], ["choke", "КНС (штуцер)"]] };
+function ctrlSpec(w) {
+  if (w.mode === "bhp") return w.type === "prod" ? { key: "pwf", min: 1, max: 225, step: 1, unit: "атм" } : { key: "pwf", min: 250, max: 375, step: 1, unit: "атм" };
+  if (w.mode === "esp") return { key: "freq", min: 30, max: 60, step: 1, unit: "Гц" };
+  return { key: "choke", min: 2, max: w.type === "prod" ? 40 : 30, step: 0.5, unit: "мм" };
+}
+function wellStatus(sim, w) {
+  if (w.on === false) return { t: "остановлена", warn: false };
+  if (w.mode === "bhp") return { t: `P<sub>wf</sub> задано`, warn: false };
+  const e = C.solveEquipment(sim, w);
+  if (w.type === "prod") {
+    if (e.dead) return { t: w.mode === "flow" ? "фонтан не идёт: давление пласта ниже давления столба — установите ЭЦН" : "ЭЦН не поднимает при текущей частоте/давлении", warn: true };
+    return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${w.mode === "esp" ? ` · ${e.kW.toFixed(0)} кВт` : ""}${e.capped ? " · упёрлись в P<sub>прием</sub> мин." : ""}`, warn: false };
+  }
+  if (e.dead) return { t: "закачка не идёт: давление КНС мало для этого пластового давления", warn: true };
+  return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${e.capped ? " · предел давления закачки" : ""}`, warn: false };
+}
 function renderWellTable(force = false) {
   const sim = G.sim; if (!sim) return;
   const tb = $("welltable").tBodies[0];
@@ -1616,29 +1793,39 @@ function renderWellTable(force = false) {
     tb.innerHTML = ""; wellRows.clear();
     sim.wells.forEach((w, idx) => {
       w.idx = idx;
-      const tr = document.createElement("tr");
-      const rng = w.type === "prod" ? [1, 225] : [250, 375];
+      const tr = document.createElement("tr"); tr.className = w.on === false ? "w-off" : "";
+      const sp = ctrlSpec(w), cur = sp.key === "pwf" ? w.pwf : w[sp.key];
       const btn = (cls, txt, title, dis) => `<button class="${cls}" title="${title}"${dis ? " disabled" : ""}>${txt}</button>`;
-      const acts = (isL2() ? btn("a-log", "📈", "Каротаж и РИГИС") : "") +
-        (isL2() && w.type === "prod" ? btn("a-pta", "⏱", "ГДИС: КВД") + btn("a-stim", "🧪", `Обработка призабойной зоны, ${(G.params.stim_cost / 1e6).toFixed(0)} млн руб${w.stimulated ? " (уже проведена)" : ""}`, w.stimulated) : "") +
-        (w.type === "prod" ? btn("a-conv", "💧→", `Перевести под закачку (ППД), ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб`) : "");
+      const acts = btn("a-on", w.on === false ? "▶" : "⏸", w.on === false ? "Запустить скважину" : "Остановить скважину") +
+        btn("a-conv", w.type === "prod" ? "💧→" : "⛏→", w.type === "prod" ? `Перевести под закачку (ППД), ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб` : `Вернуть в добычу, ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб`) +
+        (isL2() ? btn("a-log", "📈", "Каротаж и РИГИС") : "") +
+        (isL2() && w.type === "prod" ? btn("a-pta", "⏱", "ГДИС: КВД") + btn("a-stim", "🧪", `Обработка призабойной зоны, ${(G.params.stim_cost / 1e6).toFixed(0)} млн руб${w.stimulated ? " (уже проведена)" : ""}`, w.stimulated) : "");
       const p = G.pta[w.name], note = p ? `<div class="pta-note">ГДИС: k≈${p.k.toFixed(0)} мД, s≈${p.s.toFixed(1)}</div>` : "";
-      tr.innerHTML = `<td><span class="w-dot" style="background:${w.color}"></span></td><td>${w.name}${w.converted ? " <span class='sub'>(ППД)</span>" : ""}</td>` +
-        `<td class="w-pwf"><input type="range" min="${rng[0]}" max="${rng[1]}" step="1" value="${w.pwf}"> <span class="pwf-val">${w.pwf.toFixed(0)}</span></td>` +
+      const opts = MODES[w.type].map(([v, l]) => `<option value="${v}"${v === w.mode ? " selected" : ""}>${l}${v === "esp" && !w.hasESP ? ` (${(G.params.esp_cost / 1e6).toFixed(0)} млн руб)` : ""}</option>`).join("");
+      tr.innerHTML = `<td><span class="w-dot" style="background:${w.color}"></span></td>` +
+        `<td>${w.name}<div class="sub" style="font-size:11px">${w.type === "prod" ? "добыв." : "нагнет."}${w.hasESP ? " · ЭЦН" : ""}</div></td>` +
+        `<td><select>${opts}</select><div class="w-stat"></div></td>` +
+        `<td class="w-pwf"><input type="range" min="${sp.min}" max="${sp.max}" step="${sp.step}" value="${cur}"> <span class="pwf-val">${(+cur).toFixed(sp.step < 1 ? 1 : 0)}</span> <span class="sub">${sp.unit}</span></td>` +
         `<td class="qo"></td><td class="qw"></td><td class="fw"></td><td><div class="wact">${acts}</div>${note}</td>`;
       const slider = tr.querySelector("input"), val = tr.querySelector(".pwf-val");
-      slider.addEventListener("input", () => { w.pwf = +slider.value; val.textContent = w.pwf.toFixed(0); });
+      slider.addEventListener("input", () => {
+        const v = +slider.value; if (sp.key === "pwf") w.pwf = v; else w[sp.key] = v;
+        val.textContent = v.toFixed(sp.step < 1 ? 1 : 0); sim._fluxValid = false; G.dirty = true;
+      });
+      tr.querySelector("select").addEventListener("change", (e) => setWellMode(w, e.target.value));
       const on = (cls, fn) => { const b = tr.querySelector("." + cls); if (b) b.addEventListener("click", fn); };
-      on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
+      on("a-on", () => toggleWell(w)); on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
       tb.appendChild(tr);
-      wellRows.set(w, { slider, val, qo: tr.querySelector(".qo"), qw: tr.querySelector(".qw"), fw: tr.querySelector(".fw") });
+      wellRows.set(w, { slider, val, sp, st: tr.querySelector(".w-stat"), qo: tr.querySelector(".qo"), qw: tr.querySelector(".qw"), fw: tr.querySelector(".fw") });
     });
     const np = sim.wells.filter((w) => w.type === "prod").length, ni = sim.wells.length - np;
     $("wellcount").textContent = `(${sim.wells.length}: доб. ${np}, наг. ${ni}${isL2() ? `, разв. ${G.expl.length}` : ""})`;
   }
   for (const w of sim.wells) {
     const row = wellRows.get(w); if (!row) continue;
-    if (+row.slider.value !== Math.round(w.pwf)) { row.slider.value = w.pwf; row.val.textContent = w.pwf.toFixed(0); }
+    const cur = row.sp.key === "pwf" ? w.pwf : w[row.sp.key];
+    if (document.activeElement !== row.slider && Math.abs(+row.slider.value - cur) > 0.01) { row.slider.value = cur; row.val.textContent = cur.toFixed(row.sp.step < 1 ? 1 : 0); }
+    const st = wellStatus(sim, w); row.st.innerHTML = st.t; row.st.classList.toggle("warn", st.warn);
     row.qo.textContent = (w.qo * 0.86).toFixed(1); row.qw.textContent = w.qw.toFixed(1); row.fw.textContent = (w.fw * 100).toFixed(0);
   }
 }
@@ -1924,7 +2111,7 @@ function showResults() {
   const zone = (c) => (r.level !== 2 ? "" : r.hOil[c] >= r.h - 1e-6 ? "нефтяная" : r.hOil[c] > 0 ? "водонефтяная" : "водяная");
   let rows = "";
   for (const w of sim.wells) {
-    rows += `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td><td>${w.type === "prod" ? "добывающая" : w.converted ? "нагнетательная (из добывающей)" : "нагнетательная"}</td>` +
+    rows += `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td><td>${(w.type === "prod" ? "добывающая" : "нагнетательная") + (w.converted ? " (меняла назначение)" : "") + (w.hasESP ? ", ЭЦН" : "") + (w.on === false ? ", остановлена" : "")}</td>` +
       (r.level === 2 ? `<td>${zone(w.cell)}</td><td>${w.skin.toFixed(1)}${w.stimulated ? " (после ОПЗ)" : ""}</td>` : "") +
       `<td>${(w.cum.oil * 0.86).toFixed(0)} т</td><td>${w.cum.water.toFixed(0)} м³</td><td>${w.cum.inj.toFixed(0)} м³</td><td>${(w.fw * 100).toFixed(0)} %</td></tr>`;
   }
@@ -1974,7 +2161,8 @@ function drawReveal(sim) {
 // ---------------- настройки ----------------
 const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, мин, макс, шаг, только ур. 2]
   ["mu_o", "Вязкость нефти, сП", 5, 1, 50, 0.5], ["price_oil", "Цена нефти (netback), руб/т", 10000, 1000, 30000, 500],
-  ["drill_cost", "Стоимость скважины, млн руб", 10, 1, 100, 1], ["conv_cost", "Перевод в ППД, млн руб", 2, 0.5, 20, 0.5],
+  ["drill_cost", "Стоимость скважины, млн руб", 10, 1, 100, 1], ["conv_cost", "Смена назначения (ППД ⇄ добыча), млн руб", 2, 0.5, 20, 0.5],
+  ["esp_cost", "Установка ЭЦН, млн руб", 6, 0.5, 50, 0.5], ["elec_cost", "Электроэнергия, руб/кВт·ч", 5, 0, 30, 0.5],
   ["expl_cost", "Разведочная скважина, млн руб", 4, 0.5, 50, 0.5, true], ["seis_cost", "Сейсмика 3D, млн руб", 12, 1, 100, 1, true],
   ["pta_cost", "ГДИС (КВД), млн руб", 1, 0.1, 10, 0.1, true], ["stim_cost", "Обработка призабойной зоны, млн руб", 3, 0.5, 30, 0.5, true],
   ["lift_cost", "Подъём жидкости, руб/м³", 500, 50, 2000, 10], ["inj_cost", "Закачка воды, руб/м³", 300, 50, 2000, 10],
@@ -2041,7 +2229,7 @@ function readParams() {
   const num = (key, def) => { const el = $("pf-" + key), v = el ? +el.value : NaN; return isFinite(v) && v > 0 ? v : def; };
   const d = C.DEFAULT_PARAMS, years = num("horizon_years", 10);
   return { level: G.level, mu_o: num("mu_o", d.mu_o), price_oil: num("price_oil", d.price_oil), drill_cost: num("drill_cost", d.drill_cost) * 1e6,
-    conv_cost: num("conv_cost", 2) * 1e6, expl_cost: num("expl_cost", 4) * 1e6, seis_cost: num("seis_cost", 12) * 1e6, pta_cost: num("pta_cost", 1) * 1e6,
+    conv_cost: num("conv_cost", 2) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, elec_cost: num("elec_cost", 5), expl_cost: num("expl_cost", 4) * 1e6, seis_cost: num("seis_cost", 12) * 1e6, pta_cost: num("pta_cost", 1) * 1e6,
     stim_cost: num("stim_cost", 3) * 1e6, lift_cost: num("lift_cost", d.lift_cost), inj_cost: num("inj_cost", d.inj_cost),
     horizon_days: G.level === 2 ? Math.round(years) * 365 : Math.round(years * 365.25), init_money: num("init_money", d.init_money) * 1e6 };
 }
@@ -2059,6 +2247,7 @@ function startGame() {
   G.expl = G.level === 2 ? res.explore.map((e) => ({ ...e })) : [];
   G.layer = G.level === 2 ? "blank" : "k";
   $("owc-input").value = ""; G.log.sel = null; G.log.mode = "one"; setTool(null); setSpeed(0);
+  $("fc-gather").value = G.sim.field.pGather; $("fc-kns").value = G.sim.field.pKNS; $("fc-gather-v").textContent = G.sim.field.pGather; $("fc-kns-v").textContent = G.sim.field.pKNS;
   applyLevelUI(); wellRows.clear(); renderWellTable(true);
   show("screen-game"); renderAll();
   toast(G.level === 2 ? "Уровень 2: у вас 5 разведочных скважин (◆) — кликните по ним, чтобы посмотреть каротаж. Сейсмику можно заказать за деньги. Время идёт по кнопке «Следующий год»."
@@ -2067,10 +2256,12 @@ function startGame() {
 
 // ---------------- инициализация ----------------
 initSettings();
-for (const [id, tool] of [["tool-prod", "prod"], ["tool-inj", "inj"], ["tool-expl", "expl"]]) $(id).addEventListener("click", () => setTool(G.tool === tool ? null : tool));
+for (const [id, tool] of [["tool-well", "well"], ["tool-expl", "expl"]]) $(id).addEventListener("click", () => setTool(G.tool === tool ? null : tool));
 $("sp-pause").addEventListener("click", () => setSpeed(0)); $("sp-1").addEventListener("click", () => setSpeed(2));
 $("sp-10").addEventListener("click", () => setSpeed(20)); $("sp-50").addEventListener("click", () => setSpeed(100));
 $("btn-year").addEventListener("click", startYear);
+for (const [id, key] of [["fc-gather", "pGather"], ["fc-kns", "pKNS"]]) $(id).addEventListener("input", (e) => {
+  if (!G.sim) return; G.sim.field[key] = +e.target.value; $(id + "-v").textContent = e.target.value; G.sim._fluxValid = false; G.dirty = true; });
 $("btn-results").addEventListener("click", () => { setSpeed(0); showResults(); });
 $("btn-continue").addEventListener("click", () => { G.done = true; applyLevelUI(); show("screen-game"); G.dirty = true; renderAll();
   if (isL2()) toast("Геология раскрыта: открыты слои проницаемости, давления и насыщенности"); });
