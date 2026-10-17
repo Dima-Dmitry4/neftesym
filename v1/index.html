@@ -63,7 +63,7 @@
   #wellpanel { padding:8px 10px; overflow-x:auto; flex:none; max-height:46vh; overflow-y:auto; }
   .w-stat { font-size:11.5px; color:var(--muted); white-space:normal; max-width:260px; line-height:1.3; }
   .w-stat.warn { color:var(--bad); }
-  .w-off td { opacity:.55; }
+  .w-off td { opacity:.55; } .w-off td:nth-child(2) { opacity:1; }
   #welltable select { font-size:12px; padding:2px 4px; }
   .w-dot { width:11px; height:11px; border-radius:50%; display:inline-block; vertical-align:-1px; }
   .w-pwf { width:150px; white-space:nowrap; }
@@ -252,6 +252,9 @@
         <input id="fc-gather" type="range" min="5" max="40" step="1" value="12" style="width:110px"><b id="fc-gather-v">12</b> атм
         <span style="margin-left:12px" title="Давление на выкиде КНС, из которого питаются нагнетательные">Давление КНС:</span>
         <input id="fc-kns" type="range" min="60" max="200" step="5" value="130" style="width:110px"><b id="fc-kns-v">130</b> атм
+        <span style="margin-left:12px" title="Остановить все работающие добывающие с обводнённостью выше порога">Отключить добывающие с обводн. &gt;</span>
+        <input id="fc-wc" type="number" min="50" max="100" step="1" value="95" style="width:56px">%
+        <button id="fc-wc-btn">Отключить</button>
       </div>
       
       <div id="wellpanel" class="card"><table id="welltable" class="t">
@@ -2253,11 +2256,21 @@ function setPump(w, key) {
   toast(`${w.name}: насос заменён ${old} → ${C.PUMPS[key].name}, −${mln(pumpCost(key))}. Забойное давление и дебит пересчитаются`);
   renderWellTable(true); G.dirty = true; renderAll();
 }
+function stopWatered() {
+  if (guardRun() || !G.sim) return;
+  const thr = Math.max(0, Math.min(100, +$("fc-wc").value || 95)) / 100;
+  const list = G.sim.wells.filter((w) => w.type === "prod" && w.on !== false && w.q > 0 && w.fw > thr);
+  if (!list.length) return toast(`Нет работающих добывающих с обводнённостью выше ${(thr * 100).toFixed(0)} %`);
+  for (const w of list) w.on = false;
+  G.sim._fluxValid = false;
+  toast(`Отключены: ${list.map((w) => `${w.name} (${(w.fw * 100).toFixed(0)} %)`).join(", ")}. Запустить снова — кнопка «▶ Пуск» в строке; можно перевести под закачку`);
+  renderWellTable(true); G.dirty = true; renderAll();
+}
 function toggleWell(w) {
   if (guardRun()) return;
   w.on = w.on === false; G.sim._fluxValid = false;
-  toast(w.on ? `${w.name}: скважина запущена` : `${w.name}: скважина остановлена`);
-  renderWellTable(true); G.dirty = true;
+  toast(w.on ? `${w.name}: скважина запущена` : `${w.name}: скважина остановлена (обводнённость была ${(w.fw * 100).toFixed(0)} %)`);
+  renderWellTable(true); G.dirty = true; renderAll();
 }
 function stimWell(w) {
   if (guardRun() || w.stimulated) return;
@@ -2306,7 +2319,7 @@ function renderWellTable(force = false) {
       const tr = document.createElement("tr"); tr.className = w.on === false ? "w-off" : "";
       const sp = ctrlSpec(w), cur = sp.key === "pwf" ? w.pwf : w[sp.key];
       const btn = (cls, txt, title, dis) => `<button class="${cls}" title="${title}"${dis ? " disabled" : ""}>${txt}</button>`;
-      const acts = btn("a-on", w.on === false ? "▶" : "⏸", w.on === false ? "Запустить скважину" : "Остановить скважину") +
+      const acts =
         btn("a-conv", w.type === "prod" ? "💧→" : "⛏→", w.type === "prod" ? `Перевести под закачку (ППД), ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб` : `Вернуть в добычу, ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб`) +
         btn("a-con", "🏗", "Конструкция скважины") + (w.type === "prod" && w.mode === "esp" ? btn("a-pump", "📊", "Характеристика насоса: рабочая точка") : "") +
         (isL2() ? btn("a-log", "📈", "Каротаж и РИГИС") : "") +
@@ -2315,7 +2328,8 @@ function renderWellTable(force = false) {
       const opts = MODES[w.type].map(([v, l]) => `<option value="${v}"${v === w.mode ? " selected" : ""}>${l}${v === "esp" && !w.hasESP ? ` (${(G.params.esp_cost / 1e6).toFixed(0)} млн руб)` : ""}</option>`).join("");
       tr.innerHTML = `<td><span class="w-dot" style="background:${w.color}"></span></td>` +
         `<td><b>${w.name}</b><div class="sub" style="font-size:11px">${w.type === "prod" ? "добыв." : "нагнет."}${w.hasESP ? " · ЭЦН" : ""}<br>${w.kind === "v" ? "ВС" : kindLabel(w).replace("боковой ствол", "ЗБС").replace(" (старый интервал изолирован)", "")}</div>` +
-        (w.kind === "v" ? `<div class="wact" style="margin-top:3px"><button class="a-frac" title="Гидроразрыв пласта">ГРП</button><button class="a-zbs" title="Зарезка бокового ствола">ЗБС</button></div>` : "") + `</td>` +
+        `<div class="wact" style="margin-top:3px"><button class="a-on ${w.on === false ? "primary" : ""}" title="${w.on === false ? "Запустить скважину" : "Остановить (отключить) скважину: нет добычи, закачки и затрат на подъём"}">${w.on === false ? "▶ Пуск" : "⏸ Стоп"}</button>` +
+        (w.kind === "v" ? `<button class="a-frac" title="Гидроразрыв пласта">ГРП</button><button class="a-zbs" title="Зарезка бокового ствола">ЗБС</button>` : "") + `</div></td>` +
         `<td><select class="s-mode">${opts}</select>${w.type === "prod" && w.mode === "esp" ? `<select class="s-pump" title="Типоразмер насоса (замена платная)">${Object.entries(C.PUMPS).map(([k, P]) => `<option value="${k}"${k === w.pump ? " selected" : ""}>${P.name} (оптимум ${P.QB} м³/сут)${k === w.pump ? " — стоит" : ` — ${(pumpCost(k) / 1e6).toFixed(1)} млн`}</option>`).join("")}</select>` : ""}<div class="w-stat"></div></td>` +
         `<td class="w-pwf"><input type="range" min="${sp.min}" max="${sp.max}" step="${sp.step}" value="${cur}"> <span class="pwf-val">${(+cur).toFixed(sp.step < 1 ? 1 : 0)}</span> <span class="sub">${sp.unit}</span></td>` +
         `<td class="qo"></td><td class="qw"></td><td class="fw"></td><td><div class="wact">${acts}</div>${note}</td>`;
@@ -3130,6 +3144,7 @@ for (const [id, tool] of [["tool-well", "well"], ["tool-expl", "expl"]]) $(id).a
 $("sp-pause").addEventListener("click", () => setSpeed(0)); $("sp-1").addEventListener("click", () => setSpeed(2));
 $("sp-10").addEventListener("click", () => setSpeed(20)); $("sp-50").addEventListener("click", () => setSpeed(100));
 $("btn-year").addEventListener("click", startYear);
+$("fc-wc-btn").addEventListener("click", stopWatered);
 $("drill-kind").addEventListener("change", syncDrillOpts); syncDrillOpts();
 $("mt-slider").addEventListener("input", (e) => { stopPlay(); setSnap(+e.target.value); });
 $("mt-prev").addEventListener("click", () => { stopPlay(); setSnap((G.snapIdx === null ? G.snaps.length : G.snapIdx) - 1); });
