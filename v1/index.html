@@ -2496,12 +2496,12 @@ async function showResults() {
   let fc = null;
   try {
     if (finished) {
-      if (G.reportCache && G.reportCache.t === sim.t) fc = G.reportCache.fc;
+      if (G.reportCache && G.reportCache.sim === sim && G.reportCache.t === sim.t) fc = G.reportCache.fc;
       else {
         fc = C.cloneSim(sim);
         root.innerHTML = `<div class="rep-progress"><b>Формируется отчёт…</b><div style="margin-top:6px">Расчёт прогноза на 10 лет вперёд при текущем режиме работы фонда: <span id="rp-pct">0</span> %</div><div class="bar"><i id="rp-bar"></i></div></div>`;
         for (let y = 1; y <= 10; y++) { C.advance(fc, 365); $("rp-pct").textContent = y * 10; $("rp-bar").style.width = y * 10 + "%"; await new Promise((r) => setTimeout(r, 0)); }
-        G.reportCache = { t: sim.t, fc };
+        G.reportCache = { sim, t: sim.t, fc };
       }
     }
     buildReport(sim, fc, finished);
@@ -2530,7 +2530,7 @@ function buildReport(sim, fc, finished) {
     h += `<section class="rep-sec"><h2><span>${n++}.</span>Итоговая оценка</h2><div class="score-box"><div class="ring" style="background:conic-gradient(${gcol} ${sc.total * 3.6}deg, #e5ecf6 0)"><div><b>${sc.total.toFixed(0)}</b><small>из 100</small></div></div>` +
       `<div class="score-parts"><div><span class="grade" style="background:${gcol}">${sc.grade}</span></div><div style="margin-top:10px">КИН за ${T} лет: <b>${(kinP * 100).toFixed(1)} %</b> (эталон ${(kinR * 100).toFixed(1)} %) — <b>${sc.kin.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.kin}%; background:#636efa"></i></div>` +
       `<div>ЧДД за ${T} лет при ставке ${(rate * 100).toFixed(0)} %: <b>${f0(npvPT / 1e6)} млн руб</b> (эталон ${f0(npvRT / 1e6)}) — <b>${sc.npv.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.npv}%; background:#00cc96"></i></div>` +
-      `<div class="rep-note">Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант («суперэталон», подобран оптимизацией: ${refD.desc}) даёт 80 баллов по каждому показателю; превышение эталона на 25 % и более — 100; убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
+      `<div class="rep-note">Эталон для уровня ${lv} сравнивается на тех же ${T} годах; его ЧДД пересчитан по вашим ценам и затратам (цена нефти ${P.price_oil} руб/т, бурение ${(P.drill_cost / 1e6).toFixed(0)} млн руб, ставка ${(rate * 100).toFixed(0)} %). Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант («суперэталон», подобран оптимизацией: ${refD.desc}) даёт 80 баллов по каждому показателю; превышение эталона на 25 % и более — 100; убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
   }
   // ключевые показатели
   const at = (y, k, nn) => cumSum(y[k], nn);
@@ -2738,7 +2738,7 @@ function startGame() {
   G.params = readParams();
   const res = G.level === 2 ? C.buildReservoir2(G.params) : C.buildReservoir(G.params);
   G.sim = C.createSim(res, G.params);
-  Object.assign(G, { wellNames: { prod: 0, inj: 0 }, colorSeq: 0, done: false, running: null, seis: null, owcGuess: null, pta: {}, bu: null, yearInj: [], dirty: true });
+  Object.assign(G, { reportCache: null, wellNames: { prod: 0, inj: 0 }, colorSeq: 0, done: false, running: null, seis: null, owcGuess: null, pta: {}, bu: null, yearInj: [], dirty: true });
   G.expl = G.level === 2 ? res.explore.map((e) => ({ ...e })) : [];
   G.layer = G.level === 2 ? "blank" : "k";
   $("owc-input").value = ""; G.log.sel = null; G.log.mode = "one"; setTool(null); setSpeed(0);
