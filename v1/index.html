@@ -1201,10 +1201,10 @@ const RHO_OIL = 0.86; // т/м³ — используется и в геолог
 function createEconomy(params) {
   const eco = {
     balance: params.init_money,
-    revenue: 0, opex: 0, drillSpent: 0, otherSpent: 0, drills: [], // drills — сутки решений (для графика)
+    revenue: 0, opex: 0, kwh: 0, drillSpent: 0, otherSpent: 0, drills: [], // drills — сутки решений (для графика)
     update(dt, wells) {
       for (const w of wells) {
-        if (w.kW) eco.opex += w.kW * 24 * dt * (params.elec_cost || 0); // электроэнергия ЭЦН
+        if (w.kW) { eco.opex += w.kW * 24 * dt * (params.elec_cost || 0); eco.kwh += w.kW * 24 * dt; } // электроэнергия ЭЦН
         if (w.type === "prod") {
           eco.revenue += w.qo * RHO_OIL * params.price_oil * dt; // нефть: м³→т→руб
           eco.opex += w.q * params.lift_cost * dt;                // подъём всей жидкости
@@ -1551,15 +1551,19 @@ function equipmentTests() {
   return t;
 }
 
-// Эталонные варианты разработки (для оценки игрока): рассчитаны этим же ядром при параметрах по умолчанию
-// (μ нефти 5 сП); капитальные затраты и экономика пересчитываются по параметрам игрока.
+// Эталонные варианты разработки (для оценки игрока): подобраны оптимизацией и рассчитаны этим же ядром при параметрах по умолчанию
+// (μ нефти 5 сП); экономика и капитальные затраты пересчитываются по параметрам игрока.
 const REF = {
-  1: { desc: "шахматная сетка 6 добывающих + 4 нагнетательных, забойные 90 / 375 атм", drill: 10, esp: 0, seis: 0, years: 20,
+  1: { desc: "сетка 7×7 ячеек: 29 скважин (19 добывающих на P_wf 20 атм, 10 нагнетательных на 375 атм)", fund: "19 / 10", years: 20,
     // по годам: нефть, т; вода, м³; закачка, м³; электроэнергия, кВт·ч
-    s: [[272264,31110,326189,0],[230616,198908,461501,0],[176351,330479,531255,0],[139396,414207,573281,0],[113549,471032,600870,0],[94709,511711,620183,0],[80523,542017,634361,0],[69553,565315,645164,0],[60875,583696,653642,0],[53865,598527,660463,0],[48094,610734,666067,0],[43259,620957,670751,0],[39146,629643,674722,0],[35604,637113,678128,0],[32522,643602,681077,0],[29818,649282,683651,0],[27428,654288,685911,0],[25306,658722,687906,0],[23414,662667,689674,0],[21720,666190,691249,0]] },
-  2: { desc: "сейсмика + 9 скважин в нефтяной зоне (5 добывающих на ЭЦН, 4 нагнетательных со штуцером)", drill: 9, esp: 5, seis: 1, years: 20,
+    s: [[582266,267994,892967,0],[371525,804220,1226657,0],[249837,1070292,1355405,0],[179529,1218668,1424047,0],[134619,1311569,1465817,0],[105990,1222939,1355921,0],[77253,1092365,1195229,0],[62139,657187,766799,0],[50400,487772,564138,0],[41955,528109,574972,0],[24124,291972,343388,0],[12783,134500,165061,0],[11244,142399,155002,0],[9764,148508,159453,0],[8528,153588,163171,0],[4753,91943,104815,0],[0,0,11052,0],[0,0,34,0],[0,0,34,0],[0,0,34,0]],
+    // капитальные затраты по годам: бурение, ЭЦН (в долях базового), смена назначения, ОПЗ, ГДИС, недобор нефти при ГДИС (т), сейсмика
+    c: [[29,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0]] },
+  2: { desc: "сейсмика + 11 скважин в нефтяной зоне (6 добывающих на ЭЦН 60 Гц с подбором типоразмера, 5 нагнетательных со штуцером 12 мм), КНС 190 атм, давление сбора 6 атм, ОПЗ после ГДИС на скважинах со скином > 4, перевод обводнённых (> 93 %) добывающих в ППД, ежегодный подбор частоты и замена насосов", fund: "6 / 5 (+6 переводов в ППД)", years: 20,
     // по годам: нефть, т; вода, м³; закачка, м³; электроэнергия, кВт·ч
-    s: [[122204,38591,156648,2387164],[88565,104696,207659,2462633],[69128,145080,225955,2553803],[56856,172538,238113,2638052],[48035,192867,247728,2682699],[41303,208692,255624,2709485],[35970,221426,262194,2732156],[31639,231910,267717,2751480],[28054,240688,272410,2768109],[25043,248134,276436,2782534],[22487,254509,279914,2795140],[20297,260016,282943,2806234],[18406,264806,285595,2816052],[16763,268998,287931,2824786],[15327,272686,289997,2832589],[14064,275948,291836,2839596],[12950,278847,293477,2845908],[11961,281434,294950,2851615],[11080,283753,296277,2856794],[10291,285841,297476,2861509]] },
+    s: [[365762,355167,517549,5554689],[354615,528956,598772,5726054],[83628,547024,638309,6062585],[69723,252871,377960,3927666],[57328,300206,366306,3958119],[46027,275949,334199,3330278],[38952,297561,342635,3327155],[33095,313568,351829,3320699],[26000,267898,307338,2675547],[23137,276710,303373,2665217],[20468,283979,307503,2657594],[6906,99929,124746,1065220],[0,0,24616,0],[0,0,283,0],[0,0,280,0],[0,0,280,0],[0,0,280,0],[0,0,280,0],[0,0,280,0],[0,0,280,0]],
+    // капитальные затраты по годам: бурение, ЭЦН (в долях базового), смена назначения, ОПЗ, ГДИС, недобор нефти при ГДИС (т), сейсмика
+    c: [[11,6.41,0,0,0,0,1],[0,0,0,1,1,239,0],[0,0,0,0,0,0,0],[0,0,1,0,0,0,0],[0,0,0,0,0,0,0],[0,0,1,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,1,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,2,0,0,0,0],[0,0,1,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0]] },
 };
 
 // ---------- Оценка разработки: клон, годовые ряды, ЧДД, баллы ----------
@@ -1571,7 +1575,7 @@ function cloneSim(sim) {
   c.field = { ...sim.field }; c.t = sim.t; c.cumProdM3 = sim.cumProdM3;
   c.history = { days: sim.history.days.slice() };
   const e = sim.economy, d = c.economy;
-  d.balance = e.balance; d.revenue = e.revenue; d.opex = e.opex; d.drillSpent = e.drillSpent; d.otherSpent = e.otherSpent; d.drills = e.drills.slice();
+  d.kwh = e.kwh; d.balance = e.balance; d.revenue = e.revenue; d.opex = e.opex; d.drillSpent = e.drillSpent; d.otherSpent = e.otherSpent; d.drills = e.drills.slice();
   c._uE.set(sim._uE); c._uN.set(sim._uN); c._Te.set(sim._Te); c._Tn.set(sim._Tn);
   c._fluxValid = sim._fluxValid; c._lastSolveT = sim._lastSolveT; // продолжение идентично оригиналу
   return c;
@@ -1591,12 +1595,14 @@ function yearlyFromSim(sim, params) {
 }
 // годовые показатели эталона при экономических параметрах игрока
 function refYearly(level, params) {
-  const R_ = REF[level], out = { oil_t: [], water_m3: [], inj_m3: [], cf: [], cumOil_t: [], liq_m3: [] };
+  const R_ = REF[level], out = { oil_t: [], water_m3: [], inj_m3: [], cf: [], cumOil_t: [], liq_m3: [], capex: [] };
   let cum = 0;
-  const capex = R_.drill * params.drill_cost + R_.esp * (params.esp_cost || 6e6) + R_.seis * (params.seis_cost || 12e6);
+  // капитальные затраты по годам: бурение, ЭЦН (в долях базового), смена назначения, ОПЗ, ГДИС, недобор нефти при ГДИС (т), сейсмика
+  const capexOf = ([dr, es, cv, sm, pt, lost, se]) => dr * params.drill_cost + es * (params.esp_cost || 6e6) + cv * (params.conv_cost || 2e6) + sm * (params.stim_cost || 3e6) + pt * (params.pta_cost || 1e6) + lost * params.price_oil + se * (params.seis_cost || 12e6);
   R_.s.forEach(([oil, wat, inj, kwh], n) => {
-    const liq = oil / RHO_OIL + wat;
-    const cf = oil * params.price_oil - (params.lift_cost * liq + params.inj_cost * inj + (params.elec_cost || 0) * kwh) - (n === 0 ? capex : 0);
+    const liq = oil / RHO_OIL + wat, cx = capexOf(R_.c[n] || [0, 0, 0, 0, 0, 0, 0]);
+    out.capex.push(cx);
+    const cf = oil * params.price_oil - (params.lift_cost * liq + params.inj_cost * inj + (params.elec_cost || 0) * kwh) - cx;
     cum += oil; out.oil_t.push(oil); out.water_m3.push(wat); out.inj_m3.push(inj); out.cf.push(cf); out.cumOil_t.push(cum); out.liq_m3.push(liq);
   });
   return out;
@@ -1619,7 +1625,7 @@ function reportTests() {
   const t = [];
   t.push({ name: "эталоны: 20 лет для обоих уровней", pass: REF[1].s.length === 20 && REF[2].s.length === 20 });
   for (const lv of [1, 2]) {
-    const P = { ...DEFAULT_PARAMS, esp_cost: 6e6, seis_cost: 12e6 }, y = refYearly(lv, P), npv = npvOf(y.cf, 0.1) / 1e6, want = lv === 1 ? 5853.3 : 2284;
+    const P = { ...DEFAULT_PARAMS, esp_cost: 6e6, seis_cost: 12e6 }, y = refYearly(lv, P), npv = npvOf(y.cf, 0.1) / 1e6, want = lv === 1 ? 8110.4 : 5798.9;
     t.push({ name: `эталон ур.${lv}: ЧДД по рядам = рассчитанному (±1 %)`, pass: Math.abs(npv - want) / want < 0.01, details: `${npv.toFixed(1)} млн руб (ожид. ${want})` });
   }
   const sm = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
@@ -2512,7 +2518,7 @@ function buildReport(sim, fc, finished) {
   const sc = finished ? C.scoreDevelopment(kinP, kinR, npvPT, npvRT) : null;
   const gcol = sc ? (sc.total >= 90 ? "#00a37a" : sc.total >= 75 ? "#636efa" : sc.total >= 55 ? "#d97706" : "#ef553b") : "#636efa";
   const sim2 = fc || sim, np = sim.wells.filter((w) => w.type === "prod").length, ni = sim.wells.length - np;
-  const refD = C.REF[lv], refCapex = refD.drill * P.drill_cost + refD.esp * P.esp_cost + refD.seis * P.seis_cost, capex = e.drillSpent + e.otherSpent;
+  const refD = C.REF[lv], refCapex = ref.capex.slice(0, T).reduce((a, b) => a + b, 0), capex = e.drillSpent + e.otherSpent;
   const wcEnd = (y, n) => { const l = y.liq_m3[n - 1]; return l > 0 ? y.water_m3[n - 1] / l : 0; };
   const nm = $("rep-name").value.trim(), err = lv === 2 && G.owcGuess !== null ? G.owcGuess - r.owc : null;
   const mu = P.mu_o !== 5 ? ` <span class="bad">(эталон рассчитан при μ = 5 сП, у вас ${P.mu_o} сП — сравнение приближённое)</span>` : "";
@@ -2524,7 +2530,7 @@ function buildReport(sim, fc, finished) {
     h += `<section class="rep-sec"><h2><span>${n++}.</span>Итоговая оценка</h2><div class="score-box"><div class="ring" style="background:conic-gradient(${gcol} ${sc.total * 3.6}deg, #e5ecf6 0)"><div><b>${sc.total.toFixed(0)}</b><small>из 100</small></div></div>` +
       `<div class="score-parts"><div><span class="grade" style="background:${gcol}">${sc.grade}</span></div><div style="margin-top:10px">КИН за ${T} лет: <b>${(kinP * 100).toFixed(1)} %</b> (эталон ${(kinR * 100).toFixed(1)} %) — <b>${sc.kin.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.kin}%; background:#636efa"></i></div>` +
       `<div>ЧДД за ${T} лет при ставке ${(rate * 100).toFixed(0)} %: <b>${f0(npvPT / 1e6)} млн руб</b> (эталон ${f0(npvRT / 1e6)}) — <b>${sc.npv.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.npv}%; background:#00cc96"></i></div>` +
-      `<div class="rep-note">Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант (${refD.desc}) даёт 80 баллов по каждому показателю; превышение эталона на 25 % и более — 100; убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
+      `<div class="rep-note">Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант («суперэталон», подобран оптимизацией: ${refD.desc}) даёт 80 баллов по каждому показателю; превышение эталона на 25 % и более — 100; убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
   }
   // ключевые показатели
   const at = (y, k, nn) => cumSum(y[k], nn);
@@ -2540,7 +2546,7 @@ function buildReport(sim, fc, finished) {
   h += row("Закачано воды, тыс. м³", f0(at(play, "inj_m3", nPlay) / 1e3), f0(at(full, "inj_m3", T) / 1e3), f0(at(ref, "inj_m3", T) / 1e3), "");
   h += row("Обводнённость в конце периода, %", f0(wcEnd(play, nPlay) * 100), f0(wcEnd(full, T) * 100), f0(wcEnd(ref, T) * 100), "");
   h += row("Компенсация отбора закачкой, %", f0((at(play, "inj_m3", nPlay) / Math.max(1, at(play, "liq_m3", nPlay))) * 100), f0((at(full, "inj_m3", T) / Math.max(1, at(full, "liq_m3", T))) * 100), f0((at(ref, "inj_m3", T) / Math.max(1, at(ref, "liq_m3", T))) * 100), "");
-  h += row("Фонд скважин (добыв. / нагнет.)", `${np} / ${ni}`, `${np} / ${ni}`, `${refD.drill - 0 > 0 ? "" : ""}${lv === 1 ? "6 / 4" : "5 / 4"}`, "");
+  h += row("Фонд скважин (добыв. / нагнет.)", `${np} / ${ni}`, `${np} / ${ni}`, refD.fund, "");
   h += `</tbody></table></section>`;
   if (fc) h += `<section class="rep-sec"><h2><span>${n++}.</span>Сравнение с эталоном</h2><div class="rep-2col"><div id="rc-cum" class="rep-chart"></div><div id="rc-npv" class="rep-chart"></div></div><div id="rc-rate" class="rep-chart" style="margin-top:8px; height:280px"></div>` +
     `<div class="rep-note">Сплошные линии — годы игры, штриховые — прогноз при неизменном фонде и режимах, серая линия — эталонный вариант. Вертикальная черта — конец срока разработки.</div></section>`;
