@@ -157,6 +157,7 @@
   #pta-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
   #pta-plots { display:flex; gap:8px; flex:1; min-height:0; }
   #pta-plots > div { flex:1; min-width:0; }
+  #pta-side { flex:0 0 300px; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#fff; border:1px solid var(--accent); box-shadow:0 4px 14px #2a3f5f2e; color:var(--text); border-radius:8px; padding:9px 16px; z-index:60; max-width:90vw; }
   #toast.warn { border-color:var(--bad); }
@@ -224,8 +225,10 @@
         <span class="tb-right">
           <button id="tool-expl" class="lvl2-only" title="Разведочная скважина: только каротаж, без добычи">◆ Разведочная</button>
           <span id="drill-opts" class="tb-group" title="Заканчивание новой скважины: вертикальная (ВС) или горизонтальная (ГС) — длина и направление ствола">
-            <select id="drill-kind"><option value="v">ВС</option><option value="hs200">ГС 200 м</option><option value="hs400">ГС 400 м</option><option value="hs600">ГС 600 м</option></select>
-            <label title="Азимут горизонтального ствола от точки бурения: 0° — север, 90° — восток, 180° — юг, 270° — запад" style="display:flex; align-items:center; gap:3px">аз.<input id="drill-az" type="number" min="0" max="359" step="5" value="90" style="width:62px">°</label>
+            <select id="drill-kind" title="Заканчивание новой скважины"><option value="v">ВС</option><option value="vf">ВС + ГРП</option><option value="hs">ГС</option></select>
+            <label id="dk-L" class="hidden" title="Длина горизонтального участка, м (1000–2000)" style="display:flex; align-items:center; gap:3px">L<input id="drill-L" type="number" min="1000" max="2000" step="50" value="1000" style="width:70px">м</label>
+            <label id="dk-xf" class="hidden" title="Полудлина трещины ГРП" style="display:flex; align-items:center; gap:3px">x<sub>f</sub><select id="drill-xf"><option>40</option><option selected>80</option><option>120</option></select>м</label>
+            <label id="dk-az" class="hidden" title="Азимут ствола (0° — север, 90° — восток) или трещины" style="display:flex; align-items:center; gap:3px">аз.<input id="drill-az" type="number" min="0" max="359" step="5" value="90" style="width:58px">°</label>
           </span>
           <button id="tool-well" title="Пробурить скважину: потом можно выбрать режим, перевести под закачку (ППД), остановить">⛏ Скважина</button>
         </span>
@@ -339,7 +342,7 @@
           <button id="pta-run" class="primary">Провести КВД</button>
           <span id="pta-cost" class="sub"></span>
         </div>
-        <div id="pta-plots"><div id="pta-ll"></div><div id="pta-sl"></div></div>
+        <div id="pta-plots"><div id="pta-kvd"></div><div id="pta-ll"></div><div id="pta-sl"></div></div>
         <div class="row" id="pta-fit">
           <span>Радиальный участок, сут: от</span><input id="pta-t1" type="number" step="any" style="width:90px">
           <span>до</span><input id="pta-t2" type="number" step="any" style="width:90px">
@@ -747,7 +750,7 @@ function createSim(reservoir, params) {
                      on: true,             // работает / остановлена
                      mode: "bhp",          // bhp | flow (фонтан, штуцер) | esp (ЭЦН) | choke (КНС, штуцер)
                      choke: type === "prod" ? 12 : 8, // диаметр штуцера, мм
-                     freq: 50, hasESP: false, pump: "M", kW: 0, eq: null,
+                     freq: 50, hasESP: false, pump: PUMP_DEFAULT, kW: 0, eq: null,
                      depth: r.level === 2 ? r.zTop[c] + 5 + l2Altitude(c % r.nx, Math.floor(c / r.nx)) : 2450,
                      cum: { oil: 0, water: 0, inj: 0 } });
   };
@@ -824,8 +827,8 @@ function createSim(reservoir, params) {
   };
   // смена назначения скважины в обе стороны (добывающая ⇄ нагнетательная); история сохраняется
   sim.convertWell = (w) => {
-    if (w.type === "prod") { w.type = "inj"; w.pwf = 325; w.mode = r.level === 2 ? "choke" : "bhp"; w.choke = 8; }
-    else { w.type = "prod"; w.wasProd = true; w.pwf = 150; w.mode = r.level === 2 ? "flow" : "bhp"; w.choke = 12; }
+    if (w.type === "prod") { w.type = "inj"; w.pwf = 325; w.mode = "choke"; w.choke = 8; }
+    else { w.type = "prod"; w.wasProd = true; w.pwf = 150; w.mode = w.hasESP ? "esp" : "flow"; w.choke = 12; }
     w.converted = true; sim._fluxValid = false;
   };
   // перевод добывающей в нагнетательную (ППД): история добычи сохраняется
@@ -976,12 +979,14 @@ function fracCellFactor(k, xf, nCells) {
 }
 // типоразмеры ЭЦН (при 50 Гц): Q0 — подача при нулевом напоре, H0 — напор при нулевой подаче, QB — подача в оптимуме,
 // ETA — максимальный КПД, cost — стоимость относительно базового (esp_cost)
-const PUMPS = {
-  S: { name: "ЭН-125", Q0: 250, H0: 2200, QB: 160, ETA: 0.58, cost: 0.67 },
-  M: { name: "ЭН-250", Q0: 450, H0: 2200, QB: 290, ETA: 0.62, cost: 1 },
-  L: { name: "ЭН-500", Q0: 800, H0: 2300, QB: 520, ETA: 0.65, cost: 1.6 },
-  XL: { name: "ЭН-800", Q0: 1200, H0: 2400, QB: 800, ETA: 0.67, cost: 2.4 },
-};
+// Ряд номинальных подач ЭЦН, м³/сут (QB — оптимальная подача при 50 Гц). Q0 = 1.65·QB — подача при нулевом напоре,
+// H0 — напор при нулевой подаче (больше ступеней у малых насосов), КПД растёт с типоразмером, стоимость — в долях «Установки ЭЦН».
+const PUMP_NOMINALS = [20, 30, 45, 60, 80, 125, 160, 200, 250, 320, 400, 500, 630, 800, 1000, 1250];
+const PUMPS = Object.fromEntries(PUMP_NOMINALS.map((Qn) => [String(Qn), {
+  name: `ЭЦН-${Qn}`, QB: Qn, Q0: 1.65 * Qn, H0: Qn <= 125 ? 2400 : Qn <= 500 ? 2200 : 2000,
+  ETA: 0.33 + 0.16 * Math.log10(Qn / 20), cost: 0.45 + 0.6 * Math.pow(Qn / 290, 0.8),
+}]));
+const PUMP_DEFAULT = "250";
 const P_MIN_INTAKE = 20, P_MAX_INJ = 340; // атм: минимальное давление на приёме; предел по давлению закачки
 // суммарная продуктивность скважины G (м³/сут/атм) и среднее по перфорации пластовое давление
 function wellG(sim, w) {
@@ -994,11 +999,11 @@ function chokeDpAtm(q, dmm, rho) {
   const A = Math.PI * (dmm / 1000) ** 2 / 4, v = q / 86400 / (0.8 * A);
   return (rho * v * v) / 2 / ATM_PA;
 }
-function espHeadM(q, f, pk = "M") { const P = PUMPS[pk], k = f / 50; return P.H0 * k * k * (1 - (q / (P.Q0 * k)) ** 2); }
-function espEff(q, f, pk = "M") { const P = PUMPS[pk], k = f / 50, x = (q - P.QB * k) / (P.QB * k); return Math.max(0.15, P.ETA * (1 - x * x)); }
+function espHeadM(q, f, pk = PUMP_DEFAULT) { const P = PUMPS[pk], k = f / 50; return P.H0 * k * k * (1 - (q / (P.Q0 * k)) ** 2); }
+function espEff(q, f, pk = PUMP_DEFAULT) { const P = PUMPS[pk], k = f / 50, x = (q - P.QB * k) / (P.QB * k); return Math.max(0.15, P.ETA * (1 - x * x)); }
 // загрузка насоса: подача / оптимальная подача при частоте f (норма 0.6–1.2)
-function espLoad(q, f, pk = "M") { return q / (PUMPS[pk].QB * (f / 50)); }
-function espPowerKW(q, f, rho, pk = "M") { return (rho * 9.81 * (q / 86400) * Math.max(0, espHeadM(q, f, pk))) / espEff(q, f, pk) / 1000; }
+function espLoad(q, f, pk = PUMP_DEFAULT) { return q / (PUMPS[pk].QB * (f / 50)); }
+function espPowerKW(q, f, rho, pk = PUMP_DEFAULT) { return (rho * 9.81 * (q / 86400) * Math.max(0, espHeadM(q, f, pk))) / espEff(q, f, pk) / 1000; }
 function gatherPressure(sim) {
   let sq = 0;
   for (const w of sim.wells) if (w.type === "prod" && w.on !== false) sq += w.q;
@@ -1019,11 +1024,11 @@ function solveEquipment(sim, w) {
   if (w.type === "prod") {
     const rho = 860 * (1 - (w.fw || 0)) + 1000 * (w.fw || 0), hyd = (rho * 9.81 * L) / ATM_PA, pg = gatherPressure(sim);
     const pwhOf = (q) => pg + (w.mode === "flow" ? chokeDpAtm(q, w.choke, rho) : 0);
-    const req = (q) => pwhOf(q) + hyd - (w.mode === "esp" ? (rho * 9.81 * espHeadM(q, w.freq, w.pump || "M")) / ATM_PA : 0);
+    const req = (q) => pwhOf(q) + hyd - (w.mode === "esp" ? (rho * 9.81 * espHeadM(q, w.freq, w.pump || PUMP_DEFAULT)) / ATM_PA : 0);
     const qMax = Math.max(0, G * (Pc - P_MIN_INTAKE)), f = (q) => Pc - q / G - req(q);
     out.q = bisectQ(f, qMax); out.dead = out.q === 0; out.capped = out.q >= qMax && qMax > 0;
     out.pwf = Pc - out.q / G; out.pwh = pwhOf(out.q);
-    if (w.mode === "esp") { out.kW = espPowerKW(out.q, w.freq, rho, w.pump || "M"); out.load = espLoad(out.q, w.freq, w.pump || "M"); }
+    if (w.mode === "esp") { out.kW = espPowerKW(out.q, w.freq, rho, w.pump || PUMP_DEFAULT); out.load = espLoad(out.q, w.freq, w.pump || PUMP_DEFAULT); }
   } else {
     const hydW = (1000 * 9.81 * L) / ATM_PA, head = sim.field.pKNS;
     const f = (q) => head - chokeDpAtm(q, w.choke, 1000) + hydW - Pc - q / G;
@@ -1422,26 +1427,41 @@ function nearestSealFaultM(r, cell) {
   return best;
 }
 function pressureBuildup(sim, w, days) {
-  const r = sim.r, k = r.k[w.cell], h = r.h, mu = r.mu_o, rw = 0.1, s = w.skin || 0;
+  // Гибридная КВД: раннее время — аналитика радиального притока к вертикальной скважине (скин, влияние ствола,
+  // k ячейки, эффективная вязкость по суммарной подвижности); позднее время — расчёт самим симулятором:
+  // копия модели, скважина остановлена, соседи работают, давление в ячейке скважины по мере восстановления.
+  // Сшивка — плавная, на масштабе времени прихода возмущения на размер ячейки. Так поздняя часть отражает
+  // неоднородность, соседние скважины, разломы и выходит на пластовое давление зоны дренирования.
+  const r = sim.r, k = r.k[w.cell], h = r.h, mu = 1 / lambdaT(sim.Sw[w.cell], r), rw = 0.1, s = w.skin || 0;
   const q = w.q, A = (q * mu) / (4 * Math.PI * CONV_K * k * h);
-  const eta = (CONV_K * k) / (r.phi * mu * r.ct);
-  const dF = nearestSealFaultM(r, w.cell), pwf0 = w.pwf;
-  const xf = (t) => A * (E1((rw * rw) / (4 * eta * t)) + 2 * s + (dF !== null && dF < 600 ? E1((2 * dF) ** 2 / (4 * eta * t)) : 0));
-  const D = 1.5 * xf(8); // граница конечного пласта: подъём насыщается, начиная примерно с 8 сут
-  const rise = (t) => { const x = xf(t); return x / Math.pow(1 + Math.pow(x / D, 6), 1 / 6); };
+  const eta = (CONV_K * k) / (r.phi * mu * r.ct), pwf0 = w.pwf;
+  const xAn = (t) => A * (E1((rw * rw) / (4 * eta * t)) + 2 * s);
+  const ppd = 24, n = Math.round(ppd * Math.log10(days / 0.001)) + 1, tt = [];
+  for (let m = 0; m < n; m++) tt.push(0.001 * Math.pow(10, m / ppd));
+  // сеточная часть: закрытая скважина в копии модели
+  const cs = cloneSim(sim), cw = cs.wells[sim.wells.indexOf(w)];
+  cw.on = false;
+  const pc = (z) => cw.perf.reduce((a, pf) => a + z.P[pf.cell], 0) / cw.perf.length, P0c = pc(cs);
+  const grid = []; let tPrev = 0;
+  for (const tm of tt) { solvePressure(cs, Math.max(1e-6, tm - tPrev)); tPrev = tm; grid.push(pc(cs) - pwf0); }
+  const t1 = r.dx ** 2 / (4 * eta), t2 = (4 * r.dx) ** 2 / (4 * eta); // радиус исследования от 1 до 4 ячеек
+  const blend = (t) => { if (t <= t1) return 0; if (t >= t2) return 1; const u = Math.log(t / t1) / Math.log(t2 / t1); return u * u * (3 - 2 * u); };
   const tau = Math.min(0.05, Math.max(0.003, 0.008 * Math.sqrt(100 / ((k * h) / mu))));
-  const ppd = 24, n = Math.round(ppd * Math.log10(days / 0.001)) + 1;
   const rng = mulberry32((L2.SEED ^ Math.imul(w.cell + 3, 2246822519)) >>> 0);
   const t = [], p = [];
-  let pPrev = 0, tPrev = 0, rPrev = 0;
-  for (let m = 0; m < n; m++) {
-    const tm = 0.001 * Math.pow(10, m / ppd), rm = rise(tm), a = Math.exp(-(tm - tPrev) / tau);
-    pPrev = pPrev * a + (1 - a) * 0.5 * (rPrev + rm); tPrev = tm; rPrev = rm;
+  let pPrev = 0, tP = 0, rPrev = 0;
+  tt.forEach((tm, m) => {
+    const b = blend(tm), rm = (1 - b) * xAn(tm) + b * grid[m], a = Math.exp(-(tm - tP) / tau);
+    pPrev = pPrev * a + (1 - a) * 0.5 * (rPrev + rm); tP = tm; rPrev = rm;
     t.push(tm); p.push(pwf0 + pPrev + 0.01 * gauss(rng)); // шум датчика 0.01 атм
-  }
+  });
+  // «истинное» пластовое давление зоны: продолжаем остановку в модели до стабилизации (до 120 сут)
+  // «истинное» давление — максимум восстановления (дальше соседние скважины могут снова его снижать)
+  let pMax = pc(cs);
+  for (let k2 = 0; k2 < 40; k2++) { const before = pc(cs); solvePressure(cs, 3); pMax = Math.max(pMax, pc(cs)); if (pc(cs) - before < 0.005) break; }
   const deriv = bupDerivative(t, p);
-  return { wellName: w.name, cell: w.cell, t, p, deriv, q, pwf0, days,
-           truth: { k, s, dFaultM: dF, A, eta } };
+  return { wellName: w.name, cell: w.cell, t, p, deriv, q, pwf0, days, mu,
+           truth: { k, s, A, eta, pRes: pMax, pCell0: P0c } };
 }
 // производная давления по ln Δt (Бурде, окно L = 0.2)
 function bupDerivative(t, p) {
@@ -1464,11 +1484,25 @@ function interpretBuildup(bu, r, t1, t2) {
   for (const i of idx) { const x = Math.log10(bu.t[i]), y = bu.p[i]; sx += x; sy += y; sxx += x * x; sxy += x * y; }
   const n = idx.length, m = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - m * sx) / n;
   if (!(m > 0)) return null;
-  const mu = r.mu_o, rw = 0.1;
+  const mu = bu.mu || r.mu_o, rw = 0.1;
   const k = (2.303 * bu.q * mu) / (4 * Math.PI * CONV_K * r.h * m);
   const A = m / 2.303, eta = (CONV_K * k) / (r.phi * mu * r.ct);
   const s = 0.5 * ((a - bu.pwf0) / A - Math.log((4 * eta) / (rw * rw)) + 0.5772);
-  return { m, a, k, s, n };
+  return { m, a, k, s, n, ...buildupPres(bu) };
+}
+// Пластовое давление по КВД: если кривая вышла на полку (за последнюю половину записи прирост < 2 % общего подъёма) —
+// это конечное давление; иначе экстраполяция к асимптоте по трём точкам, равноотстоящим по времени (Эйткен),
+// при условии монотонного затухания; если и это невозможно — только оценка снизу (конец записи).
+function buildupPres(bu) {
+  const tE = bu.t[bu.t.length - 1], at = (tq) => { let i = 1; while (i < bu.t.length - 1 && bu.t[i] < tq) i++; const f = (tq - bu.t[i - 1]) / (bu.t[i] - bu.t[i - 1]); return bu.p[i - 1] + f * (bu.p[i] - bu.p[i - 1]); };
+  const pE = at(tE * 0.999), pH = at(tE / 2), rise = pE - bu.pwf0;
+  if (rise > 0 && pE - pH < 0.02 * rise) return { pRes: pE, pEnd: pE, stabilized: true, method: "полка" };
+  const pa = at(tE / 3), pb = at((2 * tE) / 3), pc = pE, den = pa + pc - 2 * pb;
+  if (pb > pa && pc > pb && den < 0 && (pc - pb) < 0.4 * (pb - pa)) { // при логарифмическом росте (радиальный приток) отношение ≈ 0.59 — не полка
+    const pInf = (pa * pc - pb * pb) / den;
+    if (pInf > pc && pInf - pc < 2 * (pc - pa)) return { pRes: pInf, pEnd: pE, stabilized: true, method: "экстраполяция" };
+  }
+  return { pRes: null, pEnd: pE, stabilized: false, method: "не вышла на полку" };
 }
 // подсказка: самый длинный участок, где производная постоянна (±12 % от среднего)
 function suggestWindow(bu) {
@@ -1610,9 +1644,10 @@ function level2bTests() {
   t.push({ name: "ГДИС: E1(x) по таблице", pass: e.every(([x, v]) => Math.abs(E1(x) - v) < 1e-6 * Math.max(1, v)) });
   // КВД: восстановление k и s в радиальном окне
   let okK = true, okS = true, det = [];
-  for (const [ci, sk] of [[0, 0.5], [1, 4], [3, 8]]) {
-    const sm2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
-    const ex = sm2.r.explore[ci].cell;
+  for (const [kk, sk] of [[500, 0.5], [100, 4], [20, 8]]) {
+    const ru = buildReservoir2(DEFAULT_PARAMS); ru.k.fill(kk); ru.Sw0.fill(ru.Swc); ru.tmE.fill(1); ru.tmN.fill(1);
+    const sm2 = createSim(ru, DEFAULT_PARAMS);
+    const ex = 25 * sm2.r.nx + 25;
     sm2.addWell(ex, "prod", 120); sm2.wells[0].skin = sk;
     advance(sm2, 60);
     const bu = pressureBuildup(sm2, sm2.wells[0], 14);
@@ -1623,6 +1658,13 @@ function level2bTests() {
     det.push(res ? `k ${res.k.toFixed(0)}/${k0.toFixed(0)}, s ${res.s.toFixed(1)}/${sk}` : "нет окна");
   }
   t.push({ name: "ГДИС: k по КВД в пределах 10 %", pass: okK, details: det.join("; ") });
+  // пластовое давление: длинная КВД выходит на полку и даёт P пл. зоны дренирования, короткая — только оценку снизу
+  const sp2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  sp2.addWell(sp2.r.explore[2].cell, "prod", 120); sp2.addWell(sp2.r.explore[0].cell, "prod", 120); advance(sp2, 120);
+  const bL = pressureBuildup(sp2, sp2.wells[0], 30), pL = buildupPres(bL), bS = pressureBuildup(sp2, sp2.wells[0], 0.3), pS = buildupPres(bS);
+  t.push({ name: "ГДИС: P пл. по 30-суточной КВД ±2 % от давления, на которое выходит остановленная скважина в модели; 7-часовая КВД на полку не выходит",
+           pass: pL.stabilized && Math.abs(pL.pRes / bL.truth.pRes - 1) < 0.02 && !pS.stabilized,
+           details: `оценка ${pL.pRes ? pL.pRes.toFixed(1) : "—"} (${pL.method}), модель ${bL.truth.pRes.toFixed(1)} атм; короткая: ${pS.method}` });
   t.push({ name: "ГДИС: скин по КВД в пределах ±1", pass: okS });
   return t;
 }
@@ -1650,8 +1692,8 @@ function equipmentTests() {
            details: `фонтан 0, ЭЦН 40/50/55 Гц: ${eE40.q.toFixed(0)}/${eE.q.toFixed(0)}/${eE55.q.toFixed(0)} м³/сут, ${eE.kW.toFixed(0)} кВт` });
   // типоразмер насоса: на высокопродуктивной скважине больший ЭЦН даёт больше жидкости и меньшее забойное давление
   const sp = mk(); sp.addWell(sp.r.explore[0].cell, "prod", 150); const wp = sp.wells[0]; wp.mode = "esp"; wp.freq = 50;
-  wp.pump = "M"; const pM = solveEquipment(sp, wp); wp.pump = "L"; const pL = solveEquipment(sp, wp); wp.pump = "S"; const pS = solveEquipment(sp, wp);
-  t.push({ name: "ЭЦН: больший типоразмер — больше дебит и ниже забойное давление (S < M < L)", pass: pS.q < pM.q && pM.q < pL.q && pL.pwf < pM.pwf && pM.pwf < pS.pwf,
+  wp.pump = "250"; const pM = solveEquipment(sp, wp); wp.pump = "500"; const pL = solveEquipment(sp, wp); wp.pump = "125"; const pS = solveEquipment(sp, wp);
+  t.push({ name: "ЭЦН: больший типоразмер — больше дебит и ниже забойное давление (ЭЦН-125 < 250 < 500)", pass: pS.q < pM.q && pM.q < pL.q && pL.pwf < pM.pwf && pM.pwf < pS.pwf,
            details: `S ${pS.q.toFixed(0)}/${pS.pwf.toFixed(0)}, M ${pM.q.toFixed(0)}/${pM.pwf.toFixed(0)}, L ${pL.q.toFixed(0)}/${pL.pwf.toFixed(0)} (м³/сут / атм)` });
   // нагнетательная: штуцер и КНС
   sm.addWell(sm.r.explore[0].cell, "inj", 325);
@@ -1856,7 +1898,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
+  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, reportTests, REF, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
@@ -2048,10 +2090,11 @@ function renderMap() {
     $("map").on("plotly_click", (ev) => { const p = ev.points && ev.points[0]; if (p) onMapClick(Math.floor(p.x / DX), Math.floor(p.y / DX)); });
     $("map").on("plotly_hover", (ev) => {
       const p = ev.points && ev.points[0], kv = $("drill-kind").value;
-      if (!p || G.tool !== "well" || !kv.startsWith("hs")) { if (G.preview) { G.preview = null; Plotly.restyle("map", { x: [[]], y: [[]] }, [G.previewIdx]); } return; }
-      const i = Math.floor(p.x / DX), j = Math.floor(p.y / DX), L = +kv.slice(2), th = ((+$("drill-az").value || 0) * Math.PI) / 180;
-      const x0 = (i + 0.5) * DX, y0 = (j + 0.5) * DX;
-      G.preview = { x: [x0, x0 + Math.sin(th) * L], y: [y0, y0 - Math.cos(th) * L] };
+      if (!p || G.tool !== "well" || kv === "v") { if (G.preview) { G.preview = null; Plotly.restyle("map", { x: [[]], y: [[]] }, [G.previewIdx]); } return; }
+      const i = Math.floor(p.x / DX), j = Math.floor(p.y / DX), th = ((+$("drill-az").value || 0) * Math.PI) / 180;
+      const x0 = (i + 0.5) * DX, y0 = (j + 0.5) * DX, ux = Math.sin(th), uy = -Math.cos(th);
+      if (kv === "hs") { const L = drillLen(); G.preview = { x: [x0, x0 + ux * L], y: [y0, y0 + uy * L] }; }
+      else { const xf = +$("drill-xf").value; G.preview = { x: [x0 - ux * xf, x0 + ux * xf], y: [y0 - uy * xf, y0 + uy * xf] }; }
       Plotly.restyle("map", { x: [G.preview.x], y: [G.preview.y] }, [G.previewIdx]);
     });
     $("map").on("plotly_unhover", () => { if (G.preview) { G.preview = null; Plotly.restyle("map", { x: [[]], y: [[]] }, [G.previewIdx]); } });
@@ -2100,18 +2143,23 @@ function drillWell(cell) {
   if (!r.active[cell]) return toast("Вне контура нефтеносности", true);
   if (sim.wells.some((w) => w.perf.some((pf) => pf.cell === cell))) return toast("В этой ячейке уже есть скважина", true);
   if (G.expl.some((e) => e.cell === cell)) return toast("Здесь разведочная скважина", true);
-  const kv = $("drill-kind").value, hsL = kv.startsWith("hs") ? +kv.slice(2) : 0;
+  const kv = $("drill-kind").value, az = +$("drill-az").value || 0;
   sim.addWell(cell, "prod", 150);
   const w = sim.wells[sim.wells.length - 1];
-  if (hsL) {
-    const res = sim.setCompletion(w, "hs", { L: hsL, az: +$("drill-az").value || 0 }, blockedByExpl);
+  let cost = G.params.drill_cost;
+  if (kv === "hs") {
+    const res = sim.setCompletion(w, "hs", { L: drillLen(), az }, blockedByExpl);
     if (!res.ok) { sim.wells.pop(); return toast(`ГС не пробурена: ${res.msg}`, true); }
+    cost = G.params.drill_cost * (1.3 + w.L / 1000);
+  } else if (kv === "vf") {
+    const xf = +$("drill-xf").value, res = sim.setCompletion(w, "frac", { xf, az }, blockedByExpl);
+    if (!res.ok) { sim.wells.pop(); return toast(`ГРП не выполнен: ${res.msg}`, true); }
+    cost += G.params.frac_cost * FRAC_MULT[xf];
   }
-  const cost = G.params.drill_cost * (hsL ? 1.3 + w.L / 1000 : 1);
   sim.economy.drill(sim.t, cost);
   const name = "С" + ++G.wellNames.prod;
   w.name = name; w.color = PAL[G.colorSeq++ % PAL.length];
-  if (isL2()) w.mode = "flow"; // на уровне 2 скважина стартует фонтаном через штуцер
+  w.mode = "flow"; // интегрированная модель: скважина стартует фонтаном через штуцер (далее — ЭЦН)
   let msg = `Пробурена ${name} (${kindLabel(w)}), −${mln(cost)}. Режим и назначение (добыча / ППД) — в панели скважин справа`;
   if (isL2()) { const L = C.wellLog(r, cell); msg += `. ГИС: h нефть ${L.hOil.toFixed(1)} м, вода ${L.hWater.toFixed(1)} м`; }
   toast(msg); renderWellTable(true); G.dirty = true; renderAll();
@@ -2133,11 +2181,17 @@ function buySeismic() {
   renderLayerBar(); G.dirty = true; renderAll();
 }
 const FRAC_MULT = { 40: 1, 80: 1.6, 120: 2.4 };
-function openOps(name) {
+function drillLen() { return Math.max(1000, Math.min(2000, +$("drill-L").value || 1000)); }
+function syncDrillOpts() {
+  const kv = $("drill-kind").value;
+  $("dk-L").classList.toggle("hidden", kv !== "hs"); $("dk-xf").classList.toggle("hidden", kv !== "vf"); $("dk-az").classList.toggle("hidden", kv === "v");
+}
+function openOps(name, focus) {
   const w = G.sim.wells.find((x) => x.name === name); if (!w) return;
   G.ops = name;
   if (!G.modal) openModal("op-modal"); else $("op-modal").classList.remove("hidden");
   renderOps();
+  if (focus) { const el = $(focus === "zbs" ? "op-L" : "op-xf"); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } }
 }
 function renderOps() {
   const w = G.sim.wells.find((x) => x.name === G.ops); if (!w) return;
@@ -2148,12 +2202,13 @@ function renderOps() {
       `<div class="row">Полудлина: <select id="op-xf">${[40, 80, 120].map((x) => `<option value="${x}">${x} м — ${(fc(x) / 1e6).toFixed(1)} млн руб</option>`).join("")}</select>` +
       ` Азимут трещины: <input id="op-faz" type="number" min="0" max="179" step="5" value="90" style="width:62px">° <span class="sub">(0° — север–юг, 90° — восток–запад)</span> <button id="op-frac" class="primary">Выполнить ГРП</button></div></div>` +
       `<div class="card" style="padding:12px 14px"><b>Зарезка бокового ствола</b><div class="sub" style="margin:4px 0 8px">Из вертикальной скважины бурится боковой ствол вдоль пласта: растёт контакт с пластом. Старый интервал можно изолировать (на обводнённой скважине это отсекает воду). Ствол упирается в соседние скважины и край поля.</div>` +
-      `<div class="row">Длина: <select id="op-L">${[200, 400, 600].map((L) => `<option value="${L}">${L} м — ${(zc(L) / 1e6).toFixed(1)} млн руб</option>`).join("")}</select>` +
+      `<div class="row">Длина: <input id="op-L" type="number" min="100" max="1000" step="50" value="400" style="width:70px"> м <span class="sub" id="op-Lcost">(${(zc(400) / 1e6).toFixed(1)} млн руб)</span>` +
       ` Азимут: <input id="op-zaz" type="number" min="0" max="359" step="5" value="90" style="width:62px">° <span class="sub">(0° — север, 90° — восток)</span>` +
       ` <label><input type="checkbox" id="op-iso"> изолировать старый интервал</label> <button id="op-zbs" class="primary">Зарезать ствол</button></div></div>`
-      : `<div class="note">ГРП и боковой ствол доступны только на вертикальных скважинах без ГРП. Горизонтальные скважины бурятся с заканчиванием «ГС» (выбор — рядом с кнопкой «Скважина»).</div>`);
+      : `<div class="note">ГРП и боковой ствол доступны только на вертикальных скважинах без ГРП. Горизонтальные скважины бурятся с заканчиванием «ГС», вертикальные с ГРП — «ВС + ГРП» (выбор рядом с кнопкой «Скважина»).</div>`);
   const fr = $("op-frac"); if (fr) fr.onclick = () => doFrac(w);
   const zb = $("op-zbs"); if (zb) zb.onclick = () => doZbs(w);
+  const lin = $("op-L"); if (lin) lin.oninput = () => { $("op-Lcost").textContent = `(${(zc(Math.max(100, Math.min(1000, +lin.value || 400))) / 1e6).toFixed(1)} млн руб)`; };
 }
 function doFrac(w) {
   if (guardRun()) return;
@@ -2166,7 +2221,7 @@ function doFrac(w) {
 }
 function doZbs(w) {
   if (guardRun()) return;
-  const res = G.sim.setCompletion(w, "zbs", { L: +$("op-L").value, az: +$("op-zaz").value || 0, isolate: $("op-iso").checked }, blockedByExpl);
+  const res = G.sim.setCompletion(w, "zbs", { L: Math.max(100, Math.min(1000, +$("op-L").value || 400)), az: +$("op-zaz").value || 0, isolate: $("op-iso").checked }, blockedByExpl);
   if (!res.ok) return toast(`Боковой ствол не пробурен: ${res.msg}`, true);
   const cost = G.params.drill_cost * (0.5 + w.L / 1000);
   G.sim.economy.drill(G.sim.t, cost);
@@ -2224,7 +2279,7 @@ function histSeries(sim, pick, step) {
 }
 // ---------------- панель скважин ----------------
 const wellRows = new Map();
-const MODES = { prod: [["bhp", "Забойное давление"], ["flow", "Фонтан (штуцер)"], ["esp", "ЭЦН (частота)"]], inj: [["bhp", "Забойное давление"], ["choke", "КНС (штуцер)"]] };
+const MODES = { prod: [["flow", "Фонтан (штуцер)"], ["esp", "ЭЦН (частота)"]], inj: [["choke", "КНС (штуцер)"]] }; // интегрированная модель: только оборудование
 function ctrlSpec(w) {
   if (w.mode === "bhp") return w.type === "prod" ? { key: "pwf", min: 1, max: 225, step: 1, unit: "атм" } : { key: "pwf", min: 250, max: 375, step: 1, unit: "атм" };
   if (w.mode === "esp") return { key: "freq", min: 30, max: 60, step: 1, unit: "Гц" };
@@ -2253,14 +2308,15 @@ function renderWellTable(force = false) {
       const btn = (cls, txt, title, dis) => `<button class="${cls}" title="${title}"${dis ? " disabled" : ""}>${txt}</button>`;
       const acts = btn("a-on", w.on === false ? "▶" : "⏸", w.on === false ? "Запустить скважину" : "Остановить скважину") +
         btn("a-conv", w.type === "prod" ? "💧→" : "⛏→", w.type === "prod" ? `Перевести под закачку (ППД), ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб` : `Вернуть в добычу, ${(G.params.conv_cost / 1e6).toFixed(0)} млн руб`) +
-        btn("a-ops", "🔨", "ГРП и боковой ствол") + btn("a-con", "🏗", "Конструкция скважины") + (w.type === "prod" && w.mode === "esp" ? btn("a-pump", "📊", "Характеристика насоса: рабочая точка") : "") +
+        btn("a-con", "🏗", "Конструкция скважины") + (w.type === "prod" && w.mode === "esp" ? btn("a-pump", "📊", "Характеристика насоса: рабочая точка") : "") +
         (isL2() ? btn("a-log", "📈", "Каротаж и РИГИС") : "") +
         (isL2() && w.type === "prod" ? btn("a-pta", "⏱", "ГДИС: КВД") + btn("a-stim", "🧪", `Обработка призабойной зоны, ${(G.params.stim_cost / 1e6).toFixed(0)} млн руб${w.stimulated ? " (уже проведена)" : ""}`, w.stimulated) : "");
       const p = G.pta[w.name], note = p ? `<div class="pta-note">ГДИС: k≈${p.k.toFixed(0)} мД, s≈${p.s.toFixed(1)}</div>` : "";
       const opts = MODES[w.type].map(([v, l]) => `<option value="${v}"${v === w.mode ? " selected" : ""}>${l}${v === "esp" && !w.hasESP ? ` (${(G.params.esp_cost / 1e6).toFixed(0)} млн руб)` : ""}</option>`).join("");
       tr.innerHTML = `<td><span class="w-dot" style="background:${w.color}"></span></td>` +
-        `<td>${w.name}<div class="sub" style="font-size:11px">${w.type === "prod" ? "добыв." : "нагнет."}${w.hasESP ? " · ЭЦН" : ""}<br>${w.kind === "v" ? "ВС" : kindLabel(w).replace("боковой ствол", "ЗБС").replace(" (старый интервал изолирован)", "")}</div></td>` +
-        `<td><select class="s-mode">${opts}</select>${w.type === "prod" && w.mode === "esp" ? `<select class="s-pump" title="Типоразмер насоса (замена платная)">${Object.entries(C.PUMPS).map(([k, P]) => `<option value="${k}"${k === w.pump ? " selected" : ""}>${P.name} (${P.Q0 / 2} м³/сут оптим.)${k === w.pump ? " — стоит" : ` — ${(pumpCost(k) / 1e6).toFixed(1)} млн`}</option>`).join("")}</select>` : ""}<div class="w-stat"></div></td>` +
+        `<td><b>${w.name}</b><div class="sub" style="font-size:11px">${w.type === "prod" ? "добыв." : "нагнет."}${w.hasESP ? " · ЭЦН" : ""}<br>${w.kind === "v" ? "ВС" : kindLabel(w).replace("боковой ствол", "ЗБС").replace(" (старый интервал изолирован)", "")}</div>` +
+        (w.kind === "v" ? `<div class="wact" style="margin-top:3px"><button class="a-frac" title="Гидроразрыв пласта">ГРП</button><button class="a-zbs" title="Зарезка бокового ствола">ЗБС</button></div>` : "") + `</td>` +
+        `<td><select class="s-mode">${opts}</select>${w.type === "prod" && w.mode === "esp" ? `<select class="s-pump" title="Типоразмер насоса (замена платная)">${Object.entries(C.PUMPS).map(([k, P]) => `<option value="${k}"${k === w.pump ? " selected" : ""}>${P.name} (оптимум ${P.QB} м³/сут)${k === w.pump ? " — стоит" : ` — ${(pumpCost(k) / 1e6).toFixed(1)} млн`}</option>`).join("")}</select>` : ""}<div class="w-stat"></div></td>` +
         `<td class="w-pwf"><input type="range" min="${sp.min}" max="${sp.max}" step="${sp.step}" value="${cur}"> <span class="pwf-val">${(+cur).toFixed(sp.step < 1 ? 1 : 0)}</span> <span class="sub">${sp.unit}</span></td>` +
         `<td class="qo"></td><td class="qw"></td><td class="fw"></td><td><div class="wact">${acts}</div>${note}</td>`;
       const slider = tr.querySelector("input"), val = tr.querySelector(".pwf-val");
@@ -2271,7 +2327,7 @@ function renderWellTable(force = false) {
       tr.querySelector(".s-mode").addEventListener("change", (e) => setWellMode(w, e.target.value));
       const sp2 = tr.querySelector(".s-pump"); if (sp2) sp2.addEventListener("change", (e) => setPump(w, e.target.value));
       const on = (cls, fn) => { const b = tr.querySelector("." + cls); if (b) b.addEventListener("click", fn); };
-      on("a-ops", () => openOps(w.name)); on("a-con", () => openSchem("w", w.name)); on("a-pump", () => openSchem("p", w.name)); on("a-on", () => toggleWell(w)); on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
+      on("a-frac", () => openOps(w.name, "frac")); on("a-zbs", () => openOps(w.name, "zbs")); on("a-con", () => openSchem("w", w.name)); on("a-pump", () => openSchem("p", w.name)); on("a-on", () => toggleWell(w)); on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
       tb.appendChild(tr);
       wellRows.set(w, { slider, val, sp, st: tr.querySelector(".w-stat"), qo: tr.querySelector(".qo"), qw: tr.querySelector(".qw"), fw: tr.querySelector(".fw") });
     });
@@ -2470,7 +2526,7 @@ const ATM_PA_UI = 101325;
 
 function drawPumpChar() {
   const sim = G.sim, r = sim.r, w = sim.wells.find((x) => x.name === SCH.well); if (!w) return;
-  const pk = w.pump || "M", P = C.PUMPS[pk], f = w.freq, k = f / 50, e = C.solveEquipment(sim, w);
+  const pk = w.pump || PUMP_DEFAULT, P = C.PUMPS[pk], f = w.freq, k = f / 50, e = C.solveEquipment(sim, w);
   const rho = 860 * (1 - (w.fw || 0)) + 1000 * (w.fw || 0), Pc = sim.P[w.cell], Gi = C.wellIndex(r.k[w.cell], r, w.skin) * C.lambdaT(sim.Sw[w.cell], r);
   const qmax = P.Q0 * k * 1.02, n = 90, q = [], H = [], eta = [], kw = [], Hreq = [];
   const hyd = (rho * 9.81 * w.depth) / C.ATM_PA, pg = C.gatherPressure(sim);
@@ -2744,6 +2800,14 @@ function drawPta() {
   const dp = bu.p.map((p) => p - bu.pwf0), t1 = +$("pta-t1").value, t2 = +$("pta-t2").value, hasWin = t1 > 0 && t2 > t1;
   const shapes = hasWin ? [{ type: "rect", xref: "x", yref: "paper", x0: t1, x1: t2, y0: 0, y1: 1, fillcolor: "rgba(99,110,250,.15)", line: { width: 0 }, layer: "below" }] : [];
   const dd = bu.deriv.map((v, i) => (isFinite(v) && v > 0 ? v : null));
+  const pr = C.buildupPres(bu), hrs = bu.t.map((x) => x * 24);
+  Plotly.react("pta-kvd", [
+    { type: "scatter", mode: "lines+markers", x: hrs, y: bu.p, name: "p<sub>ws</sub>", line: { color: PAL[0], width: 2 }, marker: { size: 4 }, hovertemplate: "Δt %{x:.2f} ч<br>p %{y:.2f} атм<extra></extra>" }],
+    lay({ title: ttl("КВД: забойное давление после остановки"), height: 430, margin: { l: 56, r: 10, t: 34, b: 60 },
+      xaxis: { title: { text: "Δt, ч" } }, yaxis: { title: { text: "p<sub>ws</sub>, атм" } },
+      shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: bu.pwf0, y1: bu.pwf0, line: { color: "#8a97ab", dash: "dot", width: 1.5 } }].concat(pr.pRes ? [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: pr.pRes, y1: pr.pRes, line: { color: PAL[2], dash: "dash", width: 2 } }] : []),
+      annotations: [{ xref: "paper", x: 0.98, xanchor: "right", y: bu.pwf0, yanchor: "bottom", text: `P<sub>wf</sub> до остановки ${bu.pwf0.toFixed(0)}`, showarrow: false, font: { size: 10, color: "#6b7c93" } }]
+        .concat(pr.pRes ? [{ xref: "paper", x: 0.98, xanchor: "right", y: pr.pRes, yanchor: "bottom", text: `P<sub>пл</sub> ≈ ${pr.pRes.toFixed(1)} атм`, showarrow: false, font: { size: 11, color: PAL[2] } }] : []) }), CFG);
   Plotly.react("pta-ll", [
     { type: "scatter", mode: "markers", x: bu.t, y: dp, name: "Δp", marker: { color: PAL[0], size: 6 }, hovertemplate: "Δt %{x:.3g} сут<br>Δp %{y:.2f} атм<extra>Δp</extra>" },
     { type: "scatter", mode: "markers", x: bu.t, y: dd, name: "dΔp/dlnt", marker: { color: PAL[1], size: 6, symbol: "diamond" }, hovertemplate: "Δt %{x:.3g} сут<br>производная %{y:.2f}<extra>dΔp/dlnt</extra>" }],
@@ -2754,20 +2818,24 @@ function drawPta() {
   if (res) { const xa = [t1 / 2, t2 * 3]; data.push({ type: "scatter", mode: "lines", x: xa, y: xa.map((x) => res.a + res.m * Math.log10(x)), line: { color: PAL[1], width: 2.5 }, name: "прямая", hoverinfo: "skip" }); }
   Plotly.react("pta-sl", data, lay({ title: ttl("Полулогарифмический анализ: p<sub>ws</sub> от lg Δt"), height: 430, shapes,
     xaxis: { type: "log", title: { text: "Δt, сут" } }, yaxis: { title: { text: "p<sub>ws</sub>, атм" } }, margin: { l: 56, r: 10, t: 34, b: 60 } }), CFG);
-  G.bu.res = res; renderPtaSide(res);
+  G.bu.res = res; G.bu.pres = pr; renderPtaSide(res);
 }
 function renderPtaSide(res) {
-  const bu = G.bu, doss = Object.entries(G.pta).map(([n, p]) => `<tr><td>${n}</td><td>${p.k.toFixed(0)}</td><td>${p.s.toFixed(1)}</td><td>${p.year}</td></tr>`).join("");
+  const bu = G.bu, doss = Object.entries(G.pta).map(([n, p]) => `<tr><td>${n}</td><td>${isFinite(p.k) ? p.k.toFixed(0) : "—"}</td><td>${isFinite(p.s) ? p.s.toFixed(1) : "—"}</td><td>${p.pRes ? p.pRes.toFixed(0) : "—"}</td><td>${p.year}</td></tr>`).join("");
   let h = "";
   if (!bu) h += `<div class="note">Остановите добывающую скважину и запишите восстановление забойного давления. Скважина должна уже поработать (рассчитайте хотя бы год). Остановка — это недобор нефти, поэтому длинные тесты дороже.</div>`;
   else {
     h += `<div><b>${bu.wellName}</b> · дебит до остановки ${bu.q.toFixed(0)} м³/сут · P<sub>wf</sub> = ${bu.pwf0.toFixed(0)} атм</div>`;
     h += `<div class="note"><b>Как анализировать.</b><br>1. На диагностическом графике найдите участок, где производная (красные ромбы) постоянна, — это радиальный приток. Ранние точки искажены влиянием ствола скважины, поздние — границами пласта и разломами.<br>` +
-      `2. Введите границы участка (или нажмите «Подсказка») — на правом графике через точки пройдёт прямая.<br>3. Наклон <i>m</i> даёт проницаемость, отсечка — скин.</div>`;
-    h += res ? `<h2>Результат</h2><table><tbody><tr><td>Наклон m</td><td><b>${res.m.toFixed(2)}</b> атм/цикл</td></tr><tr><td>Проницаемость k</td><td><b>${res.k.toFixed(0)}</b> мД</td></tr><tr><td>Скин s</td><td><b>${res.s.toFixed(1)}</b></td></tr><tr><td>Точек в окне</td><td>${res.n}</td></tr></tbody></table>` :
-      `<div class="sub" style="margin-top:8px">Задайте участок радиального притока (не менее 4 точек).</div>`;
+      `2. Введите границы участка (или нажмите «Подсказка») — на правом графике через точки пройдёт прямая.<br>3. Наклон <i>m</i> даёт проницаемость, отсечка — скин.<br>` +
+      `4. Пластовое давление — уровень, на который выходит КВД (левый график). Если кривая ещё растёт, давление оценивается экстраполяцией или только снизу; поздняя часть отражает соседние скважины, неоднородность и разломы.</div>`;
+    const pr = bu.pres || C.buildupPres(bu);
+    h += `<h2>Пластовое давление</h2><table><tbody><tr><td>P<sub>пл</sub> по КВД</td><td><b>${pr.pRes ? pr.pRes.toFixed(1) + " атм" : "—"}</b></td></tr><tr><td>Способ</td><td>${pr.method}${pr.stabilized ? "" : `: не меньше ${pr.pEnd.toFixed(1)} атм — увеличьте время остановки`}</td></tr>` +
+      `<tr><td>Депрессия до остановки</td><td>${pr.pRes ? (pr.pRes - bu.pwf0).toFixed(0) + " атм" : "—"}</td></tr><tr><td>Эффективная вязкость (по обводнённости)</td><td>${bu.mu.toFixed(2)} сП</td></tr></tbody></table>`;
+    h += res ? `<h2>Радиальный приток</h2><table><tbody><tr><td>Наклон m</td><td><b>${res.m.toFixed(2)}</b> атм/цикл</td></tr><tr><td>Проницаемость k</td><td><b>${res.k.toFixed(0)}</b> мД</td></tr><tr><td>Скин s</td><td><b>${res.s.toFixed(1)}</b></td></tr><tr><td>Точек в окне</td><td>${res.n}</td></tr></tbody></table>` :
+      `<div class="sub" style="margin-top:8px">Для k и скина задайте участок радиального притока (не менее 4 точек).</div>`;
   }
-  h += `<h2>Досье ГДИС</h2>` + (doss ? `<table><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>Год</th></tr></thead><tbody>${doss}</tbody></table>` : `<div class="sub">Пока нет принятых оценок</div>`);
+  h += `<h2>Досье ГДИС</h2>` + (doss ? `<table><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>P<sub>пл</sub>, атм</th><th>Год</th></tr></thead><tbody>${doss}</tbody></table>` : `<div class="sub">Пока нет принятых оценок</div>`);
   h += `<div class="note">Скин &gt; 3 — призабойная зона загрязнена: обработка (🧪) может заметно поднять дебит. Фактические k и скин будут показаны в итогах.</div>`;
   $("pta-side").innerHTML = h;
 }
@@ -2778,9 +2846,10 @@ function ptaHint() {
   $("pta-t1").value = +w.t1.toPrecision(3); $("pta-t2").value = +w.t2.toPrecision(3); drawPta();
 }
 function ptaAccept() {
-  const res = G.bu && G.bu.res; if (!res) return toast("Сначала выберите радиальный участок", true);
-  G.pta[G.bu.wellName] = { k: res.k, s: res.s, year: Math.round(G.sim.t / 365) };
-  toast(`Оценка по ${G.bu.wellName}: k ≈ ${res.k.toFixed(0)} мД, скин ≈ ${res.s.toFixed(1)} — занесено в досье`);
+  const res = G.bu && G.bu.res, pr = G.bu && G.bu.pres;
+  if (!res && !(pr && pr.pRes)) return toast("Сначала выберите радиальный участок или дождитесь выхода КВД на полку", true);
+  G.pta[G.bu.wellName] = { k: res ? res.k : NaN, s: res ? res.s : NaN, pRes: pr && pr.pRes, pTrue: G.bu.truth.pRes, year: Math.round(G.sim.t / 365) };
+  toast(`Оценка по ${G.bu.wellName}: ${res ? `k ≈ ${res.k.toFixed(0)} мД, скин ≈ ${res.s.toFixed(1)}` : ""}${pr && pr.pRes ? `${res ? ", " : ""}P пл ≈ ${pr.pRes.toFixed(1)} атм` : ""} — занесено в досье`);
   renderWellTable(true); renderPtaSide(res);
 }
 
@@ -2789,7 +2858,7 @@ const f0 = (v) => (isFinite(v) ? v.toFixed(0) : "—"), f1 = (v) => (isFinite(v)
 const pct = (a, b) => (b > 0 ? `${((a / b) * 100).toFixed(0)} %` : "—");
 function wellDesc(w) {
   const t = (w.type === "prod" ? "добыв." : "нагнет.") + (w.kind !== "v" ? ` (${kindLabel(w).replace(" (старый интервал изолирован)", "")})` : "");
-  const m = w.mode === "esp" ? `ЭЦН ${C.PUMPS[w.pump || "M"].name}, ${w.freq} Гц` : w.mode === "flow" ? `фонтан, штуцер ${w.choke} мм` : w.mode === "choke" ? `штуцер ${w.choke} мм` : `P<sub>wf</sub> ${w.pwf.toFixed(0)} атм`;
+  const m = w.mode === "esp" ? `ЭЦН ${C.PUMPS[w.pump || PUMP_DEFAULT].name}, ${w.freq} Гц` : w.mode === "flow" ? `фонтан, штуцер ${w.choke} мм` : w.mode === "choke" ? `штуцер ${w.choke} мм` : `P<sub>wf</sub> ${w.pwf.toFixed(0)} атм`;
   return `${t}, ${m}${w.converted ? ", менялась" : ""}${w.on === false ? ", остановлена" : ""}`;
 }
 async function showResults() {
@@ -2875,11 +2944,11 @@ function buildReport(sim, fc, finished) {
   h += `<tr class="sum"><td colspan="${lv === 2 ? 4 : 2}">Итого</td><td>${f1(sO)}</td><td>${f0(sW)}</td><td>${f0(sI)}</td><td></td>${fc ? `<td>${f1(sF)}</td>` : ""}</tr></tbody></table></section>`;
   // геология (уровень 2)
   if (lv === 2) {
-    const pr = Object.entries(G.pta).map(([nme, p]) => { const w = sim.wells.find((x) => x.name === nme); if (!w) return ""; const k0 = r.k[w.cell]; return `<tr><td>${nme}</td><td>${f0(p.k)} / ${f0(k0)}</td><td>${f1(p.s)} / ${w.stimulated ? "после ОПЗ" : f1(w.skin)}</td><td>${f0((Math.abs(p.k / k0 - 1)) * 100)} %</td></tr>`; }).join("");
+    const pr = Object.entries(G.pta).map(([nme, p]) => { const w = sim.wells.find((x) => x.name === nme); if (!w) return ""; const k0 = r.k[w.cell]; return `<tr><td>${nme}</td><td>${f0(p.k)} / ${f0(k0)}</td><td>${f1(p.s)} / ${w.stimulated ? "после ОПЗ" : f1(w.skin)}</td><td>${p.pRes ? f1(p.pRes) : "—"} / ${f1(p.pTrue)}</td></tr>`; }).join("");
     h += `<section class="rep-sec"><h2><span>${n++}.</span>Геология и разведка</h2><div id="reveal-plot"></div><div id="reveal-text" class="rep-note" style="font-size:12px"></div>` +
       `<table class="rep" style="margin-top:10px; max-width:560px"><tbody><tr><td>ВНК: фактический / ваша оценка</td><td>${fmtAbs(r.owc)} / ${G.owcGuess === null ? "—" : fmtAbs(G.owcGuess)} м</td></tr>` +
       `<tr><td>Разведочные скважины</td><td>${G.expl.length} (${G.expl.length - 5 >= 0 ? "+" + (G.expl.length - 5) + " пробурено" : "5 стартовых"})</td></tr><tr><td>Сейсмика 3D</td><td>${G.seis ? "заказана" : "не заказывалась"}</td></tr><tr><td>Исследований ГДИС принято</td><td>${Object.keys(G.pta).length}</td></tr></tbody></table>` +
-      (pr ? `<h2 style="margin-top:14px; font-size:13px">ГДИС: оценка / факт</h2><table class="rep" style="max-width:560px"><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>Ошибка k</th></tr></thead><tbody>${pr}</tbody></table>` : "") + `</section>`;
+      (pr ? `<h2 style="margin-top:14px; font-size:13px">ГДИС: оценка / факт</h2><table class="rep" style="max-width:560px"><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>P пл., атм</th></tr></thead><tbody>${pr}</tbody></table>` : "") + `</section>`;
   }
   // комментарии
   const cm = [];
@@ -3061,6 +3130,7 @@ for (const [id, tool] of [["tool-well", "well"], ["tool-expl", "expl"]]) $(id).a
 $("sp-pause").addEventListener("click", () => setSpeed(0)); $("sp-1").addEventListener("click", () => setSpeed(2));
 $("sp-10").addEventListener("click", () => setSpeed(20)); $("sp-50").addEventListener("click", () => setSpeed(100));
 $("btn-year").addEventListener("click", startYear);
+$("drill-kind").addEventListener("change", syncDrillOpts); syncDrillOpts();
 $("mt-slider").addEventListener("input", (e) => { stopPlay(); setSnap(+e.target.value); });
 $("mt-prev").addEventListener("click", () => { stopPlay(); setSnap((G.snapIdx === null ? G.snaps.length : G.snapIdx) - 1); });
 $("mt-next").addEventListener("click", () => { stopPlay(); setSnap((G.snapIdx === null ? G.snaps.length : G.snapIdx) + 1); });
