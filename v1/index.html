@@ -77,7 +77,57 @@
   table.t th { text-align:left; color:var(--muted); font-weight:600; padding:3px 8px 6px 0; border-bottom:1px solid var(--line); }
   table.t td { padding:5px 8px 5px 0; border-bottom:1px solid var(--row); white-space:nowrap; }
 
-  /* ---------- итоги ---------- */
+  /* ---------- отчёт ---------- */
+  .report-wrap { width:min(1040px, 96vw); margin:18px auto 40px; }
+  .report-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 14px; margin-bottom:12px; position:sticky; top:0; z-index:5; }
+  .report { padding:30px 38px; font-size:13px; }
+  .rep-head { border-bottom:3px solid var(--accent); padding-bottom:12px; margin-bottom:18px; }
+  .rep-head h1 { font-size:24px; margin:0 0 4px; }
+  .rep-head .meta { display:flex; gap:22px; flex-wrap:wrap; color:var(--muted); font-size:12.5px; }
+  .rep-sec { margin:22px 0 0; }
+  .rep-sec h2 { font-size:15px; color:var(--text); text-transform:none; letter-spacing:0; border-bottom:1px solid var(--line); padding-bottom:4px; margin:0 0 10px; }
+  .rep-sec h2 span { color:var(--accent); margin-right:6px; }
+  .score-box { display:flex; gap:26px; align-items:center; flex-wrap:wrap; padding:14px 18px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; }
+  .ring { width:150px; height:150px; border-radius:50%; display:grid; place-items:center; flex:none; }
+  .ring > div { width:112px; height:112px; border-radius:50%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .ring b { font-size:38px; line-height:1; } .ring small { color:var(--muted); font-size:12px; }
+  .score-parts { flex:1; min-width:300px; }
+  .score-parts .bar { height:10px; border-radius:5px; background:var(--row); overflow:hidden; margin:3px 0 10px; }
+  .score-parts .bar i { display:block; height:100%; border-radius:5px; }
+  .grade { display:inline-block; padding:3px 12px; border-radius:14px; color:#fff; font-weight:600; font-size:13px; }
+  .rep-note { color:var(--muted); font-size:11.5px; line-height:1.5; margin-top:6px; }
+  .rep-banner { background:#fff7e0; border:1px solid #f3d98b; border-radius:8px; padding:8px 12px; margin-bottom:14px; }
+  .rep-progress { padding:60px 20px; text-align:center; font-size:15px; }
+  .rep-progress .bar { width:60%; height:10px; background:var(--row); border-radius:5px; margin:14px auto 0; overflow:hidden; }
+  .rep-progress .bar i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
+  table.rep { width:100%; border-collapse:collapse; font-size:12px; }
+  table.rep th { text-align:right; color:var(--muted); font-weight:600; padding:4px 8px; border-bottom:2px solid var(--line); background:var(--panel2); }
+  table.rep td { padding:3px 8px; border-bottom:1px solid var(--row); text-align:right; white-space:nowrap; }
+  table.rep th:first-child, table.rep td:first-child { text-align:left; }
+  table.rep tr.sum td { font-weight:700; border-top:2px solid var(--line); background:var(--panel2); }
+  table.rep tr.fc td { color:#475569; background:#f6f8ff; }
+  .rep-2col { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .rep-chart { height:290px; }
+  .rep-list { margin:6px 0 0 18px; line-height:1.55; }
+  .good { color:var(--good); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+  @media print {
+    @page { size: A4; margin: 11mm; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    html, body { height:auto !important; overflow:visible !important; background:#fff !important; }
+    .screen { display:none !important; }
+    #screen-results.visible { display:block !important; height:auto !important; overflow:visible !important; }
+    .no-print, #toast, .modal { display:none !important; }
+    .report-wrap { width:100%; margin:0; }
+    .report { box-shadow:none; border:none; padding:0; font-size:11px; }
+    .rep-sec h2, .rep-head { break-after:avoid; }
+    .rep-chart, .score-box, table.rep tr, .rep-banner { break-inside:avoid; }
+    table.rep thead { display:table-header-group; }
+    table.rep { font-size:9.5px; } table.rep td, table.rep th { padding:2px 5px; }
+    .rep-2col { gap:8px; } .rep-chart { height:240px; }
+    #reveal-plot { height:480px !important; }
+  }
+
+  /* ---------- итоги (старое) ---------- */
   #screen-results { overflow:auto; align-items:flex-start; justify-content:center; }
   .results-box { width:min(1040px, 96vw); margin:22px auto; padding:20px 24px; }
   #res-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin:14px 0; }
@@ -208,23 +258,15 @@
 </div>
 
 <div id="screen-results" class="screen">
-  <div class="results-box card">
-    <h1 id="res-title">Итоги разработки</h1>
-    <div id="res-grid"></div>
-    <div id="res-reveal" class="lvl2-only">
-      <h2>Геология раскрыта</h2>
-      <div id="reveal-plot"></div>
-      <div id="reveal-text" class="sub" style="line-height:1.6; margin-top:6px"></div>
-    </div>
-    <h2>Добыча по годам</h2>
-    <div id="res-bars"></div>
-    <h2>По скважинам</h2>
-    <div id="res-wells"></div>
-    <div id="res-pta" class="lvl2-only"></div>
-    <div class="settings-buttons">
-      <button id="btn-continue" class="primary">Продолжить (песочница)</button>
+  <div class="report-wrap">
+    <div class="report-toolbar no-print card">
+      <button id="btn-pdf" class="primary" title="Откроется диалог печати — выберите «Сохранить как PDF»">📄 Выгрузить в PDF</button>
+      <label>Участник: <input id="rep-name" type="text" placeholder="ФИО / группа" style="width:220px"></label>
+      <span class="sub" style="flex:1; font-size:12px">PDF: в диалоге печати — «Сохранить как PDF», A4, «Фоновая графика».</span>
+      <button id="btn-continue">Продолжить (песочница)</button>
       <button id="btn-restart">Начать заново</button>
     </div>
+    <article id="report" class="report card"></article>
   </div>
 </div>
 
@@ -1509,8 +1551,92 @@ function equipmentTests() {
   return t;
 }
 
+// Эталонные варианты разработки (для оценки игрока): рассчитаны этим же ядром при параметрах по умолчанию
+// (μ нефти 5 сП); капитальные затраты и экономика пересчитываются по параметрам игрока.
+const REF = {
+  1: { desc: "шахматная сетка 6 добывающих + 4 нагнетательных, забойные 90 / 375 атм", drill: 10, esp: 0, seis: 0, years: 20,
+    // по годам: нефть, т; вода, м³; закачка, м³; электроэнергия, кВт·ч
+    s: [[272264,31110,326189,0],[230616,198908,461501,0],[176351,330479,531255,0],[139396,414207,573281,0],[113549,471032,600870,0],[94709,511711,620183,0],[80523,542017,634361,0],[69553,565315,645164,0],[60875,583696,653642,0],[53865,598527,660463,0],[48094,610734,666067,0],[43259,620957,670751,0],[39146,629643,674722,0],[35604,637113,678128,0],[32522,643602,681077,0],[29818,649282,683651,0],[27428,654288,685911,0],[25306,658722,687906,0],[23414,662667,689674,0],[21720,666190,691249,0]] },
+  2: { desc: "сейсмика + 9 скважин в нефтяной зоне (5 добывающих на ЭЦН, 4 нагнетательных со штуцером)", drill: 9, esp: 5, seis: 1, years: 20,
+    // по годам: нефть, т; вода, м³; закачка, м³; электроэнергия, кВт·ч
+    s: [[122204,38591,156648,2387164],[88565,104696,207659,2462633],[69128,145080,225955,2553803],[56856,172538,238113,2638052],[48035,192867,247728,2682699],[41303,208692,255624,2709485],[35970,221426,262194,2732156],[31639,231910,267717,2751480],[28054,240688,272410,2768109],[25043,248134,276436,2782534],[22487,254509,279914,2795140],[20297,260016,282943,2806234],[18406,264806,285595,2816052],[16763,268998,287931,2824786],[15327,272686,289997,2832589],[14064,275948,291836,2839596],[12950,278847,293477,2845908],[11961,281434,294950,2851615],[11080,283753,296277,2856794],[10291,285841,297476,2861509]] },
+};
+
+// ---------- Оценка разработки: клон, годовые ряды, ЧДД, баллы ----------
+// копия состояния (для прогноза на 10 лет вперёд без изменения игры)
+function cloneSim(sim) {
+  const c = createSim(sim.r, sim.params);
+  c.P.set(sim.P); c.Sw.set(sim.Sw);
+  c.wells = sim.wells.map((w) => ({ ...w, cum: { ...w.cum }, eq: null }));
+  c.field = { ...sim.field }; c.t = sim.t; c.cumProdM3 = sim.cumProdM3;
+  c.history = { days: sim.history.days.slice() };
+  const e = sim.economy, d = c.economy;
+  d.balance = e.balance; d.revenue = e.revenue; d.opex = e.opex; d.drillSpent = e.drillSpent; d.otherSpent = e.otherSpent; d.drills = e.drills.slice();
+  c._uE.set(sim._uE); c._uN.set(sim._uN); c._Te.set(sim._Te); c._Tn.set(sim._Tn);
+  c._fluxValid = sim._fluxValid; c._lastSolveT = sim._lastSolveT; // продолжение идентично оригиналу
+  return c;
+}
+// годовые показатели по истории: нефть (т), вода (м³), закачка (м³), денежный поток (руб), накопленная нефть (т)
+function yearlyFromSim(sim, params) {
+  const h = sim.history.days, out = { oil_t: [], water_m3: [], inj_m3: [], cf: [], cumOil_t: [], liq_m3: [] };
+  let cum = 0;
+  for (let n = 1; n * 365 <= h.length; n++) {
+    let oil = 0, wat = 0, inj = 0;
+    for (let d = (n - 1) * 365; d < n * 365; d++) for (const w of h[d].wells) { if (w.prod) { oil += w.qo; wat += w.qw; } else inj += w.q; }
+    const m0 = n === 1 ? params.init_money : h[(n - 1) * 365 - 1].money, m1 = h[n * 365 - 1].money;
+    cum += oil * RHO_OIL;
+    out.oil_t.push(oil * RHO_OIL); out.water_m3.push(wat); out.inj_m3.push(inj); out.liq_m3.push(oil + wat); out.cf.push(m1 - m0); out.cumOil_t.push(cum);
+  }
+  return out;
+}
+// годовые показатели эталона при экономических параметрах игрока
+function refYearly(level, params) {
+  const R_ = REF[level], out = { oil_t: [], water_m3: [], inj_m3: [], cf: [], cumOil_t: [], liq_m3: [] };
+  let cum = 0;
+  const capex = R_.drill * params.drill_cost + R_.esp * (params.esp_cost || 6e6) + R_.seis * (params.seis_cost || 12e6);
+  R_.s.forEach(([oil, wat, inj, kwh], n) => {
+    const liq = oil / RHO_OIL + wat;
+    const cf = oil * params.price_oil - (params.lift_cost * liq + params.inj_cost * inj + (params.elec_cost || 0) * kwh) - (n === 0 ? capex : 0);
+    cum += oil; out.oil_t.push(oil); out.water_m3.push(wat); out.inj_m3.push(inj); out.cf.push(cf); out.cumOil_t.push(cum); out.liq_m3.push(liq);
+  });
+  return out;
+}
+function npvOf(cf, rate) { return cf.reduce((s, v, n) => s + v / Math.pow(1 + rate, n + 1), 0); }
+// баллы: эталон = 80, выше эталона — до 100 (при +25 %), отрицательный результат = 0; КИН и ЧДД — по 50 %
+function scoreComponent(v, ref) {
+  if (!(v > 0)) return 0;
+  if (!(ref > 0)) return 100;
+  const r = v / ref;
+  return r <= 1 ? 80 * r : 80 + 20 * Math.min(1, (r - 1) / 0.25);
+}
+function scoreDevelopment(kin, kinRef, npv, npvRef) {
+  const sK = scoreComponent(kin, kinRef), sN = scoreComponent(npv, npvRef), total = 0.5 * sK + 0.5 * sN;
+  return { kin: sK, npv: sN, total, grade: total >= 90 ? "отлично" : total >= 75 ? "хорошо" : total >= 55 ? "удовлетворительно" : "неудовлетворительно" };
+}
+
+// ---------- Тесты оценки ----------
+function reportTests() {
+  const t = [];
+  t.push({ name: "эталоны: 20 лет для обоих уровней", pass: REF[1].s.length === 20 && REF[2].s.length === 20 });
+  for (const lv of [1, 2]) {
+    const P = { ...DEFAULT_PARAMS, esp_cost: 6e6, seis_cost: 12e6 }, y = refYearly(lv, P), npv = npvOf(y.cf, 0.1) / 1e6, want = lv === 1 ? 5853.3 : 2284;
+    t.push({ name: `эталон ур.${lv}: ЧДД по рядам = рассчитанному (±1 %)`, pass: Math.abs(npv - want) / want < 0.01, details: `${npv.toFixed(1)} млн руб (ожид. ${want})` });
+  }
+  const sm = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  sm.addWell(sm.r.explore[2].cell, "prod", 150); sm.addWell(sm.r.explore[0].cell, "inj", 330);
+  advance(sm, 200);
+  const cl = cloneSim(sm); advance(sm, 100); advance(cl, 100);
+  let dP = 0; for (let c = 0; c < sm.P.length; c++) dP = Math.max(dP, Math.abs(sm.P[c] - cl.P[c]));
+  t.push({ name: "клон состояния: продолжение даёт тот же результат", pass: dP < 1e-6 && Math.abs(sm.economy.balance - cl.economy.balance) < 1, details: `max|ΔP|=${dP.toExponential(1)}` });
+  const ya = yearlyFromSim(cl, DEFAULT_PARAMS);
+  const s1 = scoreDevelopment(0.4, 0.4, 100, 100), s2 = scoreDevelopment(0.5, 0.4, 130, 100), s3 = scoreDevelopment(0.2, 0.4, -5, 100);
+  t.push({ name: "оценка: эталон = 80, выше эталона растёт до 100, убыточный вариант = 0 по ЧДД", pass: Math.abs(s1.total - 80) < 1e-9 && s2.total === 100 && s3.npv === 0 && s3.total < 25 && ya.cf.length === 0,
+           details: `эталон ${s1.total.toFixed(0)}, лучше ${s2.total.toFixed(0)}, хуже ${s3.total.toFixed(0)}` });
+  return t;
+}
+
 registerCore({
-  VERSION: "0.10.0",
+  VERSION: "0.11.0",
   DEFAULT_PARAMS, GRID, CONV_K,
   mulberry32, gauss, buildReservoir, isConnected,
   L2, buildReservoir2, wellLog, l2Top, l2Column, l2OilNet, l2Altitude,
@@ -1519,10 +1645,10 @@ registerCore({
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
   createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
-  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, level2bTests,
+  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, reportTests, REF, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
     return [...reservoirTests(), ...relPermTests(), ...pressureTests(), ...wellTests(),
-            ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests(), ...equipmentTests()];
+            ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests(), ...equipmentTests(), ...reportTests()];
   },
 });
 </script>
@@ -1652,7 +1778,7 @@ function faultTraces(r, force = false) {
   const draw = (pts, name, color, dash, label) => out.push({ type: "scatter", mode: "lines+text", x: pts.map((p) => (p[0] + 0.5) * DX), y: pts.map((p) => (p[1] + 0.5) * DX),
     line: { color, width: 3, dash }, text: pts.map((_, n) => (n === 1 ? label : "")), textposition: "top right", textfont: { color, size: 12 },
     hovertemplate: `${name}<extra></extra>`, showlegend: false });
-  if (isL2() && G.seis) G.seis.faults.forEach((F) => draw(F.pts, F.name, "#b00020", "dash", `${F.name} (сброс ≈ ${F.throwEst} м)`));
+  if (isL2() && G.seis) G.seis.faults.forEach((F) => draw(F.pts, F.name, "#b00020", "dash", force ? "" : `${F.name} (сброс ≈ ${F.throwEst} м)`));
   if (isL2() && (force || revealed())) r.faults.forEach((F) => draw(F.pts, F.name, "#111827", "solid", `${F.name}: ${F.trans === 0 ? "запечатан" : `проницаем ×${F.trans}`}`));
   return out;
 }
@@ -2348,34 +2474,148 @@ function ptaAccept() {
 }
 
 // ---------------- итоги ----------------
-function showResults() {
-  const sim = G.sim, st = C.simStats(sim), e = sim.economy, r = sim.r, np = sim.wells.filter((w) => w.type === "prod").length;
-  const kpi = [["Накопленная добыча нефти", `${(st.cumOilM3 * 0.86 / 1e3).toFixed(1)} тыс. т`], ["Извлечение от OOIP", `${(st.recovery * 100).toFixed(1)} %`],
-    ["Конечный баланс", mln(e.balance)], ["Добыто воды", `${(st.cumWatM3 / 1e3).toFixed(0)} тыс. м³`], ["Закачано воды", `${(st.cumInjM3 / 1e3).toFixed(0)} тыс. м³`],
-    ["Обводнённость (тек.)", `${(st.waterCut * 100).toFixed(0)} %`], ["Среднее давление", `${st.avgP.toFixed(0)} атм`], ["Скважин", `${sim.wells.length} (доб. ${np} / наг. ${sim.wells.length - np})`]];
-  if (r.level === 2) {
-    kpi.push(["Разведочных скважин", `${G.expl.length}`], ["Сейсмика", G.seis ? "заказана" : "не заказывали"], ["ВНК: факт / ваша оценка", `${fmtAbs(r.owc)} / ${G.owcGuess === null ? "—" : fmtAbs(G.owcGuess)} м`]);
+const f0 = (v) => (isFinite(v) ? v.toFixed(0) : "—"), f1 = (v) => (isFinite(v) ? v.toFixed(1) : "—"), f2 = (v) => (isFinite(v) ? v.toFixed(2) : "—");
+const pct = (a, b) => (b > 0 ? `${((a / b) * 100).toFixed(0)} %` : "—");
+function wellDesc(w) {
+  const t = w.type === "prod" ? "добыв." : "нагнет.";
+  const m = w.mode === "esp" ? `ЭЦН ${C.PUMPS[w.pump || "M"].name}, ${w.freq} Гц` : w.mode === "flow" ? `фонтан, штуцер ${w.choke} мм` : w.mode === "choke" ? `штуцер ${w.choke} мм` : `P<sub>wf</sub> ${w.pwf.toFixed(0)} атм`;
+  return `${t}, ${m}${w.converted ? ", менялась" : ""}${w.on === false ? ", остановлена" : ""}`;
+}
+async function showResults() {
+  const sim = G.sim; if (!sim || G.reporting) return;
+  G.reporting = true; setSpeed(0); setTool(null);
+  const finished = !G.done && sim.t >= G.params.horizon_days - 1;
+  show("screen-results"); $("btn-continue").disabled = true; $("btn-restart").disabled = true; $("btn-pdf").disabled = true;
+  const root = $("report");
+  let fc = null;
+  try {
+    if (finished) {
+      if (G.reportCache && G.reportCache.t === sim.t) fc = G.reportCache.fc;
+      else {
+        fc = C.cloneSim(sim);
+        root.innerHTML = `<div class="rep-progress"><b>Формируется отчёт…</b><div style="margin-top:6px">Расчёт прогноза на 10 лет вперёд при текущем режиме работы фонда: <span id="rp-pct">0</span> %</div><div class="bar"><i id="rp-bar"></i></div></div>`;
+        for (let y = 1; y <= 10; y++) { C.advance(fc, 365); $("rp-pct").textContent = y * 10; $("rp-bar").style.width = y * 10 + "%"; await new Promise((r) => setTimeout(r, 0)); }
+        G.reportCache = { t: sim.t, fc };
+      }
+    }
+    buildReport(sim, fc, finished);
+  } finally { G.reporting = false; $("btn-continue").disabled = false; $("btn-restart").disabled = false; $("btn-pdf").disabled = false; }
+}
+function buildReport(sim, fc, finished) {
+  const P = G.params, r = sim.r, lv = r.level, rate = (P.disc_rate || 10) / 100, e = sim.economy;
+  const play = C.yearlyFromSim(sim, P), full = fc ? C.yearlyFromSim(fc, P) : play, ref = C.refYearly(lv, P);
+  const nPlay = play.cf.length, nFull = full.cf.length, T = Math.min(20, nFull), ooipT = r.ooipM3 * C.RHO_OIL;
+  const cumNpv = (cf) => { let a = 0; return cf.map((v, n) => (a += v / Math.pow(1 + rate, n + 1))); };
+  const npvP = cumNpv(full.cf), npvR = cumNpv(ref.cf), kin = (y, n) => (n > 0 ? y.cumOil_t[n - 1] / ooipT : 0);
+  const cumSum = (a, n) => a.slice(0, n).reduce((x, y) => x + y, 0);
+  const kinP = kin(full, T), kinR = kin(ref, T), npvPT = npvP[T - 1], npvRT = npvR[T - 1];
+  const sc = finished ? C.scoreDevelopment(kinP, kinR, npvPT, npvRT) : null;
+  const gcol = sc ? (sc.total >= 90 ? "#00a37a" : sc.total >= 75 ? "#636efa" : sc.total >= 55 ? "#d97706" : "#ef553b") : "#636efa";
+  const sim2 = fc || sim, np = sim.wells.filter((w) => w.type === "prod").length, ni = sim.wells.length - np;
+  const refD = C.REF[lv], refCapex = refD.drill * P.drill_cost + refD.esp * P.esp_cost + refD.seis * P.seis_cost, capex = e.drillSpent + e.otherSpent;
+  const wcEnd = (y, n) => { const l = y.liq_m3[n - 1]; return l > 0 ? y.water_m3[n - 1] / l : 0; };
+  const nm = $("rep-name").value.trim(), err = lv === 2 && G.owcGuess !== null ? G.owcGuess - r.owc : null;
+  const mu = P.mu_o !== 5 ? ` <span class="bad">(эталон рассчитан при μ = 5 сП, у вас ${P.mu_o} сП — сравнение приближённое)</span>` : "";
+  let h = `<div class="rep-head"><h1>Отчёт о разработке нефтяного месторождения</h1><div class="meta"><span><b>Участник:</b> <span id="rep-who">${nm || "—"}</span></span>` +
+    `<span><b>Уровень сложности:</b> ${lv}${lv === 2 ? " (разведка, сейсмика, ГДИС)" : " (геология известна)"}</span><span><b>Срок:</b> ${nPlay} лет разработки${fc ? " + 10 лет прогноза" : ""}</span><span><b>Дата:</b> ${new Date().toLocaleDateString("ru-RU")}</span></div></div>`;
+  if (!finished) h += `<div class="rep-banner"><b>Промежуточный отчёт.</b> Итоговая оценка и прогноз формируются по завершении срока разработки (${Math.round(P.horizon_days / 365.25)} лет) и в режиме песочницы не выставляются.</div>`;
+  let n = 1;
+  if (sc) {
+    h += `<section class="rep-sec"><h2><span>${n++}.</span>Итоговая оценка</h2><div class="score-box"><div class="ring" style="background:conic-gradient(${gcol} ${sc.total * 3.6}deg, #e5ecf6 0)"><div><b>${sc.total.toFixed(0)}</b><small>из 100</small></div></div>` +
+      `<div class="score-parts"><div><span class="grade" style="background:${gcol}">${sc.grade}</span></div><div style="margin-top:10px">КИН за ${T} лет: <b>${(kinP * 100).toFixed(1)} %</b> (эталон ${(kinR * 100).toFixed(1)} %) — <b>${sc.kin.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.kin}%; background:#636efa"></i></div>` +
+      `<div>ЧДД за ${T} лет при ставке ${(rate * 100).toFixed(0)} %: <b>${f0(npvPT / 1e6)} млн руб</b> (эталон ${f0(npvRT / 1e6)}) — <b>${sc.npv.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.npv}%; background:#00cc96"></i></div>` +
+      `<div class="rep-note">Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант (${refD.desc}) даёт 80 баллов по каждому показателю; превышение эталона на 25 % и более — 100; убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
   }
-  $("res-grid").innerHTML = kpi.map(([k, v]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
-  const zone = (c) => (r.level !== 2 ? "" : r.hOil[c] >= r.h - 1e-6 ? "нефтяная" : r.hOil[c] > 0 ? "водонефтяная" : "водяная");
-  let rows = "";
-  for (const w of sim.wells) {
-    rows += `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td><td>${(w.type === "prod" ? "добывающая" : "нагнетательная") + (w.converted ? " (меняла назначение)" : "") + (w.hasESP ? ", ЭЦН" : "") + (w.on === false ? ", остановлена" : "")}</td>` +
-      (r.level === 2 ? `<td>${zone(w.cell)}</td><td>${w.skin.toFixed(1)}${w.stimulated ? " (после ОПЗ)" : ""}</td>` : "") +
-      `<td>${(w.cum.oil * 0.86).toFixed(0)} т</td><td>${w.cum.water.toFixed(0)} м³</td><td>${w.cum.inj.toFixed(0)} м³</td><td>${(w.fw * 100).toFixed(0)} %</td></tr>`;
+  // ключевые показатели
+  const at = (y, k, nn) => cumSum(y[k], nn);
+  const kr = (lab, a, b, c, d) => `<tr><td>${lab}</td><td>${a}</td><td>${b}</td><td>${c}</td><td>${d}</td></tr>`;
+  h += `<section class="rep-sec"><h2><span>${n++}.</span>Ключевые показатели</h2><table class="rep"><thead><tr><th>Показатель</th><th>Факт, ${nPlay} лет</th>${fc ? `<th>С прогнозом, ${T} лет</th><th>Эталон, ${T} лет</th><th>% эталона</th>` : "<th></th><th></th><th></th>"}</tr></thead><tbody>`;
+  const row = (lab, a, b, c, d) => (fc ? kr(lab, a, b, c, d) : kr(lab, a, "", "", ""));
+  h += row("Накопленная добыча нефти, тыс. т", f1(at(play, "oil_t", nPlay) / 1e3), f1(at(full, "oil_t", T) / 1e3), f1(at(ref, "oil_t", T) / 1e3), pct(at(full, "oil_t", T), at(ref, "oil_t", T)));
+  h += row("КИН, %", f1(kin(play, nPlay) * 100), f1(kinP * 100), f1(kinR * 100), pct(kinP, kinR));
+  h += row("ЧДД, млн руб", f0(npvP[nPlay - 1] / 1e6), f0(npvPT / 1e6), f0(npvRT / 1e6), npvRT > 0 ? pct(npvPT, npvRT) : "—");
+  h += row("Суммарный денежный поток (без дисконта), млн руб", f0(cumSum(play.cf, nPlay) / 1e6), f0(cumSum(full.cf, T) / 1e6), f0(cumSum(ref.cf, T) / 1e6), "");
+  h += row("Капитальные затраты и исследования, млн руб", f0(capex / 1e6), f0(capex / 1e6), f0(refCapex / 1e6), "");
+  h += row("Добыто воды, тыс. м³", f0(at(play, "water_m3", nPlay) / 1e3), f0(at(full, "water_m3", T) / 1e3), f0(at(ref, "water_m3", T) / 1e3), "");
+  h += row("Закачано воды, тыс. м³", f0(at(play, "inj_m3", nPlay) / 1e3), f0(at(full, "inj_m3", T) / 1e3), f0(at(ref, "inj_m3", T) / 1e3), "");
+  h += row("Обводнённость в конце периода, %", f0(wcEnd(play, nPlay) * 100), f0(wcEnd(full, T) * 100), f0(wcEnd(ref, T) * 100), "");
+  h += row("Компенсация отбора закачкой, %", f0((at(play, "inj_m3", nPlay) / Math.max(1, at(play, "liq_m3", nPlay))) * 100), f0((at(full, "inj_m3", T) / Math.max(1, at(full, "liq_m3", T))) * 100), f0((at(ref, "inj_m3", T) / Math.max(1, at(ref, "liq_m3", T))) * 100), "");
+  h += row("Фонд скважин (добыв. / нагнет.)", `${np} / ${ni}`, `${np} / ${ni}`, `${refD.drill - 0 > 0 ? "" : ""}${lv === 1 ? "6 / 4" : "5 / 4"}`, "");
+  h += `</tbody></table></section>`;
+  if (fc) h += `<section class="rep-sec"><h2><span>${n++}.</span>Сравнение с эталоном</h2><div class="rep-2col"><div id="rc-cum" class="rep-chart"></div><div id="rc-npv" class="rep-chart"></div></div><div id="rc-rate" class="rep-chart" style="margin-top:8px; height:280px"></div>` +
+    `<div class="rep-note">Сплошные линии — годы игры, штриховые — прогноз при неизменном фонде и режимах, серая линия — эталонный вариант. Вертикальная черта — конец срока разработки.</div></section>`;
+  // таблица по годам
+  h += `<section class="rep-sec"><h2><span>${n++}.</span>Динамика по годам</h2><table class="rep"><thead><tr><th>Год</th><th>Нефть, тыс. т</th><th>Вода, тыс. м³</th><th>Обводн., %</th><th>Закачка, тыс. м³</th><th>Денеж. поток, млн</th><th>ЧДД накоп., млн</th><th>КИН, %</th></tr></thead><tbody>`;
+  for (let y = 0; y < nFull; y++) {
+    const liq = full.liq_m3[y];
+    h += `<tr class="${y >= nPlay ? "fc" : ""}"><td>${y + 1}${y >= nPlay ? " (прогноз)" : ""}</td><td>${f1(full.oil_t[y] / 1e3)}</td><td>${f0(full.water_m3[y] / 1e3)}</td><td>${f0(liq > 0 ? (full.water_m3[y] / liq) * 100 : 0)}</td><td>${f0(full.inj_m3[y] / 1e3)}</td><td>${f1(full.cf[y] / 1e6)}</td><td>${f0(npvP[y] / 1e6)}</td><td>${f1(kin(full, y + 1) * 100)}</td></tr>`;
   }
-  $("res-wells").innerHTML = rows ? `<table class="t"><thead><tr><th>Скв.</th><th>Тип</th>${r.level === 2 ? "<th>Зона</th><th>Скин (факт)</th>" : ""}<th>Нефть</th><th>Вода</th><th>Закачка</th><th>Обзв.</th></tr></thead><tbody>${rows}</tbody></table>` : "<p class='sub'>Скважины не пробурены</p>";
-  const ys = yearStats(sim);
-  Plotly.react("res-bars", [{ type: "bar", x: ys.map((y) => `Год ${y.n}`), y: ys.map((y) => y.oil), marker: { color: PAL[0] }, name: "Нефть", hovertemplate: "%{y:.1f} тыс. т<extra></extra>" },
-    { type: "scatter", mode: "lines+markers", x: ys.map((y) => `Год ${y.n}`), y: ys.map((y) => y.wc * 100), yaxis: "y2", name: "Обводнённость, %", line: { color: PAL[1] }, hovertemplate: "%{y:.0f} %<extra></extra>" }],
-    lay({ height: 260, showlegend: true, legend: { orientation: "h", y: 1.15 }, margin: { l: 52, r: 52, t: 24, b: 30 }, yaxis: { title: { text: "тыс. т" } },
-      yaxis2: { overlaying: "y", side: "right", range: [0, 100], title: { text: "%" }, showgrid: false } }), CFG);
-  if (r.level === 2) {
-    drawReveal(sim);
-    const pr = Object.entries(G.pta).map(([n, p]) => { const w = sim.wells.find((x) => x.name === n), k0 = r.k[w.cell]; return `<tr><td>${n}</td><td>${p.k.toFixed(0)} / ${k0.toFixed(0)}</td><td>${p.s.toFixed(1)} / ${(w.stimulated ? "—" : w.skin.toFixed(1))}</td><td>${(Math.abs(p.k / k0 - 1) * 100).toFixed(0)} %</td></tr>`; }).join("");
-    $("res-pta").innerHTML = `<h2>ГДИС: оценка / факт</h2>` + (pr ? `<table class="t"><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>Ошибка k</th></tr></thead><tbody>${pr}</tbody></table>` : "<p class='sub'>ГДИС не проводились</p>");
+  h += `</tbody></table></section>`;
+  // фонд скважин
+  const l2c = lv === 2 ? "<th>Зона</th><th>Скин (факт)</th>" : "";
+  const zone = (c) => (r.hOil[c] >= r.h - 1e-6 ? "нефтяная" : r.hOil[c] > 0 ? "водонефтяная" : "водяная");
+  h += `<section class="rep-sec"><h2><span>${n++}.</span>Фонд скважин (${sim.wells.length}${G.expl.length ? `, разведочных ${G.expl.length}` : ""})</h2><table class="rep"><thead><tr><th>Скв.</th><th style="text-align:left">Назначение и режим</th>${l2c}<th>Нефть, тыс. т</th><th>Вода, тыс. м³</th><th>Закачка, тыс. м³</th><th>Обводн., %</th>${fc ? "<th>Нефть к концу прогноза, тыс. т</th>" : ""}</tr></thead><tbody>`;
+  let sO = 0, sW = 0, sI = 0, sF = 0;
+  sim.wells.forEach((w, i) => {
+    const o = (w.cum.oil * C.RHO_OIL) / 1e3, wt = w.cum.water / 1e3, ij = w.cum.inj / 1e3, of = fc ? (fc.wells[i].cum.oil * C.RHO_OIL) / 1e3 : 0;
+    sO += o; sW += wt; sI += ij; sF += of;
+    h += `<tr><td><span class="w-dot" style="background:${w.color}"></span> ${w.name}</td><td style="text-align:left">${wellDesc(w)}</td>${lv === 2 ? `<td>${zone(w.cell)}</td><td>${w.skin.toFixed(1)}${w.stimulated ? " (после ОПЗ)" : ""}</td>` : ""}<td>${f1(o)}</td><td>${f0(wt)}</td><td>${f0(ij)}</td><td>${w.type === "prod" ? f0(w.fw * 100) : "—"}</td>${fc ? `<td>${f1(of)}</td>` : ""}</tr>`;
+  });
+  h += `<tr class="sum"><td colspan="${lv === 2 ? 4 : 2}">Итого</td><td>${f1(sO)}</td><td>${f0(sW)}</td><td>${f0(sI)}</td><td></td>${fc ? `<td>${f1(sF)}</td>` : ""}</tr></tbody></table></section>`;
+  // геология (уровень 2)
+  if (lv === 2) {
+    const pr = Object.entries(G.pta).map(([nme, p]) => { const w = sim.wells.find((x) => x.name === nme); if (!w) return ""; const k0 = r.k[w.cell]; return `<tr><td>${nme}</td><td>${f0(p.k)} / ${f0(k0)}</td><td>${f1(p.s)} / ${w.stimulated ? "после ОПЗ" : f1(w.skin)}</td><td>${f0((Math.abs(p.k / k0 - 1)) * 100)} %</td></tr>`; }).join("");
+    h += `<section class="rep-sec"><h2><span>${n++}.</span>Геология и разведка</h2><div id="reveal-plot"></div><div id="reveal-text" class="rep-note" style="font-size:12px"></div>` +
+      `<table class="rep" style="margin-top:10px; max-width:560px"><tbody><tr><td>ВНК: фактический / ваша оценка</td><td>${fmtAbs(r.owc)} / ${G.owcGuess === null ? "—" : fmtAbs(G.owcGuess)} м</td></tr>` +
+      `<tr><td>Разведочные скважины</td><td>${G.expl.length} (${G.expl.length - 5 >= 0 ? "+" + (G.expl.length - 5) + " пробурено" : "5 стартовых"})</td></tr><tr><td>Сейсмика 3D</td><td>${G.seis ? "заказана" : "не заказывалась"}</td></tr><tr><td>Исследований ГДИС принято</td><td>${Object.keys(G.pta).length}</td></tr></tbody></table>` +
+      (pr ? `<h2 style="margin-top:14px; font-size:13px">ГДИС: оценка / факт</h2><table class="rep" style="max-width:560px"><thead><tr><th>Скв.</th><th>k, мД</th><th>Скин</th><th>Ошибка k</th></tr></thead><tbody>${pr}</tbody></table>` : "") + `</section>`;
   }
-  show("screen-results");
+  // комментарии
+  const cm = [];
+  if (fc) {
+    cm.push(`КИН за ${T} лет — ${(kinP * 100).toFixed(1)} % против ${(kinR * 100).toFixed(1)} % у эталона (${kinP >= kinR ? "выше" : "ниже"} на ${Math.abs((kinP - kinR) * 100).toFixed(1)} п.п.).`);
+    cm.push(npvPT > 0 ? `ЧДД положителен (${f0(npvPT / 1e6)} млн руб), ${npvPT >= npvRT ? "лучше" : "хуже"} эталона на ${f0(Math.abs(npvPT - npvRT) / 1e6)} млн руб.` : `ЧДД отрицателен — проект за ${T} лет не окупается: проверьте число скважин и затраты на разведку.`);
+  }
+  const comp = at(play, "inj_m3", nPlay) / Math.max(1, at(play, "liq_m3", nPlay));
+  cm.push(comp < 0.7 ? `Компенсация отбора закачкой низкая (${(comp * 100).toFixed(0)} %): пластовое давление, вероятно, падало — добавьте нагнетательные скважины или переведите часть добывающих в ППД.` : comp > 1.3 ? `Закачка существенно превышает отбор (${(comp * 100).toFixed(0)} %): риск быстрых прорывов воды и лишних затрат на закачку.` : `Компенсация отбора закачкой в норме (${(comp * 100).toFixed(0)} %).`);
+  const wcE = wcEnd(play, nPlay); if (wcE > 0.85) cm.push(`Обводнённость к концу срока ${(wcE * 100).toFixed(0)} % — рассмотрите отключение предельно обводнённых скважин и перераспределение закачки.`);
+  if (ni === 0) cm.push("Нагнетательных скважин нет — разработка на упругом режиме быстро теряет давление.");
+  if (lv === 2) {
+    const inWater = sim.wells.filter((w) => w.type === "prod" && r.hOil[w.cell] <= 0).length, mixed = sim.wells.filter((w) => w.type === "prod" && r.hOil[w.cell] > 0 && r.hOil[w.cell] < r.h - 1e-6).length;
+    if (inWater) cm.push(`${inWater} добывающих пробурены в водяной зоне — дали только воду; ВНК и разломы стоило уточнить разведкой или сейсмикой до бурения.`);
+    if (mixed) cm.push(`${mixed} добывающих пробурены в водонефтяной зоне — ранняя обводнённость.`);
+    if (err !== null) cm.push(`Ошибка оценки ВНК: ${err >= 0 ? "+" : "−"}${Math.abs(err).toFixed(1)} м${Math.abs(err) < 2 ? " — отлично" : Math.abs(err) < 5 ? " — приемлемо" : " — значительная, повлияла на выбор точек бурения"}.`);
+    else cm.push("ВНК вы не оценивали — контуры нефтеносности строились без вашей интерпретации.");
+    const bad = sim.wells.filter((w) => w.type === "prod" && w.mode === "esp").map((w) => ({ w, l: C.solveEquipment(sim, w).load })).filter((x) => x.l < 0.6 || x.l > 1.2);
+    if (bad.length) cm.push(`${bad.length} ЭЦН работают вне оптимальной области (${bad.map((x) => x.w.name).join(", ")}): подберите типоразмер или частоту (см. «Характеристика насоса»).`);
+    const dead = sim.wells.filter((w) => w.type === "prod" && w.on !== false && w.mode === "flow" && C.solveEquipment(sim, w).dead).map((w) => w.name);
+    if (dead.length) cm.push(`Фонтан прекратился на ${dead.join(", ")}: нужен ЭЦН или поддержание давления закачкой.`);
+    const hi = sim.wells.filter((w) => w.type === "prod" && w.skin > 3 && !w.stimulated).map((w) => w.name);
+    if (hi.length) cm.push(`Высокий скин (> 3) у ${hi.join(", ")}: обработка призабойной зоны могла бы поднять дебит.`);
+  }
+  h += `<section class="rep-sec"><h2><span>${n++}.</span>Комментарии и рекомендации</h2><ul class="rep-list">${cm.map((x) => `<li>${x}</li>`).join("")}</ul></section>`;
+  h += `<div class="rep-note" style="margin-top:20px; border-top:1px solid var(--line); padding-top:8px">Методика: двухфазная модель нефть/вода (IMPES, сетка 50×50), экономика в рублях, ЧДД по годовым денежным потокам при ставке ${(rate * 100).toFixed(0)} %. ` +
+    `Прогноз — продолжение расчёта на 10 лет без изменений фонда и режимов. Эталонный вариант рассчитан тем же симулятором при параметрах по умолчанию; экономика эталона пересчитывается по вашим ценам и затратам. Отчёт учебный и не является проектным документом.</div>`;
+  $("report").innerHTML = h;
+  const who = $("rep-name"); who.oninput = () => { const t = document.getElementById("rep-who"); if (t) t.textContent = who.value.trim() || "—"; };
+  if (lv === 2) drawReveal(sim);
+  if (fc) {
+    const yrs = Array.from({ length: T }, (_, i) => i + 1), ln = (name, arr, color, extra = {}) => ({ type: "scatter", mode: "lines", name, x: yrs, y: arr, line: { color, width: 3 }, ...extra });
+    const split = (arr) => [arr.slice(0, nPlay), arr.slice(nPlay - 1, T)], mk = (arr, name, color, k = 1) => { const [a, b] = split(arr.slice(0, T).map((v) => v / k)); return [{ type: "scatter", mode: "lines", name, x: yrs.slice(0, nPlay), y: a, line: { color, width: 3 } }, { type: "scatter", mode: "lines", name: name + " (прогноз)", x: yrs.slice(nPlay - 1), y: b, line: { color, width: 3, dash: "dash" }, showlegend: false }]; };
+    const cl = (t, yt) => ({ paper_bgcolor: "#fff", plot_bgcolor: "#fff", font: { family: FONT, color: TXT, size: 11 }, height: 290, margin: { l: 56, r: 12, t: 34, b: 52 }, title: { text: t, x: 0.02, xanchor: "left", font: { size: 13 } }, hovermode: "x unified",
+      legend: { orientation: "h", x: 0, y: -0.2 }, xaxis: { title: { text: "годы" }, gridcolor: "#eef1f6", linecolor: "#cfd8e6", dtick: 2 }, yaxis: { title: { text: yt }, gridcolor: "#eef1f6", linecolor: "#cfd8e6", rangemode: "tozero" },
+      shapes: [{ type: "line", xref: "x", yref: "paper", x0: nPlay + 0.5, x1: nPlay + 0.5, y0: 0, y1: 1, line: { color: "#8a97ab", width: 1.5, dash: "dot" } }], annotations: [{ xref: "x", yref: "paper", x: nPlay + 0.6, y: 1, xanchor: "left", yanchor: "top", text: "прогноз →", showarrow: false, font: { size: 10, color: "#6b7c93" } }] });
+    const refT = (arr, k) => ln("Эталон", arr.slice(0, T).map((v) => v / k), "#9aa7b8", { line: { color: "#9aa7b8", width: 2.5 } });
+    Plotly.react("rc-cum", [...mk(full.cumOil_t, "Ваш вариант", "#636efa", 1e3), refT(ref.cumOil_t, 1e3)], cl("Накопленная добыча нефти, тыс. т", "тыс. т"), CFG);
+    Plotly.react("rc-npv", [...mk(npvP, "Ваш вариант", "#00a37a", 1e6), refT(npvR, 1e6)], cl("Накопленный ЧДД, млн руб", "млн руб"), CFG);
+    const wcl = full.oil_t.map((_, i) => (full.liq_m3[i] > 0 ? (full.water_m3[i] / full.liq_m3[i]) * 100 : 0));
+    const lay3 = cl("Годовая добыча нефти и обводнённость", "тыс. т/год"); lay3.height = 280; lay3.margin.r = 60; lay3.yaxis2 = { overlaying: "y", side: "right", range: [0, 100], title: { text: "обводнённость, %" }, showgrid: false }; lay3.xaxis.dtick = 1; lay3.legend.y = -0.28;
+    Plotly.react("rc-rate", [{ type: "bar", name: "Нефть, ваш вариант", x: yrs, y: full.oil_t.slice(0, T).map((v) => v / 1e3), marker: { color: yrs.map((y) => (y <= nPlay ? "#636efa" : "#b8c0ff")) } },
+      { type: "scatter", mode: "lines", name: "Нефть, эталон", x: yrs, y: ref.oil_t.slice(0, T).map((v) => v / 1e3), line: { color: "#9aa7b8", width: 2.5 } },
+      { type: "scatter", mode: "lines+markers", name: "Обводнённость, %", yaxis: "y2", x: yrs, y: wcl.slice(0, T), line: { color: "#ef553b", width: 2 }, marker: { size: 5 } }], lay3, CFG);
+  }
+  $("report").scrollIntoView({ block: "start" });
+  window.scrollTo(0, 0); $("screen-results").scrollTop = 0;
 }
 function drawReveal(sim) {
   const r = sim.r;
@@ -2414,7 +2654,7 @@ const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, м�
   ["esp_cost", "Установка ЭЦН, млн руб", 6, 0.5, 50, 0.5], ["elec_cost", "Электроэнергия, руб/кВт·ч", 5, 0, 30, 0.5],
   ["expl_cost", "Разведочная скважина, млн руб", 4, 0.5, 50, 0.5, true], ["seis_cost", "Сейсмика 3D, млн руб", 12, 1, 100, 1, true],
   ["pta_cost", "ГДИС (КВД), млн руб", 1, 0.1, 10, 0.1, true], ["stim_cost", "Обработка призабойной зоны, млн руб", 3, 0.5, 30, 0.5, true],
-  ["lift_cost", "Подъём жидкости, руб/м³", 500, 50, 2000, 10], ["inj_cost", "Закачка воды, руб/м³", 300, 50, 2000, 10],
+  ["disc_rate", "Ставка дисконтирования (ЧДД), %", 10, 0, 30, 0.5], ["lift_cost", "Подъём жидкости, руб/м³", 500, 50, 2000, 10], ["inj_cost", "Закачка воды, руб/м³", 300, 50, 2000, 10],
   ["horizon_years", "Горизонт, лет", 10, 1, 30, 1], ["init_money", "Стартовый капитал, млн руб", 50, 5, 500, 5],
 ];
 const LEVEL_DESC = {
@@ -2478,7 +2718,7 @@ function readParams() {
   const num = (key, def) => { const el = $("pf-" + key), v = el ? +el.value : NaN; return isFinite(v) && v > 0 ? v : def; };
   const d = C.DEFAULT_PARAMS, years = num("horizon_years", 10);
   return { level: G.level, mu_o: num("mu_o", d.mu_o), price_oil: num("price_oil", d.price_oil), drill_cost: num("drill_cost", d.drill_cost) * 1e6,
-    conv_cost: num("conv_cost", 2) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, elec_cost: num("elec_cost", 5), expl_cost: num("expl_cost", 4) * 1e6, seis_cost: num("seis_cost", 12) * 1e6, pta_cost: num("pta_cost", 1) * 1e6,
+    conv_cost: num("conv_cost", 2) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, disc_rate: num("disc_rate", 10), elec_cost: num("elec_cost", 5), expl_cost: num("expl_cost", 4) * 1e6, seis_cost: num("seis_cost", 12) * 1e6, pta_cost: num("pta_cost", 1) * 1e6,
     stim_cost: num("stim_cost", 3) * 1e6, lift_cost: num("lift_cost", d.lift_cost), inj_cost: num("inj_cost", d.inj_cost),
     horizon_days: G.level === 2 ? Math.round(years) * 365 : Math.round(years * 365.25), init_money: num("init_money", d.init_money) * 1e6 };
 }
@@ -2512,6 +2752,14 @@ $("btn-year").addEventListener("click", startYear);
 for (const [id, key] of [["fc-gather", "pGather"], ["fc-kns", "pKNS"]]) $(id).addEventListener("input", (e) => {
   if (!G.sim) return; G.sim.field[key] = +e.target.value; $(id + "-v").textContent = e.target.value; G.sim._fluxValid = false; G.dirty = true; });
 $("btn-results").addEventListener("click", () => { setSpeed(0); showResults(); });
+$("btn-pdf").addEventListener("click", () => {
+  const old = document.title; const nm = ($("rep-name").value || "").trim();
+  document.title = `Отчёт о разработке${nm ? " — " + nm : ""}`;
+  for (const el of document.querySelectorAll("#report .js-plotly-plot")) Plotly.Plots.resize(el);
+  setTimeout(() => { window.print(); document.title = old; }, 150);
+});
+window.addEventListener("beforeprint", () => { for (const el of document.querySelectorAll("#report .js-plotly-plot")) Plotly.Plots.resize(el); });
+window.addEventListener("afterprint", () => { for (const el of document.querySelectorAll("#report .js-plotly-plot")) Plotly.Plots.resize(el); });
 $("btn-continue").addEventListener("click", () => { G.done = true; applyLevelUI(); show("screen-game"); G.dirty = true; renderAll();
   if (isL2()) toast("Геология раскрыта: открыты слои проницаемости, давления и насыщенности"); });
 $("btn-restart").addEventListener("click", () => { G.sim = null; closeModals(); show("screen-settings"); renderSettingsPreview(); });
