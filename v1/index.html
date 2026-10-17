@@ -754,19 +754,28 @@ function createSim(reservoir, params) {
   sim.field = { pGather: 12, pKNS: 130 }; // давление сбора и давление КНС, атм
   // Заканчивание: горизонтальный ствол (hs), боковой ствол из вертикальной (zbs), трещина ГРП (frac).
   // Скважина — набор перфорированных ячеек {cell, f}: f — множитель индекса Писмана ячейки
-  // (f = HS_EFF у горизонтального участка: часть притока теряется на вертикальную фильтрацию; f = FRAC_EFF у трещины).
+  // (f = HS_EFF у горизонтального участка: часть притока теряется на вертикальную фильтрацию; у трещины ГРП f подбирается
+  // по конечной проводимости трещины — см. fracCellFactor). Трещина останавливается на разломах, ствол ГС их пересекает.
   // opt: {L, dir ("E"|"W"|"N"|"S"), isolate} для hs/zbs; {xf, dir} для frac; blocked(cell) — занятые вне модели ячейки
   sim.setCompletion = (w, kind, opt, blocked) => {
     const taken = new Set();
     for (const o of sim.wells) if (o !== w) for (const p of o.perf) taken.add(p.cell);
     const ok = (c) => r.active[c] && !taken.has(c) && !(blocked && blocked(c));
     const steps = { E: [1, 0], W: [-1, 0], S: [0, 1], N: [0, -1] };
-    const walk = (dir, n) => {
+    // грань между соседними ячейками a → b пересекает разлом (множитель проводимости < 1)
+    const faultBetween = (a, b) => {
+      if (!r.tmE) return false;
+      if (b === a + 1) return r.tmE[a] < 1; if (b === a - 1) return r.tmE[b] < 1;
+      if (b === a + r.nx) return r.tmN[a] < 1; return r.tmN[b] < 1;
+    };
+    const walk = (dir, n, stopAtFault) => {
       const [di, dj] = steps[dir || "E"], out = [], i0 = w.cell % r.nx, j0 = Math.floor(w.cell / r.nx);
+      let prev = w.cell;
       for (let k = 1; k <= n; k++) {
-        const i = i0 + di * k, j = j0 + dj * k;
-        if (i < 0 || j < 0 || i >= r.nx || j >= r.ny || !ok(j * r.nx + i)) break;
-        out.push(j * r.nx + i);
+        const i = i0 + di * k, j = j0 + dj * k, c = j * r.nx + i;
+        if (i < 0 || j < 0 || i >= r.nx || j >= r.ny || !ok(c)) break;
+        if (stopAtFault && faultBetween(prev, c)) break;
+        out.push(c); prev = c;
       }
       return out;
     };
@@ -778,9 +787,12 @@ function createSim(reservoir, params) {
     } else if (kind === "frac") {
       if (w.kind !== "v") return { ok: false, msg: "ГРП возможен на вертикальной скважине без ГРП" };
       const n = Math.max(1, Math.round(opt.xf / r.dx)), opp = { E: "W", W: "E", N: "S", S: "N" }[opt.dir || "E"];
-      const a = walk(opt.dir, n), b = walk(opp, n);
-      w.perf = [{ cell: w.cell, f: 1 }, ...a.map((c) => ({ cell: c, f: FRAC_EFF })), ...b.map((c) => ({ cell: c, f: FRAC_EFF }))];
-      w.kind = "frac"; w.dir = opt.dir; w.frac = { xf: Math.max(a.length, b.length) * r.dx, dir: opt.dir }; w.skin = Math.min(w.skin || 0, 0);
+      const a = walk(opt.dir, n, true), b = walk(opp, n, true);
+      const cells = [w.cell, ...a, ...b], kMean = cells.reduce((x, c) => x + r.k[c], 0) / cells.length;
+      const fc = fracCellFactor(kMean, opt.xf, Math.max(a.length, b.length));
+      w.perf = [{ cell: w.cell, f: 1 }, ...a.map((c) => ({ cell: c, f: fc.f })), ...b.map((c) => ({ cell: c, f: fc.f }))];
+      w.kind = "frac"; w.dir = opt.dir; w.frac = { xf: Math.max(a.length, b.length) * r.dx, dir: opt.dir, fcd: fc.fcd, sf: fc.sf, ratio: fc.ratio };
+      w.skin = Math.min(w.skin || 0, 0);
     }
     sim._fluxValid = false;
     return { ok: true, cells: w.perf.length };
@@ -904,7 +916,38 @@ function solvePressure(sim, dt) {
 // равенства притока по Писману (q = G·(P_яч − P_wf)) и пропускной способности подъёмника (бисекция по q).
 // Перепад на штуцере: ΔP = ρ·v²/2, v = q/(Cd·A), Cd = 0.8. Столб — по плотности смеси.
 const ATM_PA = 101325;
-const HS_EFF = 0.4, FRAC_EFF = 0.9; // эффективность горизонтального участка и трещины ГРП относительно вертикального вскрытия ячейки
+const HS_EFF = 0.4; // горизонтальный участок: доля индекса вертикального вскрытия ячейки (согласовано с Джоши при kv/kh ≈ 0.1)
+const FRAC_EFF = 0.9; // (не используется для ГРП с конечной проводимостью; оставлен для совместимости)
+// ---------- ГРП: трещина конечной проводимости ----------
+// Безразмерная проводимость FCD = kf·w / (k·xf), kf·w = FRAC_COND (мД·м, проппант средней проводимости).
+// Скин трещины (Cinco-Ley, Samaniego; аппроксимация Meyer–Jacot): s_f = F(ln FCD) − ln(xf/rw),
+// F(u) = (1.65 − 0.328u + 0.116u²) / (1 + 0.18u + 0.064u² + 0.005u³); при FCD → ∞ s_f → −ln(xf/(2rw)) (Пратс).
+// В сетке 40 м трещина — ряд ячеек; их множитель f подбирается так, чтобы продуктивность скважины в ПУР
+// (одна скважина в квадрате 2×2 км) совпала с аналитикой: J_ГРП/J_ВС = B/(B + s_f), B = ½ln(4A/(γ C_A rw²)) = 8.59.
+// Таблица f → J_ГРП/J_ВС получена расчётом этим же симулятором (однородный пласт, однофазный приток).
+const FRAC_COND = 1000;
+const FRAC_TABLE = {
+  1: [[0.05, 1.09], [0.1, 1.17], [0.2, 1.30], [0.4, 1.51], [0.9, 1.81], [2, 2.10], [5, 2.34], [20, 2.50], [100, 2.55]],
+  2: [[0.05, 1.20], [0.1, 1.36], [0.2, 1.62], [0.4, 1.96], [0.9, 2.38], [2, 2.71], [5, 2.94], [20, 3.09], [100, 3.13]],
+  3: [[0.05, 1.31], [0.1, 1.56], [0.2, 1.92], [0.4, 2.37], [0.9, 2.86], [2, 3.22], [5, 3.46], [20, 3.60], [100, 3.64]],
+};
+function fracSkin(fcd, xf, rw = 0.1) {
+  const u = Math.log(Math.max(0.01, Math.min(1000, fcd)));
+  const F = (1.65 - 0.328 * u + 0.116 * u * u) / (1 + 0.18 * u + 0.064 * u * u + 0.005 * u * u * u);
+  return F - Math.log(xf / rw);
+}
+function fracCellFactor(k, xf, nCells) {
+  const fcd = FRAC_COND / (k * xf), sf = fracSkin(fcd, xf), B = 8.59, ratio = B / (B + sf);
+  const tab = FRAC_TABLE[Math.max(1, Math.min(3, nCells))];
+  let f;
+  if (ratio <= tab[0][1]) f = tab[0][0] * Math.max(0, (ratio - 1) / (tab[0][1] - 1));
+  else if (ratio >= tab[tab.length - 1][1]) f = tab[tab.length - 1][0];
+  else for (let i = 1; i < tab.length; i++) if (ratio <= tab[i][1]) {
+    const [f0, r0] = tab[i - 1], [f1, r1] = tab[i], t = (ratio - r0) / (r1 - r0);
+    f = Math.exp(Math.log(f0) + t * (Math.log(f1) - Math.log(f0))); break;
+  }
+  return { f, fcd, sf, ratio };
+}
 // типоразмеры ЭЦН (при 50 Гц): Q0 — подача при нулевом напоре, H0 — напор при нулевой подаче, QB — подача в оптимуме,
 // ETA — максимальный КПД, cost — стоимость относительно базового (esp_cost)
 const PUMPS = {
@@ -1742,6 +1785,28 @@ function completionTests() {
   const inj = m.wells[2].cum.inj, pw = m.wells[0].cum.water + m.wells[1].cum.water, errW = (inj - dW - pw) / Math.max(1, inj), mb = materialBalance(m);
   const moved = m.cumProdM3 + inj, errP = (mb.withdrawn - mb.expansion) / Math.max(1, moved); // чистый отбор близок к нулю, поэтому — от суммарного объёма отбора и закачки
   t.push({ name: "ГС + ГРП + нагнетательная: баланс воды < 0.1 %, материальный баланс < 0.5 % от объёма", pass: Math.abs(errW) < 1e-3 && Math.abs(errP) < 0.005, details: `вода ${(errW * 100).toFixed(3)} %, давление ${(errP * 100).toFixed(3)} % (объём ${(moved / 1e3).toFixed(0)} тыс. м³)` });
+  // физичность: продуктивность в ПУР против аналитики (однородный пласт, одна скважина в центре квадрата 2×2 км)
+  const uni = (kk) => { const rr = buildReservoir2(DEFAULT_PARAMS); rr.k.fill(kk); rr.Sw0.fill(rr.Swc); rr.tmE.fill(1); rr.tmN.fill(1); return rr; };
+  const pss = (kk, setup) => { const sm = createSim(uni(kk), DEFAULT_PARAMS); sm.addWell(25 * sm.r.nx + 25, "prod", 150); const w = sm.wells[0]; if (setup) setup(sm, w); advance(sm, 200); return w.q / (sm.avgPressure() - w.pwf); };
+  const A = 4e6, Bd = 0.5 * Math.log((4 * A) / (1.781 * 30.88 * 0.01)), Jan = (kk, s) => (2 * Math.PI * CONV_K * kk * 10) / (5 * (Bd + s));
+  const jv = pss(100);
+  t.push({ name: "физика: ВС в ПУР совпадает с формулой Дитца (±12 %)", pass: Math.abs(jv / Jan(100, 0) - 1) < 0.12, details: `модель ${jv.toFixed(2)}, Дитц ${Jan(100, 0).toFixed(2)} м³/сут/атм` });
+  const jh = pss(100, (sm, w) => { w.cell = 25 * sm.r.nx + 20; w.perf = [{ cell: w.cell, f: 1 }]; sm.setCompletion(w, "hs", { L: 400, dir: "E" }); });
+  t.push({ name: "физика: ГС 400 м — J/Jвс в диапазоне Джоши (kv/kh 0.1…1: 3.0–3.4, допуск ±10 %)", pass: jh / jv > 2.7 && jh / jv < 3.75, details: `модель ${(jh / jv).toFixed(2)}` });
+  let fracOk = true; const fd = [];
+  for (const kk of [20, 100, 500]) {
+    const jvk = pss(kk), jf = pss(kk, (sm, w) => sm.setCompletion(w, "frac", { xf: 80, dir: "E" }));
+    const target = fracCellFactor(kk, 80, 2).ratio, got = jf / jvk;
+    if (Math.abs(got / target - 1) > 0.1) fracOk = false;
+    fd.push(`k=${kk}: ${got.toFixed(2)} (аналит. ${target.toFixed(2)})`);
+  }
+  t.push({ name: "физика: ГРП xf = 80 м — J/Jвс по Cinco-Ley (±10 %), эффект падает с ростом k", pass: fracOk, details: fd.join("; ") });
+  t.push({ name: "физика: при FCD → ∞ скин трещины → Пратс −ln(xf/2rw)", pass: Math.abs(fracSkin(1000, 80) + Math.log(80 / 0.2)) < 0.05 });
+  // трещина останавливается на разломе
+  const fz = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS), fr = fz.r;
+  let fc = -1; for (let i = 1; i < 49 && fc < 0; i++) for (let j = 10; j < 40; j++) if (fr.tmE[j * fr.nx + i] === 0 && fr.active[j * fr.nx + i]) { fc = j * fr.nx + i; break; }
+  fz.addWell(fc, "prod", 150); fz.setCompletion(fz.wells[0], "frac", { xf: 120, dir: "E" });
+  t.push({ name: "ГРП: трещина не пересекает разлом (обрезается на нём)", pass: fz.wells[0].perf.every((pf) => pf.cell % fr.nx <= fc % fr.nx), details: `ячеек ${fz.wells[0].perf.length}` });
   const cl = cloneSim(m);
   t.push({ name: "клон сохраняет заканчивание скважин", pass: cl.wells[0].perf.length === m.wells[0].perf.length && cl.wells[1].kind === "frac" && cl.wells[1].perf !== m.wells[1].perf });
   return t;
@@ -1755,7 +1820,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
+  createEconomy, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, l2Skin, E1, pressureBuildup, interpretBuildup, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, reportTests, REF, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
@@ -2033,7 +2098,7 @@ function renderOps() {
   $("op-title").textContent = `Операции на скважине ${w.name}`;
   const P = G.params, can = w.kind === "v", fc = (xf) => P.frac_cost * FRAC_MULT[xf], zc = (L) => P.drill_cost * (0.5 + L / 1000);
   $("op-body").innerHTML = `<div style="margin-bottom:10px">Текущее заканчивание: <b>${kindLabel(w)}</b> · ${w.type === "prod" ? "добывающая" : "нагнетательная"}${w.on === false ? " (остановлена)" : ""}</div>` +
-    (can ? `<div class="card" style="padding:12px 14px; margin-bottom:12px"><b>ГРП — гидроразрыв пласта</b><div class="sub" style="margin:4px 0 8px">Трещина вскрывает ряд ячеек вдоль направления; скин снимается, дебит растёт. Выполняется в любой момент между годами. В водяной зоне трещина увеличит обводнённость.</div>` +
+    (can ? `<div class="card" style="padding:12px 14px; margin-bottom:12px"><b>ГРП — гидроразрыв пласта</b><div class="sub" style="margin:4px 0 8px">Трещина конечной проводимости (k<sub>f</sub>·w = ${C.FRAC_COND} мД·м) вскрывает ряд ячеек; положительный скин снимается. Эффект тем больше, чем ниже проницаемость пласта: ожидаемый рост продуктивности при k = ${G.sim.r.k[w.cell].toFixed(0)} мД — ${[40, 80, 120].map((x) => `xf ${x} м: ×${C.fracCellFactor(G.sim.r.k[w.cell], x, x / 40).ratio.toFixed(1)}`).join(", ")} (оценка по k у скважины, одна скважина, ПУР; фактически берётся средняя k по ячейкам трещины). При низкой FCD удлинение трещины почти не помогает — нужна проводимость. Трещина останавливается на разломах. В водяной зоне увеличит обводнённость.</div>` +
       `<div class="row">Полудлина: <select id="op-xf">${[40, 80, 120].map((x) => `<option value="${x}">${x} м — ${(fc(x) / 1e6).toFixed(1)} млн руб</option>`).join("")}</select>` +
       ` Направление: <select id="op-fdir"><option value="E">восток–запад</option><option value="N">север–юг</option></select> <button id="op-frac" class="primary">Выполнить ГРП</button></div></div>` +
       `<div class="card" style="padding:12px 14px"><b>Зарезка бокового ствола</b><div class="sub" style="margin:4px 0 8px">Из вертикальной скважины бурится боковой ствол вдоль пласта: растёт контакт с пластом. Старый интервал можно изолировать (на обводнённой скважине это отсекает воду). Ствол упирается в соседние скважины и край поля.</div>` +
@@ -2050,7 +2115,7 @@ function doFrac(w) {
   const res = G.sim.setCompletion(w, "frac", { xf, dir: $("op-fdir").value }, blockedByExpl);
   if (!res.ok) return toast(`ГРП не выполнен: ${res.msg}`, true);
   G.sim.economy.spend(G.sim.t, cost);
-  toast(`${w.name}: ГРП выполнен (полудлина ${w.frac.xf} м), −${mln(cost)}`);
+  toast(`${w.name}: ГРП выполнен (полудлина ${w.frac.xf} м, FCD ${w.frac.fcd.toFixed(2)}, скин трещины ${w.frac.sf.toFixed(1)}), −${mln(cost)}`);
   renderOps(); renderWellTable(true); G.dirty = true; renderAll();
 }
 function doZbs(w) {
@@ -2601,10 +2666,10 @@ function setOwcGuess(v) {
 }
 
 // ---------------- ГДИС ----------------
-function ptaProducers() { return G.sim.wells.filter((w) => w.type === "prod"); }
+function ptaProducers() { return G.sim.wells.filter((w) => w.type === "prod" && w.kind === "v"); }
 function openPta(name) {
   const prods = ptaProducers();
-  if (!prods.length) return toast("Нет добывающих скважин для ГДИС", true);
+  if (!prods.length) return toast("Нет вертикальных добывающих скважин для ГДИС (КВД по ГС и скважинам с ГРП в учебной модели не интерпретируется)", true);
   openModal("pta-modal");
   $("pta-well").innerHTML = prods.map((w) => `<option>${w.name}</option>`).join("");
   if (name && prods.some((w) => w.name === name)) $("pta-well").value = name;
