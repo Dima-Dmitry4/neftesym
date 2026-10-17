@@ -225,7 +225,7 @@
           <button id="tool-expl" class="lvl2-only" title="Разведочная скважина: только каротаж, без добычи">◆ Разведочная</button>
           <span id="drill-opts" class="tb-group" title="Заканчивание новой скважины: вертикальная (ВС) или горизонтальная (ГС) — длина и направление ствола">
             <select id="drill-kind"><option value="v">ВС</option><option value="hs200">ГС 200 м</option><option value="hs400">ГС 400 м</option><option value="hs600">ГС 600 м</option></select>
-            <select id="drill-dir" title="Направление горизонтального ствола от точки бурения"><option value="E">→ восток</option><option value="W">← запад</option><option value="N">↑ север</option><option value="S">↓ юг</option></select>
+            <label title="Азимут горизонтального ствола от точки бурения: 0° — север, 90° — восток, 180° — юг, 270° — запад" style="display:flex; align-items:center; gap:3px">аз.<input id="drill-az" type="number" min="0" max="359" step="5" value="90" style="width:62px">°</label>
           </span>
           <button id="tool-well" title="Пробурить скважину: потом можно выбрать режим, перевести под закачку (ППД), остановить">⛏ Скважина</button>
         </span>
@@ -758,40 +758,65 @@ function createSim(reservoir, params) {
   // по конечной проводимости трещины — см. fracCellFactor). Трещина останавливается на разломах, ствол ГС их пересекает.
   // opt: {L, dir ("E"|"W"|"N"|"S"), isolate} для hs/zbs; {xf, dir} для frac; blocked(cell) — занятые вне модели ячейки
   sim.setCompletion = (w, kind, opt, blocked) => {
-    const taken = new Set();
+    const nx = r.nx, taken = new Set();
     for (const o of sim.wells) if (o !== w) for (const p of o.perf) taken.add(p.cell);
     const ok = (c) => r.active[c] && !taken.has(c) && !(blocked && blocked(c));
-    const steps = { E: [1, 0], W: [-1, 0], S: [0, 1], N: [0, -1] };
-    // грань между соседними ячейками a → b пересекает разлом (множитель проводимости < 1)
+    // грань между соседними по стороне ячейками a → b пересекает разлом (множитель проводимости < 1)
     const faultBetween = (a, b) => {
       if (!r.tmE) return false;
       if (b === a + 1) return r.tmE[a] < 1; if (b === a - 1) return r.tmE[b] < 1;
-      if (b === a + r.nx) return r.tmN[a] < 1; return r.tmN[b] < 1;
+      if (b === a + nx) return r.tmN[a] < 1; return r.tmN[b] < 1;
     };
-    const walk = (dir, n, stopAtFault) => {
-      const [di, dj] = steps[dir || "E"], out = [], i0 = w.cell % r.nx, j0 = Math.floor(w.cell / r.nx);
-      let prev = w.cell;
-      for (let k = 1; k <= n; k++) {
-        const i = i0 + di * k, j = j0 + dj * k, c = j * r.nx + i;
-        if (i < 0 || j < 0 || i >= r.nx || j >= r.ny || !ok(c)) break;
-        if (stopAtFault && faultBetween(prev, c)) break;
-        out.push(c); prev = c;
+    // переход в соседнюю ячейку, в том числе через угол (тогда разлом — если перекрыты оба обходных пути)
+    const crossesFault = (a, b) => {
+      const ia = a % nx, ja = Math.floor(a / nx), ib = b % nx, jb = Math.floor(b / nx);
+      if (ia === ib || ja === jb) return faultBetween(a, b);
+      const m1 = ja * nx + ib, m2 = jb * nx + ia;
+      return (faultBetween(a, m1) || faultBetween(m1, b)) && (faultBetween(a, m2) || faultBetween(m2, b));
+    };
+    // луч из центра ячейки скважины по азимуту az (° от севера по часовой) длиной len, м:
+    // пройденные ячейки (кроме ячейки скважины) и длина участка ствола в каждой; останавливается на занятых
+    // и неактивных ячейках, краю поля и (stopAtFault) разломах
+    const x0 = (w.cell % nx) + 0.5, y0 = Math.floor(w.cell / nx) + 0.5;
+    const ray = (azDeg, len, stopAtFault) => {
+      const th = (azDeg * Math.PI) / 180, ux = Math.sin(th), uy = -Math.cos(th), st = 0.005, n = Math.ceil(len / r.dx / st);
+      const cells = [], lens = [];
+      let prev = w.cell, reached = 0;
+      for (let k = 0; k < n; k++) {
+        const tm = Math.min((k + 0.5) * st, len / r.dx), x = x0 + ux * tm, y = y0 + uy * tm;
+        const i = Math.floor(x), j = Math.floor(y);
+        if (i < 0 || j < 0 || i >= nx || j >= r.ny) break;
+        const c = j * nx + i, seg = Math.min(st, len / r.dx - k * st) * r.dx;
+        if (c !== prev) {
+          if (c !== w.cell && (!ok(c) || (stopAtFault && crossesFault(prev, c)))) break;
+          prev = c;
+          if (c !== w.cell && cells[cells.length - 1] !== c) { cells.push(c); lens.push(0); }
+        }
+        if (c !== w.cell) lens[lens.length - 1] += seg;
+        reached += seg;
       }
-      return out;
+      return { cells, lens, reached, ux, uy };
     };
+    const az = ((opt.az ?? AZ_OF_DIR[opt.dir || "E"]) % 360 + 360) % 360;
     if (kind === "hs" || kind === "zbs") {
-      const lat = walk(opt.dir, Math.max(1, Math.round(opt.L / r.dx)));
-      if (!lat.length) return { ok: false, msg: "в этом направлении нет свободных ячеек" };
-      w.perf = [{ cell: w.cell, f: kind === "zbs" ? (opt.isolate ? 0 : 1) : HS_EFF }, ...lat.map((c) => ({ cell: c, f: HS_EFF }))];
-      w.kind = kind; w.dir = opt.dir; w.L = lat.length * r.dx; w.isolated = kind === "zbs" && !!opt.isolate;
+      // ствол длиной L от центра ячейки; луч на L + Δ/2, чтобы вдоль оси сетки ячейки вскрывались целиком (как при калибровке)
+      const R1 = ray(az, opt.L + r.dx / 2, false);
+      if (!R1.cells.length) return { ok: false, msg: "в этом направлении нет свободных ячеек" };
+      w.perf = [{ cell: w.cell, f: kind === "zbs" ? (opt.isolate ? 0 : 1) : HS_EFF }, ...R1.cells.map((c, k) => ({ cell: c, f: (HS_EFF * R1.lens[k]) / r.dx }))];
+      const Lr = Math.max(r.dx / 2, Math.min(opt.L, R1.reached - r.dx / 2));
+      w.kind = kind; w.az = az; w.dir = opt.dir || null; w.L = Math.round(Lr / 10) * 10; w.isolated = kind === "zbs" && !!opt.isolate;
+      w.traj = [[x0, y0], [x0 + (R1.ux * Lr) / r.dx, y0 + (R1.uy * Lr) / r.dx]];
     } else if (kind === "frac") {
       if (w.kind !== "v") return { ok: false, msg: "ГРП возможен на вертикальной скважине без ГРП" };
-      const n = Math.max(1, Math.round(opt.xf / r.dx)), opp = { E: "W", W: "E", N: "S", S: "N" }[opt.dir || "E"];
-      const a = walk(opt.dir, n, true), b = walk(opp, n, true);
-      const cells = [w.cell, ...a, ...b], kMean = cells.reduce((x, c) => x + r.k[c], 0) / cells.length;
-      const fc = fracCellFactor(kMean, opt.xf, Math.max(a.length, b.length));
-      w.perf = [{ cell: w.cell, f: 1 }, ...a.map((c) => ({ cell: c, f: fc.f })), ...b.map((c) => ({ cell: c, f: fc.f }))];
-      w.kind = "frac"; w.dir = opt.dir; w.frac = { xf: Math.max(a.length, b.length) * r.dx, dir: opt.dir, fcd: fc.fcd, sf: fc.sf, ratio: fc.ratio };
+      const nside = Math.max(1, Math.round(opt.xf / r.dx)), ext = (nside + 0.5) * r.dx;
+      const A = ray(az, ext, true), B = ray(az + 180, ext, true);
+      const cells = [w.cell, ...A.cells, ...B.cells], kMean = cells.reduce((x, c) => x + r.k[c], 0) / cells.length;
+      const fc = fracCellFactor(kMean, opt.xf, nside);
+      w.perf = [{ cell: w.cell, f: 1 }, ...A.cells.map((c, k) => ({ cell: c, f: (fc.f * A.lens[k]) / r.dx })), ...B.cells.map((c, k) => ({ cell: c, f: (fc.f * B.lens[k]) / r.dx }))];
+      const la = Math.max(0, Math.min(opt.xf, A.reached - r.dx / 2)), lb = Math.max(0, Math.min(opt.xf, B.reached - r.dx / 2));
+      w.kind = "frac"; w.az = az % 180; w.dir = opt.dir || null;
+      w.frac = { xf: Math.round(Math.max(la, lb) / 10) * 10, az: az % 180, fcd: fc.fcd, sf: fc.sf, ratio: fc.ratio };
+      w.traj = [[x0 - (A.ux * lb) / r.dx, y0 - (A.uy * lb) / r.dx], [x0 + (A.ux * la) / r.dx, y0 + (A.uy * la) / r.dx]];
       w.skin = Math.min(w.skin || 0, 0);
     }
     sim._fluxValid = false;
@@ -916,6 +941,7 @@ function solvePressure(sim, dt) {
 // равенства притока по Писману (q = G·(P_яч − P_wf)) и пропускной способности подъёмника (бисекция по q).
 // Перепад на штуцере: ΔP = ρ·v²/2, v = q/(Cd·A), Cd = 0.8. Столб — по плотности смеси.
 const ATM_PA = 101325;
+const AZ_OF_DIR = { N: 0, E: 90, S: 180, W: 270 }; // азимуты сторон света
 const HS_EFF = 0.4; // горизонтальный участок: доля индекса вертикального вскрытия ячейки (согласовано с Джоши при kv/kh ≈ 0.1)
 const FRAC_EFF = 0.9; // (не используется для ГРП с конечной проводимостью; оставлен для совместимости)
 // ---------- ГРП: трещина конечной проводимости ----------
@@ -1682,7 +1708,7 @@ const REF = {
 function cloneSim(sim) {
   const c = createSim(sim.r, sim.params);
   c.P.set(sim.P); c.Sw.set(sim.Sw);
-  c.wells = sim.wells.map((w) => ({ ...w, cum: { ...w.cum }, eq: null, perf: w.perf.map((pf) => ({ ...pf })), pq: w.pq && w.pq.slice(), pqw: w.pqw && w.pqw.slice(), frac: w.frac && { ...w.frac } }));
+  c.wells = sim.wells.map((w) => ({ ...w, cum: { ...w.cum }, eq: null, perf: w.perf.map((pf) => ({ ...pf })), pq: w.pq && w.pq.slice(), pqw: w.pqw && w.pqw.slice(), frac: w.frac && { ...w.frac }, traj: w.traj && w.traj.map((q) => q.slice()) }));
   c.field = { ...sim.field }; c.t = sim.t; c.cumProdM3 = sim.cumProdM3;
   c.history = { days: sim.history.days.slice() };
   const e = sim.economy, d = c.economy;
@@ -1801,6 +1827,16 @@ function completionTests() {
     fd.push(`k=${kk}: ${got.toFixed(2)} (аналит. ${target.toFixed(2)})`);
   }
   t.push({ name: "физика: ГРП xf = 80 м — J/Jвс по Cinco-Ley (±10 %), эффект падает с ростом k", pass: fracOk, details: fd.join("; ") });
+  // независимость от направления: ствол и трещина под 30° и 45° к сетке дают ту же продуктивность, что вдоль оси
+  const orient = [];
+  let orOk = true;
+  for (const az of [30, 45]) {
+    const jhd = pss(100, (sm, w) => { w.cell = 25 * sm.r.nx + 21; w.perf = [{ cell: w.cell, f: 1 }]; sm.setCompletion(w, "hs", { L: 400, az }); });
+    const jfd = pss(20, (sm, w) => sm.setCompletion(w, "frac", { xf: 80, az })), jfa = pss(20, (sm, w) => sm.setCompletion(w, "frac", { xf: 80, az: 90 })), jv20 = pss(20);
+    if (Math.abs(jhd / jh - 1) > 0.1 || Math.abs(jfd / jfa - 1) > 0.1) orOk = false;
+    orient.push(`${az}°: ГС ${(jhd / jv).toFixed(2)} (ось ${(jh / jv).toFixed(2)}), ГРП ${(jfd / jv20).toFixed(2)} (ось ${(jfa / jv20).toFixed(2)})`);
+  }
+  t.push({ name: "физика: продуктивность ГС и ГРП не зависит от направления относительно сетки (±10 %)", pass: orOk, details: orient.join("; ") });
   t.push({ name: "физика: при FCD → ∞ скин трещины → Пратс −ln(xf/2rw)", pass: Math.abs(fracSkin(1000, 80) + Math.log(80 / 0.2)) < 0.05 });
   // трещина останавливается на разломе
   const fz = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS), fr = fz.r;
@@ -1919,11 +1955,10 @@ const xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX);
 const field2D = (fn) => Array.from({ length: NX }, (_, j) => Array.from({ length: NX }, (_, i) => fn(j * NX + i)));
 const logk = Math.log10;
 
-const DIR_ARROW = { E: "→", W: "←", N: "↑", S: "↓" };
 function kindLabel(w) {
-  if (w.kind === "hs") return `ГС ${w.L} м ${DIR_ARROW[w.dir]}`;
-  if (w.kind === "zbs") return `боковой ствол ${w.L} м ${DIR_ARROW[w.dir]}${w.isolated ? " (старый интервал изолирован)" : ""}`;
-  if (w.kind === "frac") return `ГРП, полудлина ${w.frac.xf} м`;
+  if (w.kind === "hs") return `ГС ${w.L} м, аз. ${Math.round(w.az)}°`;
+  if (w.kind === "zbs") return `боковой ствол ${w.L} м, аз. ${Math.round(w.az)}°${w.isolated ? " (старый интервал изолирован)" : ""}`;
+  if (w.kind === "frac") return `ГРП, полудлина ${w.frac.xf} м, аз. ${Math.round(w.frac.az)}°`;
   return "вертикальная";
 }
 const blockedByExpl = (c) => G.expl.some((e) => e.cell === c);
@@ -1977,9 +2012,8 @@ function wellTraces(sim) {
     hovertemplate: list.map((w) => hover(w) + "<extra></extra>"), showlegend: false });
   const out = [];
   for (const w of sim.wells) {          // стволы ГС / боковых стволов и трещины ГРП
-    if (w.perf.length < 2) continue;
-    const pts = w.perf.map((pf) => pos(pf.cell)), isFrac = w.kind === "frac";
-    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (w.perf.length < 2 || !w.traj) continue;
+    const pts = w.traj.map(([x, y]) => [x * DX, y * DX]), isFrac = w.kind === "frac";
     out.push({ type: "scatter", mode: "lines", x: pts.map((q) => q[0]), y: pts.map((q) => q[1]), showlegend: false,
       line: { color: isFrac ? "rgba(239,85,59,.6)" : (w.on === false ? "#b8c2d1" : w.color), width: isFrac ? 8 : 4 }, hovertemplate: `<b>${w.name}</b>: ${kindLabel(w)}<extra></extra>` });
   }
@@ -2001,6 +2035,9 @@ function renderMap() {
     data.push(line1(r.zTop, r.owc, "#111827", "solid", "ВНК факт"), line1(r.zTop.map((z, c) => z + r.gross[c]), r.owc, "#111827", "dot", "ВНК факт"));
   }
   data.push(...faultTraces(r), ...wellTraces(sim));
+  // предпросмотр траектории ГС при наведении (инструмент «Скважина» с заканчиванием ГС)
+  G.previewIdx = data.length;
+  data.push({ type: "scatter", mode: "lines", x: G.preview ? G.preview.x : [], y: G.preview ? G.preview.y : [], hoverinfo: "skip", showlegend: false, line: { color: "#2a3f5f", width: 3, dash: "dot" } });
   const snapNote = G.snapIdx !== null && G.snaps[G.snapIdx] ? [{ xref: "paper", yref: "paper", x: 0.01, y: 0.99, xanchor: "left", yanchor: "top", showarrow: false, bgcolor: "rgba(255,255,255,.85)", text: G.snaps[G.snapIdx].t === 0 ? "<b>Начало разработки</b>" : `<b>Конец года ${Math.round(G.snaps[G.snapIdx].t / 365)}</b>` }] : [];
   const layout = lay({ height: 640, margin: { l: 56, r: 10, t: 10, b: 44 }, dragmode: false, hovermode: "closest", annotations: snapNote,
     xaxis: { range: [0, NX * DX], title: { text: "Восток, м" }, constrain: "domain" },
@@ -2009,6 +2046,15 @@ function renderMap() {
   if (!renderMap.bound) {
     renderMap.bound = true;
     $("map").on("plotly_click", (ev) => { const p = ev.points && ev.points[0]; if (p) onMapClick(Math.floor(p.x / DX), Math.floor(p.y / DX)); });
+    $("map").on("plotly_hover", (ev) => {
+      const p = ev.points && ev.points[0], kv = $("drill-kind").value;
+      if (!p || G.tool !== "well" || !kv.startsWith("hs")) { if (G.preview) { G.preview = null; Plotly.restyle("map", { x: [[]], y: [[]] }, [G.previewIdx]); } return; }
+      const i = Math.floor(p.x / DX), j = Math.floor(p.y / DX), L = +kv.slice(2), th = ((+$("drill-az").value || 0) * Math.PI) / 180;
+      const x0 = (i + 0.5) * DX, y0 = (j + 0.5) * DX;
+      G.preview = { x: [x0, x0 + Math.sin(th) * L], y: [y0, y0 - Math.cos(th) * L] };
+      Plotly.restyle("map", { x: [G.preview.x], y: [G.preview.y] }, [G.previewIdx]);
+    });
+    $("map").on("plotly_unhover", () => { if (G.preview) { G.preview = null; Plotly.restyle("map", { x: [[]], y: [[]] }, [G.previewIdx]); } });
   }
 }
 function onMapClick(i, j) {
@@ -2058,7 +2104,7 @@ function drillWell(cell) {
   sim.addWell(cell, "prod", 150);
   const w = sim.wells[sim.wells.length - 1];
   if (hsL) {
-    const res = sim.setCompletion(w, "hs", { L: hsL, dir: $("drill-dir").value }, blockedByExpl);
+    const res = sim.setCompletion(w, "hs", { L: hsL, az: +$("drill-az").value || 0 }, blockedByExpl);
     if (!res.ok) { sim.wells.pop(); return toast(`ГС не пробурена: ${res.msg}`, true); }
   }
   const cost = G.params.drill_cost * (hsL ? 1.3 + w.L / 1000 : 1);
@@ -2100,10 +2146,10 @@ function renderOps() {
   $("op-body").innerHTML = `<div style="margin-bottom:10px">Текущее заканчивание: <b>${kindLabel(w)}</b> · ${w.type === "prod" ? "добывающая" : "нагнетательная"}${w.on === false ? " (остановлена)" : ""}</div>` +
     (can ? `<div class="card" style="padding:12px 14px; margin-bottom:12px"><b>ГРП — гидроразрыв пласта</b><div class="sub" style="margin:4px 0 8px">Трещина конечной проводимости (k<sub>f</sub>·w = ${C.FRAC_COND} мД·м) вскрывает ряд ячеек; положительный скин снимается. Эффект тем больше, чем ниже проницаемость пласта: ожидаемый рост продуктивности при k = ${G.sim.r.k[w.cell].toFixed(0)} мД — ${[40, 80, 120].map((x) => `xf ${x} м: ×${C.fracCellFactor(G.sim.r.k[w.cell], x, x / 40).ratio.toFixed(1)}`).join(", ")} (оценка по k у скважины, одна скважина, ПУР; фактически берётся средняя k по ячейкам трещины). При низкой FCD удлинение трещины почти не помогает — нужна проводимость. Трещина останавливается на разломах. В водяной зоне увеличит обводнённость.</div>` +
       `<div class="row">Полудлина: <select id="op-xf">${[40, 80, 120].map((x) => `<option value="${x}">${x} м — ${(fc(x) / 1e6).toFixed(1)} млн руб</option>`).join("")}</select>` +
-      ` Направление: <select id="op-fdir"><option value="E">восток–запад</option><option value="N">север–юг</option></select> <button id="op-frac" class="primary">Выполнить ГРП</button></div></div>` +
+      ` Азимут трещины: <input id="op-faz" type="number" min="0" max="179" step="5" value="90" style="width:62px">° <span class="sub">(0° — север–юг, 90° — восток–запад)</span> <button id="op-frac" class="primary">Выполнить ГРП</button></div></div>` +
       `<div class="card" style="padding:12px 14px"><b>Зарезка бокового ствола</b><div class="sub" style="margin:4px 0 8px">Из вертикальной скважины бурится боковой ствол вдоль пласта: растёт контакт с пластом. Старый интервал можно изолировать (на обводнённой скважине это отсекает воду). Ствол упирается в соседние скважины и край поля.</div>` +
       `<div class="row">Длина: <select id="op-L">${[200, 400, 600].map((L) => `<option value="${L}">${L} м — ${(zc(L) / 1e6).toFixed(1)} млн руб</option>`).join("")}</select>` +
-      ` Направление: <select id="op-zdir"><option value="E">→ восток</option><option value="W">← запад</option><option value="N">↑ север</option><option value="S">↓ юг</option></select>` +
+      ` Азимут: <input id="op-zaz" type="number" min="0" max="359" step="5" value="90" style="width:62px">° <span class="sub">(0° — север, 90° — восток)</span>` +
       ` <label><input type="checkbox" id="op-iso"> изолировать старый интервал</label> <button id="op-zbs" class="primary">Зарезать ствол</button></div></div>`
       : `<div class="note">ГРП и боковой ствол доступны только на вертикальных скважинах без ГРП. Горизонтальные скважины бурятся с заканчиванием «ГС» (выбор — рядом с кнопкой «Скважина»).</div>`);
   const fr = $("op-frac"); if (fr) fr.onclick = () => doFrac(w);
@@ -2112,7 +2158,7 @@ function renderOps() {
 function doFrac(w) {
   if (guardRun()) return;
   const xf = +$("op-xf").value, cost = G.params.frac_cost * FRAC_MULT[xf];
-  const res = G.sim.setCompletion(w, "frac", { xf, dir: $("op-fdir").value }, blockedByExpl);
+  const res = G.sim.setCompletion(w, "frac", { xf, az: +$("op-faz").value || 0 }, blockedByExpl);
   if (!res.ok) return toast(`ГРП не выполнен: ${res.msg}`, true);
   G.sim.economy.spend(G.sim.t, cost);
   toast(`${w.name}: ГРП выполнен (полудлина ${w.frac.xf} м, FCD ${w.frac.fcd.toFixed(2)}, скин трещины ${w.frac.sf.toFixed(1)}), −${mln(cost)}`);
@@ -2120,11 +2166,11 @@ function doFrac(w) {
 }
 function doZbs(w) {
   if (guardRun()) return;
-  const res = G.sim.setCompletion(w, "zbs", { L: +$("op-L").value, dir: $("op-zdir").value, isolate: $("op-iso").checked }, blockedByExpl);
+  const res = G.sim.setCompletion(w, "zbs", { L: +$("op-L").value, az: +$("op-zaz").value || 0, isolate: $("op-iso").checked }, blockedByExpl);
   if (!res.ok) return toast(`Боковой ствол не пробурен: ${res.msg}`, true);
   const cost = G.params.drill_cost * (0.5 + w.L / 1000);
   G.sim.economy.drill(G.sim.t, cost);
-  toast(`${w.name}: боковой ствол ${w.L} м ${DIR_ARROW[w.dir]}${w.isolated ? ", старый интервал изолирован" : ""}, −${mln(cost)}`);
+  toast(`${w.name}: боковой ствол ${w.L} м, аз. ${Math.round(w.az)}°${w.isolated ? ", старый интервал изолирован" : ""}, −${mln(cost)}`);
   renderOps(); renderWellTable(true); G.dirty = true; renderAll();
 }
 function convertWell(w) {
