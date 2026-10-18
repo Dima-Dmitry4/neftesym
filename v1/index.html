@@ -874,7 +874,30 @@ function buildFaceT(sim) {
 
 // Неявное давление: (acc+ΣT+G)·P_i − ΣT·P_nb = acc·P_old + G·Pwf.
 // Матрично-свободный CG с Якоби-предобуславливателем и warm start.
+// Перетоки через ствол не моделируются: интервал, где давление пласта ниже забойного (у добывающей) или выше
+// (у нагнетательной), на этот шаг закрывается — как обратным клапаном — и давление пересчитывается. Тогда отбор,
+// заложенный в уравнение давления, совпадает с дебитами скважин (иначе у длинных ГС и трещин пласт «отдавал» в ствол
+// больше, чем видело уравнение давления, и разница уходила в «лишнюю» нефть).
 function solvePressure(sim, dt) {
+  const P0 = Float64Array.from(sim.P);
+  for (const w of sim.wells) w._xm = null;
+  for (let pass = 0; ; pass++) {
+    solvePressureOnce(sim, dt);
+    if (pass === 5) return; // маски не меняются после 5 пересчётов — последнее решение с ними согласовано
+    let changed = false;
+    for (const w of sim.wells) {
+      if (w.on === false) continue;
+      w.perf.forEach((pf, k) => {
+        if (!(pf.f > 0) || (w._xm && w._xm[k])) return;
+        const dp = w.type === "prod" ? sim.P[pf.cell] - w.pwf : w.pwf - sim.P[pf.cell];
+        if (dp < 0) { if (!w._xm) w._xm = new Array(w.perf.length).fill(false); w._xm[k] = true; changed = true; }
+      });
+    }
+    if (!changed) return;
+    sim.P.set(P0);
+  }
+}
+function solvePressureOnce(sim, dt) {
   const r = sim.r, N = r.cells.length;
   const { _x: x, _Ap: Ap, _res: res, _z: z, _diag: diag, _b: b, _Te: Te, _Tn: Tn } = sim;
   const Pold = sim.P;
@@ -892,8 +915,9 @@ function solvePressure(sim, dt) {
   }
   for (const w of sim.wells) {
     if (w.on === false) continue;
-    for (const pf of w.perf) {
-      if (!(pf.f > 0)) continue;
+    for (let k = 0; k < w.perf.length; k++) {
+      const pf = w.perf[k];
+      if (!(pf.f > 0) || (w._xm && w._xm[k])) continue;
       const idx = sim._rowOf[pf.cell], G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r);
       diag[idx] += G;
       b[idx] += G * w.pwf;
@@ -1063,7 +1087,7 @@ function updateWellRates(sim) {
     const prod = w.type === "prod";
     let q = 0, qo = 0, qw = 0;
     w.perf.forEach((pf, k) => {
-      const c = pf.cell, G = wellIndex(r.k[c], r, w.skin) * pf.f * lambdaT(sim.Sw[c], r);
+      const c = pf.cell, G = w._xm && w._xm[k] ? 0 : wellIndex(r.k[c], r, w.skin) * pf.f * lambdaT(sim.Sw[c], r);
       const dp = prod ? sim.P[c] - w.pwf : w.pwf - sim.P[c], qk = Math.max(0, G * dp);
       q += qk; w.pq[k] = qk;
       if (prod) {
@@ -1745,6 +1769,18 @@ function equipmentTests() {
   const oA = vA.wells.reduce((q, w) => q + w.cum.oil, 0), oB = vB.wells.reduce((q, w) => q + w.cum.oil, 0);
   const liq = vA.wells.reduce((q, w) => q + w.cum.oil + w.cum.water, 0), injV = vA.wells.reduce((q, w) => q + w.cum.inj, 0);
   const ex = vA.r.cells.reduce((q, c) => q + vA.r.poreVol[c] * vA.r.ct * (vA.r.P0 - vA.P[c]), 0), errV = (liq - injV - ex) / Math.max(1, liq);
+  // перетоки через ствол: длинные ГС (1000 м, аз. 45°) через неоднородный пласт — часть интервалов с давлением ниже забойного
+  const sx = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS), Rx = sx.r;
+  for (let j = 4, bb = 0; j < 47; j += 8, bb++) for (let i = 5, aa = 0; i < 47; i += 8, aa++) {
+    const c = j * Rx.nx + i; if (!Rx.active[c] || sx.wells.some((o) => o.perf.some((pf) => pf.cell === c))) continue; const ty = (aa + bb) % 3 === 0 ? "inj" : "prod";
+    sx.addWell(c, ty, ty === "prod" ? 150 : 325); const w = sx.wells[sx.wells.length - 1];
+    if (ty === "prod") { sx.setCompletion(w, "hs", { L: 1000, az: 45 }); w.mode = "esp"; w.hasESP = true; w.pump = "400"; w.freq = 40; } else { w.mode = "choke"; w.choke = 26; }
+  }
+  sx.field.pKNS = 100; sx.field.pGather = 5; advance(sx, 365);
+  const lx = sx.wells.reduce((q, w) => q + w.cum.oil + w.cum.water, 0), ix = sx.wells.reduce((q, w) => q + w.cum.inj, 0);
+  const exx = Rx.cells.reduce((q, c) => q + Rx.poreVol[c] * Rx.ct * (Rx.P0 - sx.P[c]), 0), errX = (lx - ix - exx) / Math.max(1, lx);
+  t.push({ name: "перетоки через ствол: у ГС 1000 м через неоднородный пласт отбор − закачка = упругий запас (±0.5 % отбора)",
+           pass: Math.abs(errX) < 0.005, details: `невязка объёма ${(errX * 100).toFixed(3)} %, отбор ${(lx / 1e3).toFixed(0)} тыс. м³` });
   t.push({ name: "IMPES: отбор − закачка = упругий запас (±0.5 % отбора) при ЭЦН на пределе; год одним шагом = 365 суточным (±1 %)",
            pass: Math.abs(oA / oB - 1) < 0.01 && Math.abs(errV) < 0.005, details: `нефть ${(oA / 1e3).toFixed(0)} / ${(oB / 1e3).toFixed(0)} тыс. м³, невязка объёма ${(errV * 100).toFixed(3)} %` });
   return t;
