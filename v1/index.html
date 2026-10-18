@@ -738,7 +738,7 @@ function createSim(reservoir, params) {
     _Tn: new Float64Array(r.nx * r.ny),           // проводимость северной грани ячейки
     _uE: new Float64Array(r.nx * r.ny),           // поток на восток (м³/сут, >0 из ячейки)
     _uN: new Float64Array(r.nx * r.ny),           // поток на север
-    _lastSolveT: null, _fluxValid: false,
+    _lastSolveT: null, _solveEnd: null, _fluxValid: false,
     _x: new Float64Array(N), _Ap: new Float64Array(N),
     _res: new Float64Array(N), _z: new Float64Array(N), _pk: null,
     _diag: new Float64Array(N), _b: new Float64Array(N),
@@ -1150,18 +1150,20 @@ function recordHistory(sim) {
 function advance(sim, days) {
   let remaining = days;
   while (remaining > 1e-9) {
-    // давление: при первом входе или если с последнего решения прошло ≥ 1 суток
-    const sinceSolve = sim.t - (sim._lastSolveT ?? -1e9);
-    if (!sim._fluxValid || sinceSolve >= 1 - 1e-9) {
-      const dtP = sim._fluxValid ? sinceSolve : Math.min(1, remaining);
+    // давление — неявно на интервал вперёд (≤ 1 сут): P в конце интервала, потоки и дебиты по нему применяются
+    // ровно на этот интервал (субшагами CFL). Так объём, отобранный скважинами и перенесённый между ячейками,
+    // совпадает с изменением давления (упругий запас) — без этого нефть «появлялась» при меняющемся шаге.
+    if (!sim._fluxValid || sim.t >= sim._solveEnd - 1e-9) {
+      const dtP = Math.min(1, remaining);
       applyEquipment(sim);
       solvePressure(sim, Math.max(1e-9, dtP));
-      sim._lastSolveT = sim.t;
+      sim._lastSolveT = sim.t; sim._solveEnd = sim.t + dtP;
       sim._fluxValid = true;
       computeFaceFluxes(sim);
       updateWellRates(sim);
     }
-    const dtSub = Math.min(2, cflLimit(sim), remaining);
+    let dtSub = Math.min(2, cflLimit(sim), remaining, sim._solveEnd - sim.t);
+    if (sim._solveEnd - sim.t - dtSub < 1e-6) dtSub = Math.min(remaining, sim._solveEnd - sim.t);
     // кумулятивы — теми же дебитами, что использованы в transportSubstep (до пересчёта)
     for (const w of sim.wells) {
       if (w.type === "prod") {
@@ -1730,6 +1732,21 @@ function equipmentTests() {
   const s5 = createSim(buildReservoir2({ ...DEFAULT_PARAMS, elec_cost: 0 }), { ...DEFAULT_PARAMS, elec_cost: 0 });
   s5.addWell(s5.r.explore[2].cell, "prod", 150); s5.wells[0].mode = "esp"; advance(s5, 60);
   t.push({ name: "экономика: электроэнергия ЭЦН входит в затраты", pass: p0 > s5.economy.opex, details: `${((p0 - s5.economy.opex) / 1e3).toFixed(0)} тыс. руб за 60 сут` });
+  // согласованность IMPES: отбор жидкости − закачка = упругий запас (сетка скважин, ЭЦН-1250 на пределе по давлению на приёме;
+  // до исправления шага давления невязка здесь была 15 % и вся уходила в «лишнюю» нефть); год одним вызовом = 365 суточным
+  const mkV = () => { const sm = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS), R0 = sm.r;
+    for (let j = 5, bb = 0; j < 47; j += 7, bb++) for (let i = 3, aa = 0; i < 47; i += 7, aa++) {
+      const c = j * R0.nx + i; if (!R0.active[c]) continue; const ty = (aa + bb) % 3 === 0 ? "inj" : "prod";
+      sm.addWell(c, ty, ty === "prod" ? 150 : 325); const w = sm.wells[sm.wells.length - 1];
+      if (ty === "prod") { if (R0.k[c] < 60) sm.setCompletion(w, "frac", { xf: 80, az: 0 }); w.mode = "esp"; w.hasESP = true; w.pump = "1250"; } else { w.mode = "choke"; w.choke = 10; }
+    }
+    sm.field.pKNS = 180; sm.field.pGather = 8; return sm; };
+  const vA = mkV(), vB = mkV(); advance(vA, 365); for (let d = 0; d < 365; d++) advance(vB, 1);
+  const oA = vA.wells.reduce((q, w) => q + w.cum.oil, 0), oB = vB.wells.reduce((q, w) => q + w.cum.oil, 0);
+  const liq = vA.wells.reduce((q, w) => q + w.cum.oil + w.cum.water, 0), injV = vA.wells.reduce((q, w) => q + w.cum.inj, 0);
+  const ex = vA.r.cells.reduce((q, c) => q + vA.r.poreVol[c] * vA.r.ct * (vA.r.P0 - vA.P[c]), 0), errV = (liq - injV - ex) / Math.max(1, liq);
+  t.push({ name: "IMPES: отбор − закачка = упругий запас (±0.5 % отбора) при ЭЦН на пределе; год одним шагом = 365 суточным (±1 %)",
+           pass: Math.abs(oA / oB - 1) < 0.01 && Math.abs(errV) < 0.005, details: `нефть ${(oA / 1e3).toFixed(0)} / ${(oB / 1e3).toFixed(0)} тыс. м³, невязка объёма ${(errV * 100).toFixed(3)} %` });
   return t;
 }
 
@@ -1759,7 +1776,7 @@ function cloneSim(sim) {
   const e = sim.economy, d = c.economy;
   d.kwh = e.kwh; d.balance = e.balance; d.revenue = e.revenue; d.opex = e.opex; d.drillSpent = e.drillSpent; d.otherSpent = e.otherSpent; d.drills = e.drills.slice();
   c._uE.set(sim._uE); c._uN.set(sim._uN); c._Te.set(sim._Te); c._Tn.set(sim._Tn);
-  c._fluxValid = sim._fluxValid; c._lastSolveT = sim._lastSolveT; // продолжение идентично оригиналу
+  c._fluxValid = sim._fluxValid; c._lastSolveT = sim._lastSolveT; c._solveEnd = sim._solveEnd; // продолжение идентично оригиналу
   return c;
 }
 // годовые показатели по истории: нефть (т), вода (м³), закачка (м³), денежный поток (руб), накопленная нефть (т)
