@@ -41,6 +41,7 @@
   .level-pick button small { display:block; font-weight:400; opacity:.85; font-size:12px; }
   .level-desc { color:var(--muted); font-size:12.5px; margin:4px 0 6px; }
   #tm-rt-opts { margin:2px 0 8px; font-size:13px; } #tm-rt-opts select { margin:0 4px; }
+  .edu-check { display:flex; align-items:center; gap:6px; margin:2px 0 10px; font-size:13.5px; cursor:pointer; }
   #rt-clock { font-variant-numeric:tabular-nums; }
   #rt-clock .rt-live { color:var(--bad); font-weight:600; }
   #year-hint { font-size:12px; color:var(--muted); max-width:210px; line-height:1.25; }
@@ -240,11 +241,12 @@
       <div>
         <h2>Объект разработки<span id="obj-hint"></span></h2>
         <div id="scen-pick" class="scen-pick"></div>
+        <label class="edu-check"><input type="checkbox" id="edu-mode"> Учебный режим — геология известна<sup class="hint" tabindex="0" data-tip="Для знакомства с симулятором на любом объекте: карты проницаемости, давления и насыщенности, структура (сейсмика бесплатно), фактические ВНК и разломы видны сразу. Разведка и ГДИС по-прежнему доступны. Оценка — против того же эталона объекта.">?</sup></label>
         <p id="level-desc" class="level-desc"></p>
-        <h2>Режим времени<sup class="hint" tabindex="0" data-tip="<b>По годам</b> — время стоит, год рассчитывается кнопкой «Рассчитать год», изменения вносятся между годами (на учебном полигоне есть и непрерывные скорости ×1/×10/×50 с паузой).<br><br><b>Реальное время</b> — 10 лет разработки идут выбранное число минут без пауз; бурение, перевод в ППД, режимы меняются на ходу и применяются в тот же момент игрового времени.">?</sup></h2>
+        <h2>Режим времени<sup class="hint" tabindex="0" data-tip="Скорость выбирается здесь и во время игры не меняется.<br><br><b>По годам</b> — время стоит, год рассчитывается кнопкой «Рассчитать год», изменения вносятся между годами.<br><br><b>Непрерывно</b> — 10 лет разработки идут выбранное число минут с постоянной скоростью и без пауз; бурение, перевод в ППД, режимы меняются на ходу и применяются в тот же момент игрового времени. В учебном режиме по умолчанию — непрерывно.">?</sup></h2>
         <div class="level-pick">
           <button id="tm-step" class="active">По годам</button>
-          <button id="tm-rt">Реальное время</button>
+          <button id="tm-rt">Непрерывно</button>
         </div>
         <div id="tm-rt-opts" class="hidden">10 лет разработки =<select id="tm-min"><option value="5">5 минут</option><option value="10">10 минут</option><option value="20" selected>20 минут</option><option value="40">40 минут</option><option value="60">1 час</option><option value="90">1,5 часа</option></select><span id="tm-rate" class="sub"></span></div>
         <h2>Экономика<sup class="hint" tabindex="0" data-tip="Цены по умолчанию — ориентиры для Западной Сибири и Урало-Поволжья, 2024–2025 гг.; стоимость скважин зависит от глубины объекта. Всё можно менять. В игре полный прайс — кнопка «₽ Цены» вверху.">?</sup></h2>
@@ -2365,7 +2367,7 @@ const ttl = (t) => ({ text: t, x: 0.02, xanchor: "left", font: { size: 13 } });
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
 
 const G = {
-  params: null, sim: null, level: 2, scenario: "bv8", timeMode: "step", rtMin: 20, rt: null, speed: 0, layer: "k", tool: null,
+  params: null, sim: null, level: 2, scenario: "bv8", timeMode: "step", rtMin: 20, rt: null, edu: false, speed: 0, layer: "k", tool: null,
   wellNames: { prod: 0, inj: 0 }, snaps: [], snapYear: 0, snapIdx: null, colorSeq: 0, done: false, frameLast: 0, uiLast: 0, dirty: true,
   running: null,            // идёт расчёт года: {end, t0, snap}
   expl: [],                 // разведочные скважины уровня 2 [{name, cell}]
@@ -2377,7 +2379,7 @@ const G = {
   modal: false,
 };
 const isL2 = () => G.level === 2;
-const revealed = () => !isL2() || G.done;
+const revealed = () => !isL2() || G.done || G.edu; // учебный режим — геология открыта сразу
 
 function toast(msg, warn = false) {
   const el = $("toast");
@@ -3072,7 +3074,7 @@ function updateTopbar() {
   const busy = !!G.running;
   $("btn-year").disabled = busy || G.modal;
   $("btn-year").textContent = busy ? `⏳ Идёт расчёт года ${yr + 1}…` : `▶ Рассчитать год ${yr + 1}`;
-  $("year-hint").textContent = busy ? "изменения — после окончания года" : isL2() || G.speed === 0 ? "время стоит — нажмите, чтобы рассчитать следующий год" : "";
+  $("year-hint").textContent = busy ? "изменения — после окончания года" : "время стоит — нажмите, чтобы рассчитать следующий год";
   if (G.rt) {
     const R = G.rt, total = R.min * 60 * (p.horizon_days / 3650), el = R.started ? Math.min(total, (performance.now() - R.wall0) / 1000 + R.t0 / R.rate) : t / R.rate;
     $("tb-date").textContent = `${fmtYears(t)} · год ${Math.min(Math.floor(t / 365) + 1, Math.round(p.horizon_days / 365))}`;
@@ -3415,7 +3417,7 @@ function buildReport(sim, fc, finished) {
   // на объектах вязкость задаёт пласт, и эталон считался с ней же; меняется она только на учебном полигоне
   const mu = lv === 1 && P.mu_o !== C.DEFAULT_PARAMS.mu_o ? ` <span class="bad">(эталон полигона рассчитан при μ нефти = ${C.DEFAULT_PARAMS.mu_o} сП, у вас ${P.mu_o} сП — сравнение приближённое)</span>` : "";
   let h = `<div class="rep-head"><h1>Отчёт о разработке нефтяного месторождения</h1><div class="meta"><span><b>Участник:</b> <span id="rep-who">${nm || "—"}</span></span>` +
-    `<span><b>Объект:</b> ${lv === 2 ? r.scen.name + " (разведка, сейсмика, ГДИС)" : "учебный полигон (геология известна)"}</span><span><b>Срок:</b> ${nPlay} лет разработки${fc ? " + 10 лет прогноза" : ""}</span><span><b>Дата:</b> ${new Date().toLocaleDateString("ru-RU")}</span></div></div>`;
+    `<span><b>Объект:</b> ${lv === 2 ? r.scen.name + (G.edu ? " — учебный режим (геология известна)" : " (разведка, сейсмика, ГДИС)") : "учебный полигон (геология известна)"}</span><span><b>Срок:</b> ${nPlay} лет разработки${fc ? " + 10 лет прогноза" : ""}</span><span><b>Дата:</b> ${new Date().toLocaleDateString("ru-RU")}</span></div></div>`;
   if (!finished) h += `<div class="rep-banner"><b>Промежуточный отчёт.</b> Итоговая оценка и прогноз формируются по завершении срока разработки (${Math.round(P.horizon_days / 365.25)} лет) и в режиме песочницы не выставляются.</div>`;
   let n = 1;
   if (sc) {
@@ -3587,7 +3589,7 @@ const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, м�
 const LEVEL_DESC = {
   1: "Карта проницаемости и контур нефтеносности известны заранее — сразу бурите и управляйте разработкой. Время можно крутить непрерывно или по годам.",
   2: "Геология скрыта. Есть только 5 разведочных скважин с каротажом и РИГИС. Сейсмику 3D (кровля, подошва, толщина и разломы) нужно заказать за деньги; " +
-     "ГДИС даёт проницаемость и скин. Время идёт по годам: после каждого года можно бурить, переводить скважины в ППД, обрабатывать их. " +
+     "ГДИС даёт проницаемость и скин. Бурить, переводить скважины в ППД и обрабатывать их можно между годами или на ходу — в зависимости от режима времени. " +
      "Карты давления, проницаемости и насыщенности откроются только после итогов.",
 };
 const fmtK = (v) => (v >= 10 ? v.toFixed(0) : v.toFixed(1)).replace(".", ",");
@@ -3597,23 +3599,20 @@ function renderScenPick() {
     const sc = C.SCENARIOS[id], on = G.level === 2 && G.scenario === id;
     return `<button class="scen-card${on ? " active" : ""}" data-scen="${id}" data-tip="${escAttr(`<b>${sc.name}</b><br>${sc.region}, ${sc.age}.<br>${sc.rock}.<br><br>${sc.note}`)}"><b>${sc.short}</b>` +
       `<small>k ≈ ${fmtK(sc.k.med)} мД${sc.k.chan ? " (русла до " + fmtK(sc.k.chan.hi) + ")" : ""} · μ<sub>н</sub> ${fmtN(sc.mu_o, sc.mu_o >= 10 ? 0 : 1)} сП · ≈ ${fmtN(sc.depth / 1000, 1)} км</small></button>`;
-  }).join("") + `<button class="scen-card edu${G.level === 1 ? " active" : ""}" data-scen="edu" data-tip="${escAttr(LEVEL_DESC[1])}"><b>Учебный полигон</b><small>геология известна — для знакомства</small></button>`;
+  }).join("");
   $("scen-pick").innerHTML = cards;
   $("scen-pick").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setScenario(b.dataset.scen)));
 }
 function setScenario(id) {
-  const lvl = id === "edu" ? 1 : 2;
-  if (lvl === 2) {
-    G.scenario = id; const sp = C.scenarioParams(id);
-    $("pf-drill_cost").value = sp.drill_cost / 1e6; $("pf-expl_cost").value = sp.expl_cost / 1e6;
-  } else $("pf-drill_cost").value = C.DEFAULT_PARAMS.drill_cost / 1e6;
-  setLevel(lvl);
+  G.scenario = C.SCENARIOS[id] ? id : "bv8"; const sp = C.scenarioParams(G.scenario);
+  $("pf-drill_cost").value = sp.drill_cost / 1e6; $("pf-expl_cost").value = sp.expl_cost / 1e6;
+  setLevel(2);
 }
 function renderSettingsPreview() {
   const l2 = G.level === 2, sc = C.scenOf(G.scenario);
   renderScenPick();
   $("level-desc").innerHTML = "";
-  $("obj-hint").innerHTML = hint(`<b>Объекты</b> (карточки): ${LEVEL_DESC[2]}<br><br><b>Учебный полигон</b>: ${LEVEL_DESC[1]}`);
+  $("obj-hint").innerHTML = hint(`${LEVEL_DESC[2]}<br><br>Галочка «Учебный режим» открывает геологию сразу — на любом объекте.`);
   document.querySelectorAll("#params-form .lvl2-only").forEach((el) => el.classList.toggle("hidden", !l2));
   document.querySelectorAll("#params-form .lvl1-only").forEach((el) => el.classList.toggle("hidden", l2));
   if (!l2) {
@@ -3626,18 +3625,21 @@ function renderSettingsPreview() {
       ["Связанная вода / остаточная нефть", "0.20 / 0.25"], ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"], ["Плотность нефти", "0.86 т/м³"],
       ["Запасы OOIP", `${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т`]].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
   } else {
-    $("preview-title").textContent = `${sc.short}: лицензионный участок и разведочные скважины`;
+    $("preview-title").textContent = G.edu ? `${sc.short}: карта проницаемости (учебный режим)` : `${sc.short}: лицензионный участок и разведочные скважины`;
     const r = C.buildReservoir2({ ...C.DEFAULT_PARAMS, ...C.scenarioParams(G.scenario) });
-    Plotly.react("preview-plot", [{ type: "scatter", mode: "markers+text", x: r.explore.map((e) => ((e.cell % NX) + 0.5) * DX), y: r.explore.map((e) => (Math.floor(e.cell / NX) + 0.5) * DX),
+    const kMap = G.edu ? [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.hOil[c] > 0 ? logk(r.k[c]) : null)), colorscale: "Viridis", zmin: logk(Math.max(0.3, sc.k.min)), zmax: logk(sc.k.chan ? sc.k.chan.hi : sc.k.max),
+      hovertemplate: "k = %{customdata:.1f} мД<extra></extra>", customdata: field2D((c) => r.k[c]), colorbar: { title: { text: "lg k", side: "right" }, thickness: 12 } }] : [];
+    Plotly.react("preview-plot", [...kMap, { type: "scatter", mode: "markers+text", x: r.explore.map((e) => ((e.cell % NX) + 0.5) * DX), y: r.explore.map((e) => (Math.floor(e.cell / NX) + 0.5) * DX),
       text: r.explore.map((e) => e.name), textposition: "top center", marker: { symbol: "diamond", size: 14, color: "#fff", line: { color: TXT, width: 2 } }, hovertemplate: "%{text}<extra></extra>" }],
       lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
     const K = sc.k, kr = `медиана ≈ ${fmtK(K.med)} мД, обычно ${fmtK(Math.max(K.min, K.med * Math.exp(-1.3 * K.sig)))}–${fmtK(Math.min(K.max, K.med * Math.exp(1.3 * K.sig)))} мД` + (K.chan ? `; в руслах ${fmtK(K.chan.lo)}–${fmtK(K.chan.hi)} мД` : "");
     $("props-read").innerHTML = [["Глубина", `≈ ${(Math.round(sc.depth / 50) * 50).toLocaleString("ru-RU")} м`], ["Толщина", `≈ ${sc.h} м`], ["Пористость", fmtN(sc.phi)],
       ["Проницаемость", `≈ ${fmtK(K.med)} мД${K.chan ? `, русла до ${fmtK(K.chan.hi)}` : ""}`], ["Вязкость нефти / воды", `${fmtN(sc.mu_o, sc.mu_o >= 10 ? 0 : 1)} / ${fmtN(sc.mu_w, 2)} сП`],
-      ["S<sub>wc</sub> / S<sub>or</sub>", `${fmtN(sc.Swc)} / ${fmtN(sc.Sor)}`], ["Пластовое давление", `≈ ${r.P0} атм${sc.pGrad > 0.11 ? " (АВПД)" : ""}`]]
+      ["S<sub>wc</sub> / S<sub>or</sub>", `${fmtN(sc.Swc)} / ${fmtN(sc.Sor)}`], ["Пластовое давление", `≈ ${r.P0} атм${sc.pGrad > 0.11 ? " (АВПД)" : ""}`],
+      ...(G.edu ? [["Запасы OOIP", `${fmtN((r.ooipM3 * C.RHO_OIL) / 1e6)} млн т`], ["ВНК", `абс. −${r.owc} м`]] : [])]
       .map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
     $("props-hint").innerHTML = hint(`<b>${sc.name}</b><br>${sc.region}, ${sc.age}.<br>Коллектор: ${sc.rock}.<br>Проницаемость (по аналогам): ${kr}.<br><br>${sc.note}<br><br>` +
-      "Сетка 50×50, ячейка 40×40 м. Строение, разломы, ВНК и запасы неизвестны — разведка и сейсмика; проницаемость и скин скважин — по ГДИС.");
+      (G.edu ? "Учебный режим: геология известна — карты k, структура, ВНК и разломы видны сразу. " : "") + "Сетка 50×50, ячейка 40×40 м. Строение, разломы, ВНК и запасы неизвестны — разведка и сейсмика; проницаемость и скин скважин — по ГДИС.");
   }
 }
 // ---------- подсказки ----------
@@ -3741,6 +3743,7 @@ function initSettings() {
   }).join("");
   setScenario(G.scenario);
   $("tm-step").addEventListener("click", () => setTimeMode("step")); $("tm-rt").addEventListener("click", () => setTimeMode("rt"));
+  $("edu-mode").addEventListener("change", (e) => { G.edu = e.target.checked; if (G.edu) setTimeMode("rt"); renderSettingsPreview(); });
   $("tm-min").addEventListener("change", () => setTimeMode("rt"));
   $("btn-start").addEventListener("click", startGame); $("btn-selftest").addEventListener("click", runSelfTestBrowser);
 }
@@ -3769,7 +3772,8 @@ function show(id) { for (const s of ["screen-settings", "screen-game", "screen-r
 function applyLevelUI() {
   document.querySelectorAll(".lvl2-only").forEach((el) => { if (!el.closest("#params-form")) el.classList.toggle("hidden", !isL2()); });
   const rt = !!(G.rt && !G.rt.done);
-  $("speed-group").classList.toggle("hidden", isL2() || rt); $("year-group").classList.toggle("hidden", rt); $("rt-group").classList.toggle("hidden", !rt);
+  $("speed-group").classList.add("hidden"); // скорость выбирается на стартовом экране
+  $("year-group").classList.toggle("hidden", rt); $("rt-group").classList.toggle("hidden", !rt);
   renderLayerBar();
 }
 function startGame() {
@@ -3781,14 +3785,15 @@ function startGame() {
   G.layer = G.level === 2 ? "blank" : "k";
   $("owc-input").value = ""; G.log.sel = null;
   if (G.level === 2) { $("owc-input").min = Math.round(res.owc - 150); $("owc-input").max = Math.round(res.owc + 150); }
-  $("tb-obj").textContent = G.level === 2 ? `Объект: ${res.scen.short}` : "Учебный полигон"; G.log.mode = "one"; setTool(null); setSpeed(0);
+  $("tb-obj").textContent = G.level === 2 ? `Объект: ${res.scen.short}${G.edu ? " · учебный режим" : ""}` : "Учебный полигон";
+  if (G.level === 2 && G.edu) { G.seis = res.seis; G.layer = "k"; } G.log.mode = "one"; setTool(null); setSpeed(0);
   $("fc-gather").value = G.sim.field.pGather; $("fc-kns").value = G.sim.field.pKNS; $("fc-gather-v").textContent = G.sim.field.pGather; $("fc-kns-v").textContent = G.sim.field.pKNS;
   stopPlay(); saveSnap(G.sim);
   // реальное время: игровое время привязано к часам (catch-up после свёрнутой вкладки), без пауз
   G.rt = G.timeMode === "rt" ? { min: G.rtMin, rate: 3650 / (G.rtMin * 60), started: false, done: false, wall0: 0, t0: 0, lastYear: 0 } : null;
   applyLevelUI(); wellRows.clear(); renderWellTable(true);
   show("screen-game"); renderAll();
-  if (G.rt) toast(`Реальное время: 10 лет = ${fmtClock(G.rt.min * 60)}, 1 год ≈ ${fmtClock(G.rt.min * 6)}. Осмотритесь и нажмите «▶ Старт» — дальше время не останавливается, изменения вносятся на ходу.`);
+  if (G.rt) toast(`${G.edu ? "Учебный режим: геология открыта. " : ""}Непрерывное время: 10 лет = ${fmtClock(G.rt.min * 60)}, 1 год ≈ ${fmtClock(G.rt.min * 6)}. Осмотритесь и нажмите «▶ Старт» — дальше время не останавливается, изменения вносятся на ходу.`);
   else toast(G.level === 2 ? `${res.scen.short}: ` + " у вас 5 разведочных скважин (◆) — кликните по ним, чтобы посмотреть каротаж. Сейсмику можно заказать за деньги. Время идёт по кнопке «Следующий год»."
                       : "Нажмите ▶ для запуска времени или «Следующий год». Выберите инструмент и кликните по карте, чтобы бурить.");
 }
