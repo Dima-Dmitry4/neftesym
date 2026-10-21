@@ -44,6 +44,18 @@
   #rt-clock { font-variant-numeric:tabular-nums; }
   #rt-clock .rt-live { color:var(--bad); font-weight:600; }
   #year-hint { font-size:12px; color:var(--muted); max-width:210px; line-height:1.25; }
+  /* подсказки: «?» в верхнем индексе и всплывающее окно (наведение, фокус, касание) */
+  .hint { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; margin-left:4px; border-radius:50%;
+          font:700 10px/1 system-ui, sans-serif; color:var(--accent); background:var(--panel2); border:1px solid var(--line); cursor:help;
+          vertical-align:super; text-transform:none; letter-spacing:0; }
+  .hint:hover, .hint:focus { background:var(--accent); color:#fff; border-color:var(--accent); outline:none; }
+  #tip { position:fixed; z-index:200; display:none; max-width:min(380px, calc(100vw - 16px)); background:var(--panel); color:var(--text);
+         border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 24px #2a3f5f33; padding:9px 11px; font-size:12.5px; line-height:1.45;
+         pointer-events:none; text-transform:none; letter-spacing:0; font-weight:400; }
+  #tip table { border-collapse:collapse; } #tip td { padding:1px 10px 1px 0; vertical-align:top; } #tip td:last-child { text-align:right; white-space:nowrap; font-weight:600; padding-right:0; }
+  #tip .tg { font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding-top:6px; }
+  #btn-prices { font-weight:600; }
+  .note-mini { margin-top:8px; font-size:12px; color:var(--muted); }
   .scen-pick { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-bottom:6px; }
   .scen-card { text-align:left; padding:8px 10px; line-height:1.3; border-radius:8px; background:var(--panel); }
   .scen-card b { display:block; font-size:14px; }
@@ -214,31 +226,31 @@
 <body>
 <div id="screen-settings" class="screen visible">
   <div class="settings-box card">
-    <h1>Разработка нефтяного месторождения</h1>
-    <p class="sub">Учебный симулятор: IMPES-расчёт давления и насыщенности, скважины по Писману · <a href="../gallery.html" style="color:var(--accent)">все прототипы</a></p>
+    <h1>Разработка нефтяного месторождения<sup class="hint" tabindex="0" data-tip="Учебный симулятор: двухфазная модель нефть–вода (IMPES, сетка 50×50), скважины по Писману, интегрированная модель с ЭЦН, штуцерами, КНС и системой сбора, экономика с ЧДД и оценкой против эталона.">?</sup></h1>
+    <p class="sub"><a href="../gallery.html" style="color:var(--accent)">все прототипы</a></p>
     <div class="settings-cols">
       <div>
         <h2 id="preview-title">Карта проницаемости</h2>
         <div id="preview-plot" style="width:100%; height:380px"></div>
         <div class="prop-block">
-          <h2>Свойства пласта</h2>
+          <h2>Свойства пласта<span id="props-hint"></span></h2>
           <div id="props-read"></div>
         </div>
       </div>
       <div>
-        <h2>Объект разработки</h2>
+        <h2>Объект разработки<span id="obj-hint"></span></h2>
         <div id="scen-pick" class="scen-pick"></div>
         <p id="level-desc" class="level-desc"></p>
-        <h2>Режим времени</h2>
+        <h2>Режим времени<sup class="hint" tabindex="0" data-tip="<b>По годам</b> — время стоит, год рассчитывается кнопкой «Рассчитать год», изменения вносятся между годами (на учебном полигоне есть и непрерывные скорости ×1/×10/×50 с паузой).<br><br><b>Реальное время</b> — 10 лет разработки идут выбранное число минут без пауз; бурение, перевод в ППД, режимы меняются на ходу и применяются в тот же момент игрового времени.">?</sup></h2>
         <div class="level-pick">
-          <button id="tm-step" class="active">По годам<small>время стоит; год рассчитывается по кнопке, изменения — между годами</small></button>
-          <button id="tm-rt">Реальное время<small>время идёт само и без пауз, изменения вносятся на ходу</small></button>
+          <button id="tm-step" class="active">По годам</button>
+          <button id="tm-rt">Реальное время</button>
         </div>
         <div id="tm-rt-opts" class="hidden">10 лет разработки =<select id="tm-min"><option value="5">5 минут</option><option value="10">10 минут</option><option value="20" selected>20 минут</option><option value="40">40 минут</option><option value="60">1 час</option><option value="90">1,5 часа</option></select><span id="tm-rate" class="sub"></span></div>
-        <h2>Экономика и флюиды (можно менять)</h2>
+        <h2>Экономика<sup class="hint" tabindex="0" data-tip="Цены по умолчанию — ориентиры для Западной Сибири и Урало-Поволжья, 2024–2025 гг.; стоимость скважин зависит от глубины объекта. Всё можно менять. В игре полный прайс — кнопка «₽ Цены» вверху.">?</sup></h2>
         <div class="form-grid" id="params-form"></div>
         <div class="settings-buttons">
-          <button id="btn-selftest">Самотест физики (~6 с)</button>
+          <button id="btn-selftest" title="Проверка балансов и физики ядра (~1 мин)">Самотест</button>
           <button id="btn-start" class="primary">Начать разработку</button>
         </div>
         <pre id="selftest-out" class="selftest-out hidden"></pre>
@@ -323,6 +335,7 @@
     </div>
     <div class="tb-right">
       <button id="btn-schem" title="Система сбора и закачки, конструкция скважин">🗺 Схемы</button>
+      <button id="btn-prices" data-tip="@prices">₽ Цены</button>
       <button id="btn-logs" class="lvl2-only" title="Каротажи и РИГИС всех скважин, схема корреляции">📈 Каротажи</button>
       <button id="btn-pta" class="lvl2-only" title="Гидродинамические исследования: КВД, проницаемость и скин">⏱ ГДИС</button>
       <button id="btn-results">Итоги</button>
@@ -334,7 +347,7 @@
         <span class="lbl">Слой:</span>
         <span id="layers" class="tb-group"></span>
         <span class="tb-right">
-          <button id="tool-expl" class="lvl2-only" title="Разведочная скважина: только каротаж, без добычи">◆ Разведочная</button>
+          <button id="tool-expl" class="lvl2-only" data-tip="@expl">◆ Разведочная</button>
           <span id="drill-opts" class="tb-group" title="Заканчивание новой скважины: вертикальная (ВС) или горизонтальная (ГС) — длина и направление ствола">
             <select id="drill-kind" title="Заканчивание новой скважины"><option value="v">ВС</option><option value="vf">ВС + ГРП</option><option value="hs">ГС</option><option value="hsf">ГС + МГРП</option></select>
             <label id="dk-L" class="hidden" title="Длина горизонтального участка, м (1000–2000)" style="display:flex; align-items:center; gap:3px">L<input id="drill-L" type="number" min="1000" max="2000" step="50" value="1000" style="width:70px">м</label>
@@ -342,7 +355,7 @@
             <label id="dk-xf" class="hidden" title="Полудлина трещины ГРП" style="display:flex; align-items:center; gap:3px">x<sub>f</sub><select id="drill-xf"><option>40</option><option selected>80</option><option>120</option></select>м</label>
             <label id="dk-az" class="hidden" title="Азимут ствола (0° — север, 90° — восток) или трещины" style="display:flex; align-items:center; gap:3px">аз.<input id="drill-az" type="number" min="0" max="359" step="5" value="90" style="width:58px">°</label>
           </span>
-          <button id="tool-well" title="Пробурить скважину: потом можно выбрать режим, перевести под закачку (ППД), остановить">⛏ Скважина</button>
+          <button id="tool-well" data-tip="@drill">⛏ Скважина</button>
         </span>
       </div>
       <div id="map"></div>
@@ -374,7 +387,7 @@
         <tbody></tbody>
       </table></div>
       <div class="row" style="margin-top:10px"><b>Графики</b><span class="sub">скважина:</span><select id="wc-sel"></select>
-        <span class="sub">«Все» — суммарные дебиты и среднее P<sub>wf</sub> добывающих</span></div>
+        <sup class="hint" tabindex="0" data-tip="«Все скважины» — суммарные дебиты жидкости и нефти и среднее забойное давление добывающих; ось времени — только рассчитанные годы.">?</sup></div>
       <div class="card" style="margin-top:6px; padding:4px"><div id="wc-one" style="width:100%; height:330px"></div></div>
       <div id="year-card" class="card">
         <div class="panel-title" style="margin-top:0">Итоги по годам</div>
@@ -2636,7 +2649,7 @@ function renderOps() {
       : canM ? `<div class="card" style="padding:12px 14px"><b>МГРП — многостадийный гидроразрыв на горизонтальном стволе</b><div class="sub" style="margin:4px 0 8px">Вдоль ствола ${w.L} м равномерно создаются поперечные трещины (азимут ствола ± 90°) конечной проводимости (k<sub>f</sub>·w = ${C.FRAC_COND} мД·м). У поперечной трещины есть дополнительный скин стягивания потока к стволу: s<sub>c</sub> = (kh / k<sub>f</sub>w)·(ln(h/2r<sub>w</sub>) − π/2) ≈ ${C.fracChokeSkin(kh, G.sim.r.h).toFixed(1)} при k = ${kh.toFixed(0)} мД. Соседние трещины мешают друг другу (интерференция) — отдача от каждой следующей стадии падает. МГРП окупается в низкопроницаемом пласте; в высокопроницаемом ГС и без того дренирует пласт. Трещины не пересекают разломы.</div>` +
       `<div class="row">Стадий: <input id="op-mn" type="number" min="2" max="${nMax}" step="1" value="${Math.min(6, nMax)}" style="width:56px"> <span class="sub">(до ${nMax}: интервал ≥ 80 м)</span> Полудлина: <select id="op-mxf">${[40, 80, 120].map((x) => `<option value="${x}"${x === 80 ? " selected" : ""}>${x} м</option>`).join("")}</select>` +
       ` <span class="sub" id="op-mcost">(${(mc(Math.min(6, nMax), 80) / 1e6).toFixed(1)} млн руб)</span> <button id="op-mgrp" class="primary">Выполнить МГРП</button></div></div>`
-      : `<div class="note">ГРП и боковой ствол — на вертикальных скважинах без ГРП; МГРП — на горизонтальных стволах (ГС, ЗБС) без МГРП. При бурении заканчивание выбирается рядом с кнопкой «Скважина»: «ВС + ГРП», «ГС», «ГС + МГРП».</div>`);
+      : `<div class="note keep">ГРП и боковой ствол — на вертикальных скважинах без ГРП; МГРП — на горизонтальных стволах (ГС, ЗБС) без МГРП. При бурении заканчивание выбирается рядом с кнопкой «Скважина»: «ВС + ГРП», «ГС», «ГС + МГРП».</div>`);
   const mg = $("op-mgrp"); if (mg) {
     mg.onclick = () => doMgrp(w);
     const upd = () => { $("op-mcost").textContent = `(${(mc(+$("op-mn").value || 2, +$("op-mxf").value) / 1e6).toFixed(1)} млн руб)`; };
@@ -3022,7 +3035,7 @@ function drawPumpChar() {
     `<table class="t"><tbody>` + row("Подача (режим)", `${e.q.toFixed(0)} м³/сут`) + row("Оптимум при этой частоте", `${qb.toFixed(0)} м³/сут`) + row("Загрузка", `${(load * 100).toFixed(0)} %`) +
     row("Напор насоса", `${Hop.toFixed(0)} м`) + row("КПД", `${etaOp.toFixed(0)} %`) + row("Мощность", `${e.kW.toFixed(0)} кВт`) +
     row("Удельный расход", `${e.q > 0 ? ((e.kW * 24) / e.q).toFixed(1) : "—"} кВт·ч/м³`) + row("P на приёме", `${e.pwf.toFixed(0)} атм`) + `</tbody></table>` +
-    (adv ? `<div class="note">${adv}</div>` : "") +
+    (adv ? `<div class="note keep">${adv}</div>` : "") +
     `<div class="note">Режим работы — пересечение напора насоса (синяя линия) и потребного напора скважины (серый пунктир: подъём столба жидкости за вычетом притока из пласта). ` +
     `Звезда на графике напора и на графике КПД показывает режим. Рабочая зона — 60–120 % от оптимальной подачи; штриховые линии — напор на 40 и 60 Гц.</div>`;
 }
@@ -3321,7 +3334,7 @@ function drawPta() {
 function renderPtaSide(res) {
   const bu = G.bu, doss = Object.entries(G.pta).map(([n, p]) => `<tr><td>${n}</td><td>${isFinite(p.k) ? p.k.toFixed(0) : "—"}</td><td>${isFinite(p.s) ? p.s.toFixed(1) : "—"}</td><td>${p.pRes ? p.pRes.toFixed(0) : "—"}</td><td>${p.year}</td></tr>`).join("");
   let h = "";
-  if (!bu) h += `<div class="note">Остановите добывающую скважину и запишите восстановление забойного давления. Скважина должна уже поработать (рассчитайте хотя бы год). Остановка — это недобор нефти, поэтому длинные тесты дороже.</div>`;
+  if (!bu) h += `<div class="note keep">Остановите добывающую скважину и запишите восстановление забойного давления. Скважина должна уже поработать (рассчитайте хотя бы год). Остановка — это недобор нефти, поэтому длинные тесты дороже.</div>`;
   else {
     h += `<div><b>${bu.wellName}</b> · дебит до остановки ${bu.q.toFixed(0)} м³/сут · P<sub>wf</sub> = ${bu.pwf0.toFixed(0)} атм</div>`;
     h += `<div class="note"><b>Как анализировать.</b><br>1. На диагностическом графике найдите участок, где производная (красные ромбы) постоянна, — это радиальный приток. Ранние точки искажены влиянием ствола скважины, поздние — границами пласта и разломами.<br>` +
@@ -3552,18 +3565,24 @@ function drawReveal(sim) {
 }
 
 // ---------------- настройки ----------------
-const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, мин, макс, шаг, только ур. 2]
-  ["mu_o", "Вязкость нефти, сП", 5, 1, 50, 0.5], ["price_oil", "Цена нефти (netback: за вычетом НДПИ и транспорта), руб/т", 12000, 1000, 40000, 500],
-  ["drill_cost", "Вертикальная (ННС) скважина под ключ, млн руб (ГС: ×(1,2 + 0,5·L/1000); ЗБС: ×(0,35 + 0,5·L/1000))", 80, 5, 400, 5],
-  ["conv_cost", "Смена назначения (ППД ⇄ добыча), млн руб", 5, 0.5, 30, 0.5],
-  ["esp_cost", "Установка ЭЦН-290 с монтажом, млн руб (другие типоразмеры ×0,5…2,4)", 6, 0.5, 50, 0.5], ["frac_cost", "ГРП с полудлиной 40 м, млн руб (80 м ×1,6; 120 м ×2,4; МГРП ×(0,4 + 0,6·стадий))", 8, 1, 50, 0.5],
-  ["elec_cost", "Электроэнергия (ЭЦН и КНС), руб/кВт·ч", 5.5, 0, 30, 0.5],
-  ["expl_cost", "Разведочная скважина, млн руб", 90, 5, 400, 5, true], ["seis_cost", "Сейсмика 3D, млн руб", 40, 1, 300, 1, true],
-  ["pta_cost", "ГДИС (КВД), млн руб (+ недобор нефти)", 1, 0.1, 10, 0.1, true], ["stim_cost", "Обработка призабойной зоны, млн руб", 2, 0.5, 30, 0.5, true],
-  ["disc_rate", "Ставка дисконтирования (ЧДД), %", 10, 0, 30, 0.5],
-  ["lift_cost", "Сбор и подготовка жидкости (без электроэнергии ЭЦН), руб/м³", 100, 0, 1000, 10], ["inj_cost", "Водоподготовка для ППД (без электроэнергии КНС), руб/м³", 40, 0, 500, 5],
-  ["well_opex", "Обслуживание добывающей скважины, млн руб/год (нагнет. ×0,5; остановленной ×0,25)", 4, 0, 30, 0.5],
-  ["horizon_years", "Горизонт, лет", 10, 1, 30, 1], ["init_money", "Стартовый капитал, млн руб", 600, 50, 5000, 50],
+const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, мин, макс, шаг, только ур. 2, подсказка]
+  ["mu_o", "Вязкость нефти, сП", 5, 1, 50, 0.5, false, "Только на учебном полигоне; у объектов вязкость задаёт пласт."],
+  ["price_oil", "Цена нефти, руб/т", 12000, 1000, 40000, 500, false, "Netback: экспортная цена за вычетом НДПИ, пошлин и транспорта. Налог на прибыль не учитывается."],
+  ["drill_cost", "Скважина (ННС), млн руб", 80, 5, 400, 5, false, "Вертикальная (наклонно-направленная) «под ключ». ГС длиной L: ×(1,2 + 0,5·L/1000); боковой ствол (ЗБС): ×(0,35 + 0,5·L/1000). По умолчанию зависит от глубины объекта."],
+  ["conv_cost", "Перевод добыча ⇄ ППД, млн руб", 5, 0.5, 30, 0.5, false, "КРС, пакер, подключение водовода."],
+  ["esp_cost", "ЭЦН, млн руб", 6, 0.5, 50, 0.5, false, "ЭЦН-290 с монтажом; другие типоразмеры ×0,5…2,4."],
+  ["frac_cost", "ГРП, млн руб", 8, 1, 50, 0.5, false, "Полудлина трещины 40 м; 80 м ×1,6; 120 м ×2,4. МГРП из n стадий: ×(0,4 + 0,6·n)."],
+  ["elec_cost", "Электроэнергия, руб/кВт·ч", 5.5, 0, 30, 0.5, false, "ЭЦН — по мощности насоса в рабочей точке; КНС — P<sub>КНС</sub>·V/η, η = 0,7."],
+  ["expl_cost", "Разведочная скважина, млн руб", 90, 5, 400, 5, true, "Только каротаж и РИГИС, без добычи."],
+  ["seis_cost", "Сейсмика 3D, млн руб", 40, 1, 300, 1, true, "Карты кровли, подошвы, толщины и разломов (с ошибками)."],
+  ["pta_cost", "ГДИС (КВД), млн руб", 1, 0.1, 10, 0.1, true, "Плюс недобор нефти за время остановки скважины."],
+  ["stim_cost", "ОПЗ, млн руб", 2, 0.5, 30, 0.5, true, "Обработка призабойной зоны: снижает скин скважины до −1."],
+  ["disc_rate", "Ставка дисконтирования, %", 10, 0, 30, 0.5, false, "Для расчёта ЧДД по годовым денежным потокам."],
+  ["lift_cost", "Подготовка жидкости, руб/м³", 100, 0, 1000, 10, false, "Сбор, подготовка нефти, утилизация воды — без электроэнергии ЭЦН."],
+  ["inj_cost", "Водоподготовка ППД, руб/м³", 40, 0, 500, 5, false, "Водозабор и подготовка воды — без электроэнергии КНС."],
+  ["well_opex", "Обслуживание, млн руб/год", 4, 0, 30, 0.5, false, "На работающую добывающую скважину: ПРС, ремонт оборудования, персонал. Нагнетательная ×0,5, остановленная ×0,25."],
+  ["horizon_years", "Горизонт, лет", 10, 1, 30, 1, false, ""],
+  ["init_money", "Стартовый капитал, млн руб", 600, 50, 5000, 50, false, "Баланс может уйти в минус — ЧДД и оценка от капитала не зависят."],
 ];
 const LEVEL_DESC = {
   1: "Карта проницаемости и контур нефтеносности известны заранее — сразу бурите и управляйте разработкой. Время можно крутить непрерывно или по годам.",
@@ -3576,9 +3595,9 @@ const fmtN = (v, d = 2) => v.toFixed(d).replace(".", ",");
 function renderScenPick() {
   const cards = C.SCENARIO_ORDER.map((id) => {
     const sc = C.SCENARIOS[id], on = G.level === 2 && G.scenario === id;
-    return `<button class="scen-card${on ? " active" : ""}" data-scen="${id}"><b>${sc.short}</b><small>${sc.region.split(",")[0]} · ${sc.age}</small>` +
+    return `<button class="scen-card${on ? " active" : ""}" data-scen="${id}" data-tip="${escAttr(`<b>${sc.name}</b><br>${sc.region}, ${sc.age}.<br>${sc.rock}.<br><br>${sc.note}`)}"><b>${sc.short}</b>` +
       `<small>k ≈ ${fmtK(sc.k.med)} мД${sc.k.chan ? " (русла до " + fmtK(sc.k.chan.hi) + ")" : ""} · μ<sub>н</sub> ${fmtN(sc.mu_o, sc.mu_o >= 10 ? 0 : 1)} сП · ≈ ${fmtN(sc.depth / 1000, 1)} км</small></button>`;
-  }).join("") + `<button class="scen-card edu${G.level === 1 ? " active" : ""}" data-scen="edu"><b>Учебный полигон</b><small>Геология известна заранее, время идёт непрерывно — для знакомства с симулятором</small></button>`;
+  }).join("") + `<button class="scen-card edu${G.level === 1 ? " active" : ""}" data-scen="edu" data-tip="${escAttr(LEVEL_DESC[1])}"><b>Учебный полигон</b><small>геология известна — для знакомства</small></button>`;
   $("scen-pick").innerHTML = cards;
   $("scen-pick").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setScenario(b.dataset.scen)));
 }
@@ -3593,11 +3612,12 @@ function setScenario(id) {
 function renderSettingsPreview() {
   const l2 = G.level === 2, sc = C.scenOf(G.scenario);
   renderScenPick();
-  $("level-desc").innerHTML = LEVEL_DESC[G.level] + (l2 && sc.note ? `<div class="scen-note"><b>${sc.name}.</b> ${sc.note}</div>` : "");
+  $("level-desc").innerHTML = "";
+  $("obj-hint").innerHTML = hint(`<b>Объекты</b> (карточки): ${LEVEL_DESC[2]}<br><br><b>Учебный полигон</b>: ${LEVEL_DESC[1]}`);
   document.querySelectorAll("#params-form .lvl2-only").forEach((el) => el.classList.toggle("hidden", !l2));
   document.querySelectorAll("#params-form .lvl1-only").forEach((el) => el.classList.toggle("hidden", l2));
   if (!l2) {
-    $("preview-title").textContent = "Карта проницаемости";
+    $("preview-title").textContent = "Карта проницаемости"; $("props-hint").innerHTML = "";
     const r = C.buildReservoir(C.DEFAULT_PARAMS);
     Plotly.react("preview-plot", [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.active[c] ? logk(r.k[c]) : null)), colorscale: "Viridis", zmin: logk(15), zmax: logk(800),
       hovertemplate: "%{z:.2f}<extra>lg k</extra>", colorbar: { title: { text: "lg k", side: "right" }, thickness: 12 } }],
@@ -3612,22 +3632,97 @@ function renderSettingsPreview() {
       text: r.explore.map((e) => e.name), textposition: "top center", marker: { symbol: "diamond", size: 14, color: "#fff", line: { color: TXT, width: 2 } }, hovertemplate: "%{text}<extra></extra>" }],
       lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
     const K = sc.k, kr = `медиана ≈ ${fmtK(K.med)} мД, обычно ${fmtK(Math.max(K.min, K.med * Math.exp(-1.3 * K.sig)))}–${fmtK(Math.min(K.max, K.med * Math.exp(1.3 * K.sig)))} мД` + (K.chan ? `; в руслах ${fmtK(K.chan.lo)}–${fmtK(K.chan.hi)} мД` : "");
-    $("props-read").innerHTML = [["Регион", sc.region], ["Возраст", sc.age], ["Коллектор", sc.rock], ["Глубина залегания", `≈ ${(Math.round(sc.depth / 50) * 50).toLocaleString("ru-RU")} м`],
-      ["Эффективная толщина", `≈ ${sc.h} м (три пачки, глинистые прослои)`], ["Пористость", fmtN(sc.phi)], ["Проницаемость (по аналогам)", kr],
-      ["Вязкость нефти / воды в пласте", `${fmtN(sc.mu_o, sc.mu_o >= 10 ? 0 : 1)} / ${fmtN(sc.mu_w, 2)} сП`], ["Связанная вода / остаточная нефть", `${fmtN(sc.Swc)} / ${fmtN(sc.Sor)}`],
-      ["Начальное пластовое давление", `≈ ${r.P0} атм${sc.pGrad > 0.11 ? " (аномально высокое)" : ""}`], ["Сетка", "50×50, ячейка 40×40 м"],
-      ["Строение, разломы, ВНК", "неизвестны — разведка, сейсмика"], ["Проницаемость и скин скважин", "известны только по ГДИС"], ["Запасы OOIP", "неизвестны"]]
+    $("props-read").innerHTML = [["Глубина", `≈ ${(Math.round(sc.depth / 50) * 50).toLocaleString("ru-RU")} м`], ["Толщина", `≈ ${sc.h} м`], ["Пористость", fmtN(sc.phi)],
+      ["Проницаемость", `≈ ${fmtK(K.med)} мД${K.chan ? `, русла до ${fmtK(K.chan.hi)}` : ""}`], ["Вязкость нефти / воды", `${fmtN(sc.mu_o, sc.mu_o >= 10 ? 0 : 1)} / ${fmtN(sc.mu_w, 2)} сП`],
+      ["S<sub>wc</sub> / S<sub>or</sub>", `${fmtN(sc.Swc)} / ${fmtN(sc.Sor)}`], ["Пластовое давление", `≈ ${r.P0} атм${sc.pGrad > 0.11 ? " (АВПД)" : ""}`]]
       .map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
+    $("props-hint").innerHTML = hint(`<b>${sc.name}</b><br>${sc.region}, ${sc.age}.<br>Коллектор: ${sc.rock}.<br>Проницаемость (по аналогам): ${kr}.<br><br>${sc.note}<br><br>` +
+      "Сетка 50×50, ячейка 40×40 м. Строение, разломы, ВНК и запасы неизвестны — разведка и сейсмика; проницаемость и скин скважин — по ГДИС.");
   }
 }
+// ---------- подсказки ----------
+const escAttr = (x) => String(x).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escHtml = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// «?» с подсказкой (html — наш собственный текст)
+const hint = (html) => `<sup class="hint" tabindex="0" data-tip="${escAttr(html)}">?</sup>`;
+const mlnS = (v) => (v / 1e6).toFixed(v < 1e7 ? 1 : 0).replace(".", ",");
+// прайс по текущим ценам игры (или по форме настроек до старта)
+function pricesHtml() {
+  const P = G.params || readParams(), cc = (u) => C.costOf(u, P), row = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`, g = (t) => `<tr><td colspan="2" class="tg">${t}</td></tr>`;
+  const esp = Object.values(C.PUMPS).map((q) => q.cost * P.esp_cost);
+  let h = "<table>" + g("Бурение") + row("ВС (ННС)", `${mlnS(cc(C.CAPEX.vert()))} млн`) +
+    row("ВС + ГРП 40 / 80 / 120 м", [40, 80, 120].map((x) => mlnS(cc({ ...C.CAPEX.vert(), ...C.CAPEX.frac(x) }))).join(" / ") + " млн") +
+    row("ГС 1000 / 1500 / 2000 м", [1000, 1500, 2000].map((L) => mlnS(cc(C.CAPEX.hs(L)))).join(" / ") + " млн") +
+    row("ГС 1000 м + МГРП 6×80 м", `${mlnS(cc({ ...C.CAPEX.hs(1000), ...C.CAPEX.mgrp(6, 80) }))} млн`) +
+    row("Боковой ствол 300 / 600 / 1000 м", [300, 600, 1000].map((L) => mlnS(cc(C.CAPEX.zbs(L)))).join(" / ") + " млн");
+  if (isL2()) h += row("Разведочная скважина", `${mlnS(P.expl_cost)} млн`);
+  h += g("Операции") + row("ГРП 40 / 80 / 120 м", [40, 80, 120].map((x) => mlnS(cc(C.CAPEX.frac(x)))).join(" / ") + " млн") +
+    row("МГРП 4 / 6 / 8 стадий × 80 м", [4, 6, 8].map((n) => mlnS(cc(C.CAPEX.mgrp(n, 80)))).join(" / ") + " млн") +
+    row("ЭЦН (ЭЦН-20 … ЭЦН-1250)", `${mlnS(Math.min(...esp))}–${mlnS(Math.max(...esp))} млн`) + row("Перевод добыча ⇄ ППД", `${mlnS(P.conv_cost)} млн`);
+  if (isL2()) h += row("ОПЗ", `${mlnS(P.stim_cost)} млн`) + row("ГДИС (КВД)", `${mlnS(P.pta_cost)} млн + недобор нефти`) + row("Сейсмика 3D", `${mlnS(P.seis_cost)} млн`);
+  h += g("Эксплуатация") + row("Нефть (netback)", `${P.price_oil.toLocaleString("ru-RU")} руб/т`) + row("Подготовка жидкости", `${P.lift_cost} руб/м³`) +
+    row("Водоподготовка ППД", `${P.inj_cost} руб/м³`) + row("Электроэнергия (ЭЦН, КНС)", `${String(P.elec_cost).replace(".", ",")} руб/кВт·ч`) +
+    row("Обслуживание добывающей", `${mlnS(P.well_opex)} млн/год`) + row("— нагнетательной / остановленной", `×${String(C.WELL_OPEX_INJ).replace(".", ",")} / ×${String(C.WELL_OPEX_IDLE).replace(".", ",")}`);
+  return h + "</table>";
+}
+// стоимость бурения при текущем выборе заканчивания
+function drillTipHtml() {
+  const P = G.params || readParams(), kv = $("drill-kind").value, L = drillLen(), xf = +$("drill-xf").value, n = Math.max(1, Math.min(Math.floor(L / 80), +$("drill-n").value || 6));
+  let u = C.CAPEX.vert(), what = "вертикальная (ННС)";
+  if (kv === "vf") { u = { ...u, ...C.CAPEX.frac(xf) }; what = `ВС + ГРП ${xf} м`; }
+  if (kv === "hs" || kv === "hsf") { u = C.CAPEX.hs(L); what = `ГС ${L} м`; }
+  if (kv === "hsf") { u = { ...u, ...C.CAPEX.mgrp(n, xf) }; what += ` + МГРП ${n}×${xf} м`; }
+  return `<b>Пробурить скважину</b>: ${what} — <b>${mlnS(C.costOf(u, P))} млн руб</b>.<br>Клик по карте — бурение; потом можно выбрать режим, перевести под закачку (ППД), остановить. Если ствол упрётся в соседей, длина и цена будут меньше.`;
+}
+const TIP_FN = { prices: pricesHtml, drill: drillTipHtml, expl: () => `<b>Разведочная скважина</b> — ${mlnS((G.params || readParams()).expl_cost)} млн руб.<br>Только каротаж и РИГИС, без добычи.` };
+const tipBox = document.createElement("div"); tipBox.id = "tip"; document.body.appendChild(tipBox);
+let tipFor = null;
+function tipShow(el) {
+  const raw = el.dataset.tip; if (!raw) return;
+  tipFor = el; tipBox.innerHTML = raw[0] === "@" && TIP_FN[raw.slice(1)] ? TIP_FN[raw.slice(1)]() : raw;
+  tipBox.style.display = "block";
+  const r = el.getBoundingClientRect(), w = tipBox.offsetWidth, h = tipBox.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let top = r.bottom + 6; if (top + h > vh - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
+  tipBox.style.top = `${Math.max(8, top)}px`; tipBox.style.left = `${Math.max(8, Math.min(vw - w - 8, r.left + r.width / 2 - w / 2))}px`;
+}
+function tipHide() { tipFor = null; tipBox.style.display = "none"; }
+// обычные title переводим в те же подсказки (быстрее и заметнее системных); графики Plotly не трогаем
+function tipTarget(t) {
+  if (!t || !t.closest) return null;
+  const tt = t.closest("[title]");
+  if (tt && !tt.closest(".js-plotly-plot") && tt.getAttribute("title")) { tt.dataset.tip = escHtml(tt.getAttribute("title")); tt.removeAttribute("title"); }
+  return t.closest("[data-tip]");
+}
+document.addEventListener("mouseover", (e) => { const el = tipTarget(e.target); if (el) { if (el !== tipFor) tipShow(el); } else if (tipFor) tipHide(); });
+document.addEventListener("focusin", (e) => { const el = e.target.closest && e.target.closest(".hint"); if (el) tipShow(el); });
+document.addEventListener("focusout", (e) => { if (e.target === tipFor) tipHide(); });
+document.addEventListener("click", (e) => { const el = e.target.closest && e.target.closest(".hint"); if (el) { e.preventDefault(); e.stopPropagation(); tipShow(el); } }, true);
+document.addEventListener("scroll", tipHide, true);
+// Пояснения в окнах игры (каротаж, ГДИС, схемы, насос, операции) сворачиваются в строку «ℹ Как читать ?»:
+// полный текст — в подсказке. Видимыми остаются заметки .keep (совет, пустое состояние, ограничение) и отчёт.
+const NOTE_SCOPES = "#log-modal, #pta-modal, #schem-modal, #op-modal";
+function compactNotes(root) {
+  if (!root.querySelectorAll) return;
+  for (const n of root.querySelectorAll(".note:not(.keep)")) {
+    if (!n.closest(NOTE_SCOPES)) continue;
+    const d = document.createElement("div"); d.className = "note-mini";
+    d.innerHTML = `ℹ Как читать${hint(n.innerHTML)}`; n.replaceWith(d);
+  }
+  // описания операций в карточках: <b>Название</b><div class="sub">описание</div>
+  for (const sub of root.querySelectorAll("#op-modal .card > div.sub")) {
+    const b = sub.previousElementSibling; if (!b || b.tagName !== "B") continue;
+    b.insertAdjacentHTML("afterend", hint(sub.innerHTML)); sub.replaceWith(Object.assign(document.createElement("div"), { style: "height:8px" }));
+  }
+}
+new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) if (nd.nodeType === 1) compactNotes(nd.parentElement || nd); })
+  .observe(document.body, { childList: true, subtree: true });
 function setTimeMode(mode) {
   G.timeMode = mode;
   $("tm-step").classList.toggle("active", mode === "step"); $("tm-rt").classList.toggle("active", mode === "rt");
   $("tm-rt-opts").classList.toggle("hidden", mode !== "rt");
   G.rtMin = +$("tm-min").value;
   $("tm-rate").textContent = ` — 1 год ≈ ${fmtClock((G.rtMin * 60) / 10)}, 1 месяц ≈ ${fmtClock((G.rtMin * 60) / 120)}`;
-  $("tm-step").querySelector("small").textContent = G.level === 2 ? "время стоит; год рассчитывается по кнопке, изменения — между годами"
-    : "время идёт по кнопкам ×1 / ×10 / ×50 или по годам; можно ставить на паузу";
+
 }
 // мм:сс или ч:мм:сс
 function fmtClock(sec) {
@@ -3640,9 +3735,9 @@ function setLevel(lvl) {
   G.level = lvl; renderSettingsPreview(); setTimeMode(G.timeMode);
 }
 function initSettings() {
-  $("params-form").innerHTML = FORM_FIELDS.map(([key, label, def, min, max, step, l2]) => {
+  $("params-form").innerHTML = FORM_FIELDS.map(([key, label, def, min, max, step, l2, tip]) => {
     const cls = l2 ? ` class="lvl2-only"` : key === "mu_o" ? ` class="lvl1-only"` : "";
-    return `<label for="pf-${key}"${cls}>${label}</label><input id="pf-${key}"${cls} type="number" value="${def}" min="${min}" max="${max}" step="${step}">`;
+    return `<label for="pf-${key}"${cls}>${label}${tip ? hint(tip) : ""}</label><input id="pf-${key}"${cls} type="number" value="${def}" min="${min}" max="${max}" step="${step}">`;
   }).join("");
   setScenario(G.scenario);
   $("tm-step").addEventListener("click", () => setTimeMode("step")); $("tm-rt").addEventListener("click", () => setTimeMode("rt"));
