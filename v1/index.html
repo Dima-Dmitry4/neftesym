@@ -41,6 +41,8 @@
   .level-pick button small { display:block; font-weight:400; opacity:.85; font-size:12px; }
   .level-desc { color:var(--muted); font-size:12.5px; margin:4px 0 6px; }
   #tm-rt-opts { margin:2px 0 8px; font-size:13px; } #tm-rt-opts select { margin:0 4px; }
+  .seed-row { display:flex; align-items:center; gap:6px; margin:4px 0 6px; font-size:13.5px; flex-wrap:wrap; }
+  .seed-row input { width:96px; } #seed-code { margin-left:4px; }
   .edu-check { display:flex; align-items:center; gap:6px; margin:2px 0 10px; font-size:13.5px; cursor:pointer; }
   #rt-clock { font-variant-numeric:tabular-nums; }
   #rt-clock .rt-live { color:var(--bad); font-weight:600; }
@@ -241,6 +243,8 @@
       <div>
         <h2>Объект разработки<span id="obj-hint"></span></h2>
         <div id="scen-pick" class="scen-pick"></div>
+        <div class="seed-row"><label for="seed-in">Сид объекта</label><input id="seed-in" type="number" min="0" max="999999" step="1" value="0">
+          <button id="seed-dice" title="Случайный сид">🎲</button><span id="seed-code" class="sub"></span><sup class="hint" tabindex="0" data-tip="<b>Сид</b> — номер месторождения внутри выбранного типа пласта. <b>0</b> — канонический объект группы. Любое число от 1 до 999 999 детерминированно создаёт свой объект в диапазонах типа пласта: структура и сателлит, разломы (число, положение, амплитуда, герметичность), ВНК, карты проницаемости (с руслами у русловых пластов) и толщин, пористость, вязкость, Swc/Sor, положение разведочных скважин.<br><br><b>Соревнование:</b> всем ввести один и тот же тип пласта и сид (код вида «БВ8 · сид 4821») и не менять цены — объект и эталон у всех будут одинаковыми. Эталон для сида считается в фоне во время игры (политика эталона группы, лучший из нескольких вариантов расстановки).">?</sup></div>
         <label class="edu-check"><input type="checkbox" id="edu-mode"> Учебный режим — геология известна<sup class="hint" tabindex="0" data-tip="Для знакомства с симулятором на любом объекте: карты проницаемости, давления и насыщенности, структура (сейсмика бесплатно), фактические ВНК и разломы видны сразу. Разведка и ГДИС по-прежнему доступны. Оценка — против того же эталона объекта.">?</sup></label>
         <p id="level-desc" class="level-desc"></p>
         <h2>Режим времени<sup class="hint" tabindex="0" data-tip="Скорость выбирается здесь и во время игры не меняется.<br><br><b>По годам</b> — время стоит, год рассчитывается кнопкой «Рассчитать год», изменения вносятся между годами.<br><br><b>Непрерывно</b> — 10 лет разработки идут выбранное число минут с постоянной скоростью и без пауз; бурение, перевод в ППД, режимы меняются на ходу и применяются в тот же момент игрового времени. В учебном режиме по умолчанию — непрерывно.">?</sup></h2>
@@ -252,7 +256,7 @@
         <h2>Экономика<sup class="hint" tabindex="0" data-tip="Цены по умолчанию — ориентиры для Западной Сибири и Урало-Поволжья, 2024–2025 гг.; стоимость скважин зависит от глубины объекта. Всё можно менять. В игре полный прайс — кнопка «₽ Цены» вверху.">?</sup></h2>
         <div class="form-grid" id="params-form"></div>
         <div class="settings-buttons">
-          <button id="btn-selftest" title="Проверка балансов и физики ядра (~1 мин)">Самотест</button>
+          <button id="btn-selftest" title="Проверка балансов и физики ядра (~2–3 мин)">Самотест</button>
           <button id="btn-start" class="primary">Начать разработку</button>
         </div>
         <pre id="selftest-out" class="selftest-out hidden"></pre>
@@ -645,12 +649,56 @@ const SCENARIOS = {
 };
 const SCENARIO_ORDER = ["bv8", "av12", "yuv1", "yuk1011", "ach", "bb"];
 const scenOf = (id) => SCENARIOS[id] || SCENARIOS.base;
+// ---------- Объект по сиду: группа (тип пласта) + номер ----------
+// Сид 0 — канонический объект группы (как в SCENARIOS, с заранее найденным эталоном). Сид ≥ 1 — детерминированно
+// сгенерированный объект в диапазонах группы: глубина, толщина и её карта, пористость, проницаемость (медиана, разброс,
+// гладкий тренд, русла), вязкость, Swc/Sor, высота залежи, структура (купол с сателлитом), разломы, разведочные скважины.
+// Одинаковые группа и сид у всех игроков дают один и тот же объект.
+function hashSeed(...xs) { let h = 2166136261; for (const ch of xs.join("|")) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+const SEED_MAX = 999999;
+function scenarioForSeed(id, seed) {
+  const b = SCENARIOS[id]; seed = Math.max(0, Math.min(SEED_MAX, Math.floor(+seed || 0)));
+  if (!b || !seed || id === "base") return b;
+  const rng = mulberry32(hashSeed(id, seed)), u = () => rng() / 4294967296, U = (a, c) => a + (c - a) * u();
+  const waves = (n, amp, Lmin, Lmax) => Array.from({ length: n }, () => { const L = U(Lmin, Lmax), d = U(0, 2 * Math.PI); return { a: amp * U(0.6, 1), kx: (Math.cos(d) * 2 * Math.PI) / L, ky: (Math.sin(d) * 2 * Math.PI) / L, ph: U(0, 2 * Math.PI) }; });
+  const depth = Math.round(b.depth + U(-120, 120));
+  const K = b.k, kMed = K.med * Math.exp(U(Math.log(0.6), Math.log(1.6))), kf = kMed / K.med;
+  const k = { med: +kMed.toPrecision(3), sig: +(K.sig * U(0.85, 1.2)).toFixed(2), min: +(K.min * kf).toPrecision(2), max: +(K.max * kf).toPrecision(3) };
+  if (K.chan) k.chan = { lo: Math.round(K.chan.lo * U(0.8, 1.2)), hi: Math.round(K.chan.hi * U(0.8, 1.2)), n: Math.max(1, K.chan.n + (u() < 0.35 ? (u() < 0.5 ? -1 : 1) : 0)) };
+  // структура: главный купол (центр, полуоси, ориентация, амплитуда) и, чаще всего, сателлит
+  const dome = { cx: U(19, 31), cy: U(19, 31), ax: U(17, 26), ay: U(11, 18), th: U(0, Math.PI), amp: U(17, 28), bumps: waves(2, 1.6, 8, 16) };
+  let sat = null;
+  if (u() < 0.7) for (let q = 0; q < 20 && !sat; q++) {
+    const a = U(0, 2 * Math.PI), dd = U(15, 22), cx = dome.cx + dd * Math.cos(a), cy = dome.cy + dd * Math.sin(a);
+    if (cx > 6 && cx < 43 && cy > 6 && cy < 43) sat = { cx, cy, dz: U(5, 14), r2: U(36, 70) };
+  }
+  // разломы: 0–3 ломаные через участок, амплитуда 2–6 м, проводимость от запечатанного до проницаемого
+  const nF = [0, 1, 1, 2, 2, 2, 3][Math.floor(u() * 7)], faults = [];
+  for (let f = 0; f < nF; f++) {
+    const ang = U(0, Math.PI), px = U(13, 37), py = U(13, 37), dx = Math.cos(ang), dy = Math.sin(ang), nxp = -dy, nyp = dx, pts = [];
+    for (const tq of [-40, -14, 14, 40]) { const jit = tq === -40 || tq === 40 ? 0 : U(-1.6, 1.6); pts.push([+(px + dx * tq + nxp * jit).toFixed(2), +(py + dy * tq + nyp * jit).toFixed(2)]); }
+    faults.push({ name: `F-${f + 1}`, pts, shift: +((u() < 0.5 ? -1 : 1) * U(2, 6)).toFixed(1), trans: [0, 0, 0.1, 0.3, 0.6][Math.floor(u() * 5)] });
+  }
+  // русла: ориентация, извилистость, положение
+  const chans = Array.from({ length: k.chan ? k.chan.n : 0 }, () => ({ th: U(0, Math.PI), off: U(-14, 14), a1: U(3, 7), L1: U(25, 50), p1: U(0, 2 * Math.PI), a2: U(1, 3), L2: U(8, 14), p2: U(0, 2 * Math.PI), w: U(1.8, 2.8) }));
+  const geo = { seed, salt: hashSeed("salt", id, seed), dome, sat, faults, chans, kTrend: waves(3, 0.55, 14, 40), thick: waves(3, 0.2, 16, 45), shale: [U(0, 6), U(0, 6), U(4.5, 7.5), U(4.5, 7.5)] };
+  const mu_o = b.mu_o * Math.exp(U(Math.log(0.7), Math.log(1.5)));
+  return { ...b, id, seed, name: `${b.name}, сид ${seed}`, short: b.short, depth, h: +(b.h * U(0.8, 1.25)).toFixed(1), phi: +(b.phi + U(-0.02, 0.02)).toFixed(3),
+           shale: +(b.shale * U(0.8, 1.25)).toFixed(2), Swc: +(b.Swc + U(-0.03, 0.03)).toFixed(3), Sor: +(b.Sor + U(-0.03, 0.03)).toFixed(3),
+           mu_o: +mu_o.toFixed(mu_o >= 10 ? 1 : 2), owcRel: Math.round(Math.max(10, (b.owcRel || 20) + U(-6, 6))), pGrad: +(b.pGrad + U(-0.003, 0.003)).toFixed(4),
+           k, flip: 0, drill: Math.round((b.drill * depth) / b.depth), expl: Math.round((b.expl * depth) / b.depth), geo };
+}
+// объект по параметрам игры: группа params.scenario и сид params.seed
+const scenOfParams = (params) => (params.seed ? scenarioForSeed(params.scenario, params.seed) : scenOf(params.scenario));
+const waveSum = (ws, i, j) => ws.reduce((q, w) => q + w.a * Math.sin(w.kx * i + w.ky * j + w.ph), 0);
+// множитель эффективной толщины ячейки (карта толщин объекта по сиду): 0.6…1.45
+function thickMul(i, j, sc) { const g = sc && sc.geo; return g ? Math.max(0.6, Math.min(1.45, 1 + waveSum(g.thick, i, j))) : 1; }
 // отражение координат ячейки (центр ячейки (i, j) — точка (i, j)) по сценарию
 function l2Flip(i, j, sc) { const f = (sc && sc.flip) || 0; return [f & 1 ? GRID.nx - 1 - i : i, f & 2 ? GRID.ny - 1 - j : j]; }
 // разломы сценария в координатах сетки
-function l2Faults(sc) { return L2.FAULTS.map((F) => ({ ...F, pts: F.pts.map(([x, y]) => l2Flip(x, y, sc)) })); }
+function l2Faults(sc) { return sc && sc.geo ? sc.geo.faults : L2.FAULTS.map((F) => ({ ...F, pts: F.pts.map(([x, y]) => l2Flip(x, y, sc)) })); }
 // параметры по умолчанию для объекта: вязкость нефти и стоимости скважин
-function scenarioParams(id) { const sc = scenOf(id); return { scenario: id, mu_o: sc.mu_o || DEFAULT_PARAMS.mu_o, drill_cost: sc.drill * 1e6, expl_cost: sc.expl * 1e6 }; }
+function scenarioParams(id, seed = 0) { const sc = seed ? scenarioForSeed(id, seed) : scenOf(id); return { scenario: id, seed: seed || 0, mu_o: sc.mu_o || DEFAULT_PARAMS.mu_o, drill_cost: sc.drill * 1e6, expl_cost: sc.expl * 1e6 }; }
 // расстояние от точки до отрезка ab: {d — расстояние, side — знак стороны (+1 слева по ходу)}
 function segDist(px, py, a, b) {
   const vx = b[0] - a[0], vy = b[1] - a[1], L = vx * vx + vy * vy;
@@ -673,16 +721,28 @@ function segCross(a, b, c, d) {
   return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
 }
 // ступенька кровли от разломов в точке (i, j), м (гладкая на ширине ~1 ячейки)
-function l2FaultShift(i, j) {
+function l2FaultShift(i, j, faults = L2.FAULTS) {
   let sum = 0;
-  for (const F of L2.FAULTS) {
+  for (const F of faults) {
     const q = polyDist(i, j, F.pts);
     sum += F.shift * 0.5 * (1 + Math.tanh((q.side * q.d) / 0.8));
   }
   return sum;
 }
 // истинная абс. отметка кровли в точке (i, j) — координаты в ячейках, м
-function l2Top(i, j, sc) { const [a, b] = l2Flip(i, j, sc); return l2TopSmooth(a, b) + l2FaultShift(a, b) + ((sc && sc.depth) || 2400) - 2400; }
+function l2Top(i, j, sc) {
+  if (sc && sc.geo) return sc.depth + geoTop(i, j, sc.geo) + l2FaultShift(i, j, sc.geo.faults);
+  const [a, b] = l2Flip(i, j, sc); return l2TopSmooth(a, b) + l2FaultShift(a, b) + ((sc && sc.depth) || 2400) - 2400;
+}
+// кровля объекта по сиду относительно свода: купол-эллипсоид с неровностями и сателлит (гладкий минимум)
+function geoTop(i, j, g) {
+  const d = g.dome, x = i - d.cx, y = j - d.cy, c = Math.cos(d.th), sn = Math.sin(d.th);
+  const u = (x * c + y * sn) / d.ax, v = (-x * sn + y * c) / d.ay;
+  const zMain = d.amp * (u * u + v * v) + waveSum(d.bumps, i, j);
+  if (!g.sat) return zMain;
+  const S = g.sat, zSat = S.dz + (22 * ((i - S.cx) ** 2 + (j - S.cy) ** 2)) / S.r2, m = Math.min(zMain, zSat), sm = 4;
+  return m - sm * Math.log(Math.exp((m - zMain) / sm) + Math.exp((m - zSat) / sm));
+}
 function l2TopSmooth(i, j) {
   const th = 25 * Math.PI / 180, x = i - 22, y = j - 26;
   const u = (x * Math.cos(th) + y * Math.sin(th)) / 22, v = (-x * Math.sin(th) + y * Math.cos(th)) / 15;
@@ -692,16 +752,17 @@ function l2TopSmooth(i, j) {
   return m - s * Math.log(Math.exp((m - zMain) / s) + Math.exp((m - zSat) / s));
 }
 // толщины двух глинистых прослоев, м (0 — прослой выклинился)
-function l2Shales(i, j) {
-  const t1 = 0.9 + 0.7 * Math.sin(i / 6.1 + 1.1) * Math.cos(j / 7.3 - 0.5);
-  const t2 = 0.5 + 0.8 * Math.sin(i / 5.3 - 0.7 + j / 9.1);
+function l2Shales(i, j, g) {
+  const q = g ? g.shale : [1.1, -0.5, 6.1, 7.3];
+  const t1 = 0.9 + 0.7 * Math.sin(i / q[2] + q[0]) * Math.cos(j / q[3] + q[1]);
+  const t2 = 0.5 + 0.8 * Math.sin(i / 5.3 - 0.7 + (g ? q[1] : 0) + j / 9.1);
   return [t1 < 0.35 ? 0 : t1, t2 < 0.3 ? 0 : t2];
 }
 // альтитуда стола ротора, м: MD = z + альтитуда (скважины вертикальные)
 function l2Altitude(i, j) { return 95 + 18 * Math.sin(i / 9 + 0.3) + 12 * Math.cos(j / 7 - 1.0); }
 // разрез пласта сверху вниз: [{top, base, sand}], абс. отметки
 function l2Column(i, j, sc) {
-  const sh = l2Shales(i, j).map((t) => t * ((sc && sc.shale) || 1)), out = [], hh = (sc && sc.h) || GRID.h;
+  const sh = l2Shales(i, j, sc && sc.geo).map((t) => t * ((sc && sc.shale) || 1)), out = [], hh = ((sc && sc.h) || GRID.h) * thickMul(i, j, sc);
   let z = l2Top(i, j, sc);
   L2.SANDS.map((x) => (x * hh) / GRID.h).forEach((hs, n) => {
     out.push({ top: z, base: z + hs, sand: true }); z += hs;
@@ -728,8 +789,8 @@ function l2SeisError(seed = L2.SEED + 7, scale = 1) {
 // и разломы. Ошибки — гладкие поля: кровля |δ| ≲ 4 м, подошва ≲ 3 м (толщина = подошва −
 // кровля, относительная ошибка толщины велика); трассы разломов смещены на ≲ 1 ячейки,
 // сбросы оценены с ошибкой ≈ 25 %. Герметичность разломов сейсмикой не определяется.
-function buildSeismic(zTop, gross, nx, ny, faultsSc = L2.FAULTS) {
-  const N = nx * ny, eTop = l2SeisError(L2.SEED + 7, 1), eBase = l2SeisError(L2.SEED + 19, 0.8);
+function buildSeismic(zTop, gross, nx, ny, faultsSc = L2.FAULTS, salt = L2.SEED) {
+  const N = nx * ny, eTop = l2SeisError(salt + 7, 1), eBase = l2SeisError(salt + 19, 0.8);
   const top = new Float64Array(N), base = new Float64Array(N), thick = new Float64Array(N);
   for (let j = 0; j < ny; j++)
     for (let i = 0; i < nx; i++) {
@@ -738,7 +799,7 @@ function buildSeismic(zTop, gross, nx, ny, faultsSc = L2.FAULTS) {
       base[c] = zTop[c] + gross[c] + eBase(i, j);
       thick[c] = base[c] - top[c];
     }
-  const rng = mulberry32(L2.SEED + 31), u = () => rng() / 4294967296 - 0.5;
+  const rng = mulberry32(salt + 31), u = () => rng() / 4294967296 - 0.5;
   const faults = faultsSc.map((F) => ({
     name: F.name,
     pts: F.pts.map(([x, y]) => [x + 1.4 * u(), y + 0.6 * u()]),   // координаты вершин, ячейки
@@ -747,33 +808,44 @@ function buildSeismic(zTop, gross, nx, ny, faultsSc = L2.FAULTS) {
   return { top, base, thick, faults };
 }
 function buildReservoir2(params) {
-  const sc = scenOf(params.scenario), base = sc === SCENARIOS.base;
+  const sc = scenOfParams(params), base = sc === SCENARIOS.base, g = sc.geo, salt = g ? g.salt : L2.SEED;
   const { nx, ny, dx } = GRID, N = nx * ny, Swc = sc.Swc, h = sc.h, phi = sc.phi;
-  const rng = mulberry32(L2.SEED);
+  const rng = mulberry32(salt);
   const cy = (ny - 1) / 2;
-  const active = new Uint8Array(N).fill(1), k = new Float64Array(N);
+  const active = new Uint8Array(N).fill(1), k = new Float64Array(N), kTrue = new Float64Array(N), tm = new Float64Array(N);
   const zTop = new Float64Array(N), gross = new Float64Array(N);
   const hOil = new Float64Array(N), Sw0 = new Float64Array(N);
   const river = (i) => cy + 6 * Math.sin((i / nx) * 2 * Math.PI) + 3 * Math.sin(i / 7.0);
   const river2 = (i) => cy - 15 + 4 * Math.sin((i / nx) * 3 * Math.PI + 1) + 2 * Math.sin(i / 5.0);
-  const K = sc.k, owc = sc.depth + (sc.owcRel || 20), faults = l2Faults(sc); // ВНК: высота залежи owcRel над сводом
+  const K = sc.k, faults = l2Faults(sc), cols = new Array(N);
+  let owc = sc.depth + (sc.owcRel || 20); // ВНК: высота залежи owcRel над сводом
   for (let j = 0; j < ny; j++) {
     for (let i = 0; i < nx; i++) {
       const c = j * nx + i;
-      const kbg = Math.min(K.max, Math.max(K.min, K.med * Math.exp(K.sig * gauss(rng))));
+      const kbg = Math.min(K.max, Math.max(K.min, K.med * Math.exp(K.sig * gauss(rng) + (g ? waveSum(g.kTrend, i, j) : 0))));
       const kch = K.chan ? K.chan.lo + (K.chan.hi - K.chan.lo) * (rng() / 4294967296) : (rng(), 0);
-      const inCh = K.chan && (Math.abs(j - river(i)) < 2.6 || (K.chan.n > 1 && Math.abs(j - river2(i)) < 2.0));
-      k[c] = inCh ? Math.max(kch, kbg) : kbg;
-      const col = l2Column(i, j, sc);
+      const inCh = K.chan && (g ? inGeoChannel(i, j, g) : Math.abs(j - river(i)) < 2.6 || (K.chan.n > 1 && Math.abs(j - river2(i)) < 2.0));
+      kTrue[c] = inCh ? Math.max(kch, kbg) : kbg;
+      tm[c] = thickMul(i, j, sc); k[c] = kTrue[c] * tm[c]; // в расчёте — k·h/h̄ (проводимость пропорциональна толщине)
+      const col = (cols[c] = l2Column(i, j, sc));
       zTop[c] = col[0].top;
       gross[c] = col[col.length - 1].base - col[0].top;
       hOil[c] = l2OilNet(col, owc);
       // вертикальное усреднение: нефтяная часть при Swc, водяная — Sw = 1
-      const fo = hOil[c] / h;
+      const fo = Math.min(1, hOil[c] / (h * tm[c]));
       Sw0[c] = fo * Swc + (1 - fo);
     }
   }
-  const poreVol = new Float64Array(N).fill(dx * dx * h * phi);
+  if (g) {
+    // объект по сиду: ВНК — от фактического свода (с учётом разломов), высота залежи не меньше 1,4 толщины;
+    // если площадь нефтеносности мала — ВНК ниже, пока нефтяных ячеек не станет ≥ 450
+    let zMin = Infinity; for (let c = 0; c < N; c++) zMin = Math.min(zMin, zTop[c]);
+    owc = zMin + Math.max(sc.owcRel, 1.4 * h + 4);
+    const fill = () => { let n = 0; for (let c = 0; c < N; c++) { hOil[c] = l2OilNet(cols[c], owc); const fo = Math.min(1, hOil[c] / (h * tm[c])); Sw0[c] = fo * Swc + (1 - fo); if (hOil[c] > 0) n++; } return n; };
+    for (let q = 0; fill() < 450 && q < 30; q++) owc += 2;
+    owc = Math.round(owc * 10) / 10; fill();
+  }
+  const poreVol = new Float64Array(N).map((_, c) => dx * dx * h * phi * tm[c]);
   const cells = Array.from({ length: N }, (_, c) => c);
   const ooipM3 = cells.reduce((s, c) => s + poreVol[c] * (1 - Sw0[c]), 0);
   // проводимости граней: восток (c → c+1) и север (c → c+nx) режутся разломами
@@ -787,9 +859,9 @@ function buildReservoir2(params) {
           if (j + 1 < ny && segCross([i, j], [i, j + 1], F.pts[n], F.pts[n + 1])) tmN[c] = Math.min(tmN[c], F.trans);
         }
     }
-  const seis = buildSeismic(zTop, gross, nx, ny, faults);
+  const seis = buildSeismic(zTop, gross, nx, ny, faults, salt);
   const P0 = base ? 250 : Math.round(sc.pGrad * sc.depth);
-  return { level: 2, scenario: base ? null : params.scenario, scen: sc, nx, ny, dx, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w,
+  return { level: 2, scenario: base ? null : params.scenario, seed: g ? sc.seed : 0, salt, scen: sc, kTrue, thick: tm, nx, ny, dx, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w,
            // предел забойного давления закачки (давление гидроразрыва с запасом): ≈ 0.14 атм/м глубины ВНК
            pMaxInj: base ? 340 : Math.round(0.14 * owc),
            // SwMax > 1: перенос насыщенности (как и на уровне 1) относит упругий запас
@@ -799,7 +871,29 @@ function buildReservoir2(params) {
            Swc, Sor: sc.Sor, SwMax: 1.05, rho_oil: sc.rho, active, k, poreVol, ooipM3, cells,
            Sw0, zTop, zSeis: seis.top, gross, hOil, owc, tmE, tmN, seis,
            faults: faults.map((F) => ({ name: F.name, pts: F.pts, shift: F.shift, trans: F.trans })),
-           explore: L2.EXPLORE.map(([name, i, j]) => { const [a2, b2] = l2Flip(i, j, sc); return { name, cell: b2 * nx + a2 }; }) };
+           explore: g ? pickExplore(zTop, hOil, h, tm, salt) : L2.EXPLORE.map(([name, i, j]) => { const [a2, b2] = l2Flip(i, j, sc); return { name, cell: b2 * nx + a2 }; }) };
+}
+
+// русло объекта по сиду: извилистая полоса в повёрнутых координатах
+function inGeoChannel(i, j, g) {
+  for (const ch of g.chans) {
+    const x = (i - 24.5) * Math.cos(ch.th) + (j - 24.5) * Math.sin(ch.th), y = -(i - 24.5) * Math.sin(ch.th) + (j - 24.5) * Math.cos(ch.th);
+    const yc = ch.off + ch.a1 * Math.sin((2 * Math.PI * x) / ch.L1 + ch.p1) + ch.a2 * Math.sin((2 * Math.PI * x) / ch.L2 + ch.p2);
+    if (Math.abs(y - yc) < ch.w) return true;
+  }
+  return false;
+}
+// стартовые разведочные скважины объекта по сиду: свод, два крыла в нефтяной зоне, водонефтяная зона, водяная зона
+function pickExplore(zTop, hOil, h, tm, salt) {
+  const nx = GRID.nx, rng = mulberry32(salt + 53), u = () => rng() / 4294967296, inner = (c) => { const i = c % nx, j = Math.floor(c / nx); return i > 4 && i < nx - 5 && j > 4 && j < nx - 5; };
+  const cells = Array.from({ length: nx * nx }, (_, c) => c).filter(inner), out = [];
+  const far = (c) => out.every((o) => Math.hypot((o % nx) - (c % nx), Math.floor(o / nx) - Math.floor(c / nx)) >= 7);
+  const take = (list) => { const L = list.filter(far); if (!L.length) return; out.push(L[Math.floor(u() * L.length)]); };
+  const full = cells.filter((c) => hOil[c] >= h * tm[c] - 1e-6), part = cells.filter((c) => hOil[c] > 0.5 && hOil[c] < h * tm[c] - 0.5), water = cells.filter((c) => hOil[c] <= 0);
+  out.push(full.reduce((a, c) => (zTop[c] < zTop[a] ? c : a), full[0] ?? cells[0])); // свод
+  take(full); take(full); take(part.length ? part : full); take(water);
+  while (out.length < 5) take(cells);
+  return out.slice(0, 5).map((cell, n) => ({ name: `Р-${n + 1}`, cell }));
 }
 
 // Синтетический каротаж и РИГИС в ячейке cell (уровень 2). Кривые: ГК (мкР/ч),
@@ -809,7 +903,7 @@ function buildReservoir2(params) {
 function wellLog(r, cell) {
   const i = cell % r.nx, j = Math.floor(cell / r.nx);
   const col = l2Column(i, j, r.scen), owc = r.owc;
-  const rng = mulberry32((L2.SEED ^ Math.imul(cell + 1, 2654435761)) >>> 0);
+  const rng = mulberry32(((r.salt || L2.SEED) ^ Math.imul(cell + 1, 2654435761)) >>> 0);
   const nz = () => gauss(rng);
   const r1 = (x) => Math.round(x * 10) / 10;
   const alt = r1(l2Altitude(i, j));
@@ -912,8 +1006,8 @@ function lambdaT(Sw, r) { return krw(Sw, r) / r.mu_w + kro(Sw, r) / r.mu_o; }
 // Писман: q = WI·λt·(P_яч − Pwf), re = 0.2·Δ = 8 м, rw = 0.1 м, skin = 0
 function wellIndex(k, r, skin = 0) { return CONV_K * 2 * Math.PI * k * r.h / Math.max(0.5, Math.log(8 / 0.1) + skin); }
 // скин скважины уровня 2 (истина, игроку неизвестна): −1…7, большинство 0…3
-function l2Skin(cell) {
-  const u = mulberry32((L2.SEED ^ Math.imul(cell + 7, 40503)) >>> 0)() / 4294967296;
+function l2Skin(cell, salt = L2.SEED) {
+  const u = mulberry32((salt ^ Math.imul(cell + 7, 40503)) >>> 0)() / 4294967296;
   return Math.round((-1 + 8 * u * u) * 10) / 10;
 }
 
@@ -947,7 +1041,7 @@ function createSim(reservoir, params) {
     if (sim.wells.some((w) => w.perf.some((p) => p.cell === c))) throw new Error("ячейка занята");
     sim.wells.push({ cell: c, type, pwf, q: 0, qo: 0, qw: 0,
                      perf: [{ cell: c, f: 1 }], kind: "v", L: 0, dir: null, frac: null, // заканчивание: v — вертикальная, hs — ГС, zbs — боковой ствол, frac — ГРП
-                     skin: r.level === 2 ? l2Skin(c) : 0, wasProd: type === "prod",
+                     skin: r.level === 2 ? l2Skin(c, r.salt) : 0, wasProd: type === "prod",
                      on: true,             // работает / остановлена
                      mode: "bhp",          // bhp | flow (фонтан, штуцер) | esp (ЭЦН) | choke (КНС, штуцер)
                      choke: type === "prod" ? 12 : 8, // диаметр штуцера, мм
@@ -2121,7 +2215,7 @@ function yearlyFromSim(sim, params) {
 }
 // годовые показатели эталона при экономических параметрах игрока
 function refYearly(level, params) {
-  const R_ = REF[level], out = { oil_t: [], water_m3: [], inj_m3: [], cf: [], cumOil_t: [], liq_m3: [], capex: [], parts: [] };
+  const R_ = typeof level === "object" ? level : REF[level], out = { oil_t: [], water_m3: [], inj_m3: [], cf: [], cumOil_t: [], liq_m3: [], capex: [], parts: [] };
   let cum = 0;
   // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей);
   // капзатраты — в единицах параметров (см. CAPEX)
@@ -2132,6 +2226,112 @@ function refYearly(level, params) {
   });
   return out;
 }
+// ---------- Политика эталона (найдена оптимизатором для канонического объекта группы) ----------
+// Параметры: сетка s (ячеек), смещение ox/oy, схема pat (0 — шахматная, 1 — две добывающие на нагнетательную, 2 — рядная),
+// фаза, мин. доля нефтенасыщенной толщины hMin; заканчивание compl (v, vf — ВС + ГРП при k < fracK, hs, hsf — ГС + МГРП)
+// с xf, hsL, hsAz, mgN; ЭЦН сразу (prodMode esp) с частотой f0, штуцеры chokeP/dInj, КНС kns, сбор pg; ежегодно: перевод
+// convN добывающих с обводнённостью > thrC в ППД, ЭЦН вместо заглохшего фонтана, замена перегруженного насоса и подбор
+// частоты по чистому доходу, ОПЗ после ГДИС при скине > thrS на году stimYear, отключение нерентабельных (shut).
+const POLICIES = {
+  bv8: {"s":14,"ox":2,"oy":2,"pat":2,"phase":2,"thrC":1.01,"convN":3,"prodMode":"esp","f0":50,"chokeP":10,"dInj":16,"kns":120,"pg":14,"qMin":20,"compl":"v","xf":120,"fracK":120,"hsL":2000,"hsAz":135,"mgN":5,"shut":0,"hMin":0.7,"thrS":1.5,"stimYear":2},
+  av12: {"s":15,"ox":4,"oy":5,"pat":2,"phase":1,"thrC":0.98,"convN":2,"prodMode":"esp","f0":40,"chokeP":13,"dInj":16,"kns":100,"pg":10,"qMin":20,"compl":"hsf","xf":80,"fracK":30,"hsL":1000,"hsAz":90,"mgN":8,"shut":0,"hMin":0.4,"thrS":99,"stimYear":2},
+  yuv1: {"s":16,"ox":8,"oy":8,"pat":0,"phase":0,"thrC":0.93,"convN":3,"prodMode":"esp","f0":45,"chokeP":15,"dInj":14,"kns":130,"pg":11,"qMin":10,"compl":"vf","xf":120,"fracK":60,"hsL":1500,"hsAz":45,"mgN":5,"shut":0,"hMin":0.7,"thrS":1.5,"stimYear":2},
+  yuk1011: {"s":8,"ox":7,"oy":3,"pat":1,"phase":1,"thrC":1.01,"convN":1,"prodMode":"esp","f0":55,"chokeP":19,"dInj":8,"kns":190,"pg":9,"qMin":10,"compl":"vf","xf":120,"fracK":30,"hsL":1000,"hsAz":0,"mgN":8,"shut":1,"hMin":0.4,"thrS":3,"stimYear":3},
+  ach: {"s":12,"ox":4,"oy":2,"pat":0,"phase":1,"thrC":0.98,"convN":4,"prodMode":"esp","f0":55,"chokeP":14,"dInj":22,"kns":130,"pg":12,"qMin":10,"compl":"vf","xf":120,"fracK":1000,"hsL":2000,"hsAz":90,"mgN":3,"shut":0,"hMin":0.5,"thrS":1.5,"stimYear":3},
+  bb: {"s":8,"ox":7,"oy":5,"pat":1,"phase":0,"thrC":1.01,"convN":4,"prodMode":"esp","f0":55,"chokeP":19,"dInj":8,"kns":180,"pg":9,"qMin":20,"compl":"vf","xf":80,"fracK":60,"hsL":2000,"hsAz":45,"mgN":8,"shut":0,"hMin":0.4,"thrS":1.5,"stimYear":3},
+};
+// Исполнение политики: генератор (кусками по ≈ 73 сут — для фонового расчёта без зависания интерфейса).
+// Возвращает годовые ряды в натуральных единицах (как REF): s — [нефть т, вода м³, закачка м³, кВт·ч ЭЦН, кВт·ч КНС, скв.-лет], c — капзатраты.
+function* policyRun(r, P, th, years = 20) {
+  const PK = Object.keys(PUMPS), wellDay = (P.well_opex / 365) * (1 - WELL_OPEX_IDLE);
+  const netOf = (w, e) => (1 - (w.fw || 0)) * e.q * RHO_OIL * P.price_oil - e.q * P.lift_cost - e.kW * 24 * P.elec_cost;
+  const pickPump = (sim, w) => {
+    let best = PUMP_DEFAULT, bn = -1e18;
+    for (const k of PK) { w.pump = k; w.mode = "esp"; w.freq = 50; const e = solveEquipment(sim, w); const net = netOf(w, e) - (PUMPS[k].cost * P.esp_cost) / 1000; if (net > bn) { bn = net; best = k; } }
+    w.pump = best; return best;
+  };
+  const wl = [];
+  for (let b = 0, j = th.oy; j < 47; j += th.s, b++) for (let a = 0, i = th.ox; i < 47; i += th.s, a++) {
+    const c = j * r.nx + i;
+    if (!(r.hOil[c] >= th.hMin * r.h - 1e-9) || r.explore.some((e) => e.cell === c)) continue;
+    const role = th.pat === 0 ? ((a + b + th.phase) % 2 === 0 ? "prod" : "inj") : th.pat === 1 ? ((a + b + th.phase) % 3 === 0 ? "inj" : "prod") : ((b + th.phase) % 2 === 0 ? "prod" : "inj");
+    wl.push({ c, role });
+  }
+  if (wl.length < 2 || !wl.some((w) => w.role === "prod") || !wl.some((w) => w.role === "inj")) return null;
+  const sim = createSim(r, P), eco = sim.economy;
+  eco.charge(0, { seis_cost: 1 });
+  sim.field.pKNS = th.kns; sim.field.pGather = th.pg;
+  const installEsp = (w) => { const k = pickPump(sim, w); w.hasESP = true; w.freq = th.f0; eco.charge(sim.t, { esp_cost: PUMPS[k].cost }); };
+  for (const x of wl) {
+    if (sim.wells.some((o) => o.perf.some((pf) => pf.cell === x.c))) continue;
+    sim.addWell(x.c, x.role, x.role === "prod" ? 150 : 325);
+    const w = sim.wells[sim.wells.length - 1]; w.name = "W" + sim.wells.length;
+    let units = CAPEX.vert();
+    if (x.role === "prod") {
+      if (th.compl === "hs" || th.compl === "hsf") {
+        const rr = sim.setCompletion(w, "hs", { L: th.hsL, az: th.hsAz });
+        if (rr.ok) { units = CAPEX.hs(w.L); if (th.compl === "hsf" && r.k[x.c] < th.fracK) { const rf = sim.setCompletion(w, "mgrp", { n: th.mgN, xf: th.xf }); if (rf.ok) Object.assign(units, CAPEX.mgrp(w.mgrp.n, th.xf)); } }
+      } else if (th.compl === "vf" && r.k[x.c] < th.fracK) { const rr = sim.setCompletion(w, "frac", { xf: th.xf, az: th.hsAz }); if (rr.ok) Object.assign(units, CAPEX.frac(th.xf)); }
+      eco.charge(0, units, true);
+      w.mode = "flow"; w.choke = th.chokeP; if (th.prodMode === "esp") installEsp(w);
+    } else { eco.charge(0, units, true); w.mode = "choke"; w.choke = th.dInj; }
+  }
+  const s = [], c = [], diffU = (a, b2) => Object.fromEntries(Object.keys(a).map((k) => [k, a[k] - (b2[k] || 0)]));
+  let pcu = {}, pu = Object.fromEntries(Object.keys(eco.u).map((k) => [k, 0]));
+  for (let y = 0; y < years; y++) {
+    if (y >= 1) {
+      let conv = 0;
+      const prods = sim.wells.filter((w) => w.type === "prod" && w.on !== false).sort((a, b2) => b2.fw - a.fw);
+      for (const w of prods) if (conv < th.convN && w.fw > th.thrC) { sim.convertWell(w); conv++; eco.charge(sim.t, { conv_cost: 1 }); w.mode = "choke"; w.choke = th.dInj; }
+      for (const w of sim.wells) {
+        if (w.type !== "prod" || w.on === false) continue;
+        if (w.mode === "flow") { const e = solveEquipment(sim, w); if (e.dead || e.q < th.qMin) { w.mode = "esp"; installEsp(w); } }
+        if (w.mode === "esp") {
+          const e = solveEquipment(sim, w);
+          if (e.load > 1.2) { const old = w.pump, f0 = w.freq; const nk = pickPump(sim, w); w.freq = f0; if (+nk > +old) eco.charge(sim.t, { esp_cost: PUMPS[nk].cost }); else w.pump = old; }
+          let bf = w.freq, bn = -1e18;
+          for (const f of [35, 40, 45, 50, 55, 60]) { w.freq = f; const q = solveEquipment(sim, w); const net = netOf(w, q); if (net > bn) { bn = net; bf = f; } }
+          w.freq = bf;
+        }
+        if (y === th.stimYear - 1 && w.skin > th.thrS && !w.stimulated) { eco.charge(sim.t, { pta_cost: 1, lost_t: w.qo * RHO_OIL * 14 }); sim.stimulate(w); eco.charge(sim.t, { stim_cost: 1 }); }
+        if (th.shut) { const e = solveEquipment(sim, w); if (netOf(w, e) < wellDay) w.on = false; }
+        else if ((1 - w.fw) * RHO_OIL * P.price_oil - P.lift_cost < 0) w.on = false;
+      }
+      sim._fluxValid = false;
+    }
+    for (let q = 0; q < 5; q++) { advance(sim, 73); yield (y + (q + 1) / 5) / years; }
+    const du = diffU(eco.u, pu), dcu = diffU(eco.cu, pcu);
+    for (const k in dcu) if (Math.abs(dcu[k]) < 1e-12) delete dcu[k];
+    s.push([Math.round(du.oil_t), Math.round(du.liq - du.oil_t / RHO_OIL), Math.round(du.inj), Math.round(du.kwhE), Math.round(du.kwhK), +du.wy.toFixed(3)]);
+    c.push(Object.fromEntries(Object.entries(dcu).map(([k, v]) => [k, +v.toFixed(4)])));
+    pu = { ...eco.u }; pcu = { ...eco.cu };
+  }
+  let npv = 0, cum = 0;
+  s.forEach(([oil, wat, inj, kwhE, kwhK, wy], n) => { npv += flowOf({ oil_t: oil, liq: oil / RHO_OIL + wat, inj, kwhE, kwhK, wy }, c[n], P).cf / Math.pow(1.1, n + 1); cum += oil; });
+  return { s, c, npv, kin: cum / (r.ooipM3 * RHO_OIL), th, nWells: sim.wells.length };
+}
+// Эталон объекта по сиду: политика группы в нескольких вариантах сетки (шаг исходный, ×0,75, ×0,55; два положения); выбирается вариант с наибольшей суммой 0,5·ЧДД/ЧДД_max + 0,5·КИН/КИН_max. Детерминирован:
+// одинаковый сид у всех игроков даёт один и тот же эталон. Цены — по умолчанию для объекта; по ценам игрока ряды
+// пересчитываются так же, как у заранее найденных эталонов (refYearly).
+function* seedRefRun(r, P, group) {
+  // шаги сетки: исходный, ×0,75 и ×0,55 (не реже 7 ячеек), каждый — в исходном положении и со сдвигом на полшага
+  const th0 = POLICIES[group], steps = [...new Set([th0.s, Math.max(7, Math.round(th0.s * 0.75)), Math.max(7, Math.round(th0.s * 0.55))])], variants = [];
+  for (const st of steps) for (const sh of [0, Math.floor(st / 2)]) variants.push({ ...th0, s: st, ox: (th0.ox + sh) % st, oy: (th0.oy + sh) % st });
+  const res = [];
+  for (let v = 0; v < variants.length; v++) {
+    const g = policyRun(r, P, variants[v]);
+    let st = g.next();
+    while (!st.done) { yield (v + st.value) / variants.length; st = g.next(); }
+    if (st.value) res.push(st.value);
+  }
+  if (!res.length) return null;
+  const nMax = Math.max(1, ...res.map((x) => x.npv)), kMax = Math.max(1e-9, ...res.map((x) => x.kin));
+  const J = (x) => 0.5 * Math.max(0, x.npv) / nMax + 0.5 * x.kin / kMax;
+  const best = res.reduce((a, b2) => (J(b2) > J(a) ? b2 : a));
+  return { ...best, npv: best.npv / 1e6, desc: `политика эталона группы (сетка через ${best.th.s * 40} м, схема ${["шахматная", "«две добывающие на нагнетательную»", "рядная"][best.th.pat]}), применённая к этому объекту; лучший из ${res.length} вариантов расстановки` };
+}
+// выполнить генератор до конца (без кусков)
+function runGen(g) { let st = g.next(); while (!st.done) st = g.next(); return st.value; }
 // ключ эталона: учебный полигон — 1, объект уровня 2 — его id (базовый купол — 2)
 function refKey(level, scenario) { return level === 1 ? 1 : scenario && REF[scenario] ? scenario : 2; }
 function npvOf(cf, rate) { return cf.reduce((s, v, n) => s + v / Math.pow(1 + rate, n + 1), 0); }
@@ -2221,6 +2421,46 @@ function scenarioTests() {
   // разные объекты — разная карта: структура отражена, разведочные скважины в других ячейках
   const cellsOf = (id) => buildReservoir2({ ...DEFAULT_PARAMS, ...scenarioParams(id) }).explore.map((e) => e.cell).join(",");
   t.push({ name: "объекты: структура отражается — у БВ8, АВ1, ЮВ1 и ЮК разные положения разведочных скважин", pass: new Set(["bv8", "av12", "yuv1", "yuk1011"].map(cellsOf)).size === 4 });
+  return t;
+}
+
+// ---------- Тесты: объекты по сиду ----------
+function seedTests() {
+  const t = [], P0 = { ...DEFAULT_PARAMS, ...DEFAULT_COSTS };
+  const build = (id, seed) => buildReservoir2({ ...P0, ...scenarioParams(id, seed) });
+  const a1 = build("ach", 4821), a2 = build("ach", 4821), b1 = build("ach", 4822);
+  const same = a1.k.every((v, c) => v === a2.k[c]) && a1.hOil.every((v, c) => v === a2.hOil[c]) && a1.explore.map((e) => e.cell).join() === a2.explore.map((e) => e.cell).join();
+  const diff = a1.k.some((v, c) => v !== b1.k[c]) && a1.owc !== b1.owc;
+  t.push({ name: "сид: одинаковый сид — тот же объект (k, толщины, ВНК, разведка), соседний сид — другой; сид 0 — канонический объект",
+           pass: same && diff && SCENARIO_ORDER.every((id) => scenarioForSeed(id, 0) === SCENARIOS[id]) && build("bv8", 0).owc === buildReservoir2({ ...P0, ...scenarioParams("bv8") }).owc });
+  const bad = [];
+  for (const id of SCENARIO_ORDER) {
+    const b = SCENARIOS[id];
+    for (let sd = 1; sd <= 10; sd++) {
+      const sc = scenarioForSeed(id, sd);
+      if (!(sc.mu_o >= 0.69 * b.mu_o && sc.mu_o <= 1.51 * b.mu_o && sc.k.med >= 0.59 * b.k.med && sc.k.med <= 1.61 * b.k.med && Math.abs(sc.phi - b.phi) <= 0.0201 &&
+            sc.h >= 0.79 * b.h && sc.h <= 1.26 * b.h && Math.abs(sc.depth - b.depth) <= 120 && sc.geo.faults.length <= 3 && sc.Swc > 0.1 && sc.Sor > 0.15)) bad.push(`${id}/${sd}`);
+    }
+  }
+  t.push({ name: "сид: свойства в диапазонах группы (вязкость ×0,7–1,5, k ×0,6–1,6, Кп ±0,02, h ×0,8–1,25, глубина ±120 м, ≤ 3 разломов)", pass: !bad.length, details: bad.join(", ") || "60 объектов" });
+  const det = [];
+  let ok = true;
+  for (const id of SCENARIO_ORDER) {
+    const P = { ...P0, ...scenarioParams(id, 5) }, r = buildReservoir2(P), hs = r.explore.map((e) => r.hOil[e.cell]);
+    let logOk = true;
+    for (const e of r.explore) { const L = wellLog(r, e.cell); if (Math.abs(L.hOil - r.hOil[e.cell]) > 0.15 || Math.abs(L.hOil + L.hWater - r.h * r.thick[e.cell]) > 0.2) logOk = false; }
+    const oilN = r.cells.filter((c) => r.hOil[c] > 0).length, sm = createSim(r, P), oil = r.cells.filter((c) => r.hOil[c] >= r.h * r.thick[c] - 1e-6);
+    sm.addWell(oil[Math.floor(oil.length * 0.3)], "prod", Math.max(20, r.P0 - 80)); sm.addWell(oil[Math.floor(oil.length * 0.7)], "inj", r.P0 + 25); advance(sm, 365);
+    let dW = 0; for (const c of r.cells) dW += r.poreVol[c] * (sm.Sw[c] - r.Sw0[c]);
+    const inj = sm.wells[1].cum.inj, errW = (inj - dW - sm.wells[0].cum.water) / Math.max(1, inj);
+    if (!(hs[0] > 0 && hs.some((x) => x <= 0) && logOk && oilN >= 450 && Math.abs(errW) < 1e-3 && sm.wells[0].cum.oil > 0)) ok = false;
+    det.push(`${scenarioForSeed(id, 5).short}: нефть в ${oilN} яч., вода ${(errW * 100).toFixed(3)} %`);
+  }
+  t.push({ name: "сид 5 у всех групп: разведка вскрывает нефть (свод) и воду, РИГИС = модель с картой толщин, площадь нефтеносности ≥ 450 ячеек, баланс воды за год < 0.1 %", pass: ok, details: det.join("; ") });
+  // исполнитель политики в ядре воспроизводит эталон, найденный оптимизатором (канонический АВ1)
+  const Pa = { ...P0, ...scenarioParams("av12") }, x = runGen(policyRun(buildReservoir2(Pa), Pa, POLICIES.av12));
+  t.push({ name: "эталон по политике: исполнитель в ядре воспроизводит найденный оптимизатором эталон (АВ1, ±0.5 %)", pass: Math.abs(x.npv / 1e6 / REF.av12.npv - 1) < 0.005,
+           details: `${(x.npv / 1e6).toFixed(1)} против ${REF.av12.npv} млн руб` });
   return t;
 }
 
@@ -2321,16 +2561,16 @@ registerCore({
   VERSION: "0.12.0",
   DEFAULT_PARAMS, GRID, CONV_K,
   mulberry32, gauss, buildReservoir, isConnected,
-  L2, SCENARIOS, SCENARIO_ORDER, scenOf, scenarioParams, l2Flip, buildReservoir2, wellLog, l2Top, l2Column, l2OilNet, l2Altitude,
+  POLICIES, policyRun, seedRefRun, runGen, L2, SCENARIOS, SCENARIO_ORDER, scenOf, scenarioParams, scenarioForSeed, scenOfParams, SEED_MAX, hashSeed, l2Flip, buildReservoir2, wellLog, l2Top, l2Column, l2OilNet, l2Altitude,
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
   SCORE_BONUS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
-  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, reportTests, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
+  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, seedTests, reportTests, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
     return [...reservoirTests(), ...relPermTests(), ...pressureTests(), ...wellTests(),
-            ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests(), ...equipmentTests(), ...completionTests(), ...scenarioTests(), ...reportTests()];
+            ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests(), ...equipmentTests(), ...completionTests(), ...scenarioTests(), ...seedTests(), ...reportTests()];
   },
 });
 </script>
@@ -2367,7 +2607,7 @@ const ttl = (t) => ({ text: t, x: 0.02, xanchor: "left", font: { size: 13 } });
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
 
 const G = {
-  params: null, sim: null, level: 2, scenario: "bv8", timeMode: "step", rtMin: 20, rt: null, edu: false, speed: 0, layer: "k", tool: null,
+  params: null, sim: null, level: 2, scenario: "bv8", timeMode: "step", rtMin: 20, rt: null, edu: false, seed: 0, seedRef: null, refJobs: {}, speed: 0, layer: "k", tool: null,
   wellNames: { prod: 0, inj: 0 }, snaps: [], snapYear: 0, snapIdx: null, colorSeq: 0, done: false, frameLast: 0, uiLast: 0, dirty: true,
   running: null,            // идёт расчёт года: {end, t0, snap}
   expl: [],                 // разведочные скважины уровня 2 [{name, cell}]
@@ -2421,6 +2661,11 @@ function renderLayerBar() {
   }
 }
 const xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX);
+// шкала карты проницаемости по данным пласта (lg k, 2-й и 99-й процентили)
+function kRange(r) {
+  if (!r._kRange) { const v = [...(r.kTrue || r.k)].filter((x, c) => r.active[c]).sort((a, b) => a - b); r._kRange = [Math.log10(v[Math.floor(v.length * 0.02)]), Math.log10(v[Math.floor(v.length * 0.99)])]; }
+  return r._kRange;
+}
 const field2D = (fn) => Array.from({ length: NX }, (_, j) => Array.from({ length: NX }, (_, i) => fn(j * NX + i)));
 const logk = Math.log10;
 
@@ -2438,7 +2683,7 @@ function cellText(c, r, sim) {
   const i = c % NX, j = Math.floor(c / NX), L = [`ячейка (${i}, ${j})`];
   if (r.level === 2 && G.seis) L.push(`кровля (сейсмика): ${fmtAbs(G.seis.top[c])} м`, `толщина (сейсмика): ${G.seis.thick[c].toFixed(1)} м`);
   if (revealed()) {
-    L.push(`k = ${r.k[c].toFixed(0)} мД`);
+    L.push(`k = ${(r.kTrue || r.k)[c].toFixed(r.kTrue && r.kTrue[c] < 10 ? 1 : 0)} мД`);
     if (r.level === 2) L.push(`факт: кровля ${fmtAbs(r.zTop[c])} м, h<sub>н</sub> = ${r.hOil[c].toFixed(1)} м`);
     L.push(`P = ${sim.P[c].toFixed(1)} атм`, `Sw = ${Math.min(1, sim.Sw[c]).toFixed(2)}`);
   }
@@ -2449,7 +2694,7 @@ function layerTrace(sim) {
   const act = (c) => r.active[c];
   const common = { x: xs, y: xs, text, hovertemplate: "%{text}<extra></extra>", hoverongaps: false };
   const bar = (title, extra = {}) => ({ title: { text: title, side: "right" }, thickness: 14, len: 0.9, ...extra });
-  if (id === "k") return { type: "heatmap", ...common, z: field2D((c) => (act(c) ? logk(r.k[c]) : null)), zmin: logk(15), zmax: logk(800), colorscale: "Viridis",
+  if (id === "k") return { type: "heatmap", ...common, z: field2D((c) => (act(c) ? logk((r.kTrue || r.k)[c]) : null)), zmin: kRange(r)[0], zmax: kRange(r)[1], colorscale: "Viridis",
     colorbar: bar("k, мД", { tickvals: [logk(15), logk(50), logk(150), logk(400), logk(800)], ticktext: ["15", "50", "150", "400", "800"] }) };
   if (id === "P") return { type: "heatmap", ...common, z: field2D((c) => (act(c) ? v.P[c] : null)), colorscale: "RdBu", reversescale: true, colorbar: bar("P, атм") };
   if (id === "Sw") return { type: "heatmap", ...common, z: field2D((c) => (act(c) ? Math.min(1, v.Sw[c]) : null)), zmin: r.Swc, zmax: 1, colorscale: "Blues", reversescale: true, colorbar: bar("S<sub>w</sub>") };
@@ -3141,6 +3386,42 @@ function rtTick() {
   if (sim.t >= G.params.horizon_days - 1e-9) { R.done = true; applyLevelUI(); showResults(); }
 }
 setInterval(rtTick, 250);
+// ---------- эталон объекта по сиду: фоновый поток (Web Worker) с тем же ядром; кэш в памяти и в браузере ----------
+const refCacheKey = (g, sd) => `oilgame-ref-v1:${g}:${sd}`;
+function startSeedRef(group, seed) {
+  const key = `${group}:${seed}`;
+  if (G.refJobs[key]) return G.refJobs[key];
+  const job = (G.refJobs[key] = { key, group, seed, progress: 0, result: null, error: null, waiters: [] });
+  try { const c = localStorage.getItem(refCacheKey(group, seed)); if (c) { job.result = JSON.parse(c); job.progress = 1; return job; } } catch (e) {}
+  const done = (res) => { job.result = res; job.progress = 1; try { localStorage.setItem(refCacheKey(group, seed), JSON.stringify(res)); } catch (e) {} job.waiters.splice(0).forEach((f) => f()); };
+  const params = { ...C.DEFAULT_PARAMS, ...C.DEFAULT_COSTS, level: 2, ...C.scenarioParams(group, seed) };
+  try {
+    const src = document.getElementById("sim-core").textContent + `
+      self.onmessage = (e) => { const C = globalThis.OILCORE, d = e.data, r = C.buildReservoir2(d.params), g = C.seedRefRun(r, d.params, d.group);
+        let st = g.next(), last = 0; while (!st.done) { const now = Date.now(); if (now - last > 400) { postMessage({ progress: st.value }); last = now; } st = g.next(); }
+        postMessage({ done: true, result: st.value }); };`;
+    const wk = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    wk.onmessage = (e) => { if (e.data.done) { done(e.data.result); wk.terminate(); } else job.progress = e.data.progress; };
+    wk.onerror = (e) => { job.error = e.message || "ошибка фонового расчёта"; wk.terminate(); job.worker = null; job.waiters.splice(0).forEach((f) => f()); };
+    wk.postMessage({ params, group }); job.worker = wk;
+  } catch (e) { job.error = String(e); }
+  return job;
+}
+// дождаться эталона (если фоновый поток недоступен — посчитать здесь кусками); onProgress(доля)
+async function awaitSeedRef(group, seed, onProgress) {
+  const job = startSeedRef(group, seed);
+  if (job.error || !job.worker && !job.result) {
+    const params = { ...C.DEFAULT_PARAMS, ...C.DEFAULT_COSTS, level: 2, ...C.scenarioParams(group, seed) }, g = C.seedRefRun(C.buildReservoir2(params), params, group);
+    let st = g.next(), t0 = performance.now();
+    while (!st.done) { if (performance.now() - t0 > 40) { onProgress(st.value); await new Promise((r) => setTimeout(r, 0)); t0 = performance.now(); } st = g.next(); }
+    job.result = st.value; job.error = null; job.progress = 1;
+    try { localStorage.setItem(refCacheKey(group, seed), JSON.stringify(job.result)); } catch (e) {}
+    return job.result;
+  }
+  while (!job.result && !job.error) { onProgress(job.progress); await new Promise((r) => { job.waiters.push(r); setTimeout(r, 300); }); }
+  if (job.error) return awaitSeedRef(group, seed, onProgress);
+  return job.result;
+}
 function rtStart() {
   if (!G.rt || G.rt.started) return;
   Object.assign(G.rt, { started: true, wall0: performance.now(), t0: G.sim.t });
@@ -3391,12 +3672,18 @@ async function showResults() {
         G.reportCache = { sim, t: sim.t, fc };
       }
     }
+    if (sim.r.seed && sim.r.level === 2) {
+      const job = G.refJobs[`${G.scenario}:${sim.r.seed}`];
+      if (!job || !job.result) root.innerHTML = `<div class="rep-progress"><b>Расчёт эталона для объекта ${objCode(sim.r.scenario, sim.r.seed)}…</b><div style="margin-top:6px">Политика эталона группы применяется к этому объекту в нескольких вариантах расстановки; у всех игроков с этим сидом эталон одинаковый. Готово <span id="rp-pct">0</span> %</div><div class="bar"><i id="rp-bar"></i></div></div>`;
+      G.seedRef = await awaitSeedRef(sim.r.scenario, sim.r.seed, (f) => { const a = $("rp-pct"), b = $("rp-bar"); if (a) a.textContent = Math.round(f * 100); if (b) b.style.width = Math.round(f * 100) + "%"; });
+    }
     buildReport(sim, fc, finished);
   } finally { G.reporting = false; $("btn-continue").disabled = false; $("btn-restart").disabled = false; $("btn-pdf").disabled = false; }
 }
 function buildReport(sim, fc, finished) {
   const P = G.params, r = sim.r, lv = r.level, rate = (P.disc_rate || 10) / 100, e = sim.economy;
-  const rk = C.refKey(lv, r.scenario), play = C.yearlyFromSim(sim, P), full = fc ? C.yearlyFromSim(fc, P) : play, ref = C.refYearly(rk, P);
+  const seedRef = lv === 2 && r.seed && G.seedRef ? { ...G.seedRef, fund: "—" } : null, rk = seedRef || C.refKey(lv, r.scenario);
+  const play = C.yearlyFromSim(sim, P), full = fc ? C.yearlyFromSim(fc, P) : play, ref = C.refYearly(rk, P);
   const nPlay = play.cf.length, nFull = full.cf.length, T = Math.min(20, nFull), ooipT = r.ooipM3 * C.RHO_OIL;
   const cumNpv = (cf) => { let a = 0; return cf.map((v, n) => (a += v / Math.pow(1 + rate, n + 1))); };
   const npvP = cumNpv(full.cf), npvR = cumNpv(ref.cf), kin = (y, n) => (n > 0 ? y.cumOil_t[n - 1] / ooipT : 0);
@@ -3411,20 +3698,25 @@ function buildReport(sim, fc, finished) {
     return q <= 1 ? `ваш / эталон = ${qs} → 100 × ${qs} = ${pts.toFixed(1).replace(".", ",")}` : `ваш / эталон = ${qs} → 100 + ${C.SCORE_BONUS}·ln ${qs} = ${pts.toFixed(1).replace(".", ",")}`;
   };
   const sim2 = fc || sim, np = sim.wells.filter((w) => w.type === "prod").length, ni = sim.wells.length - np;
-  const refD = C.REF[rk], refCapex = ref.capex.slice(0, T).reduce((a, b) => a + b, 0), capex = e.drillSpent + e.otherSpent;
+  const refD = seedRef || C.REF[rk], refCapex = ref.capex.slice(0, T).reduce((a, b) => a + b, 0), capex = e.drillSpent + e.otherSpent;
   const wcEnd = (y, n) => { const l = y.liq_m3[n - 1]; return l > 0 ? y.water_m3[n - 1] / l : 0; };
   const nm = $("rep-name").value.trim(), err = lv === 2 && G.owcGuess !== null ? G.owcGuess - r.owc : null;
   // на объектах вязкость задаёт пласт, и эталон считался с ней же; меняется она только на учебном полигоне
+  // честность соревнования: цены отличаются от стандартных для объекта
+  const stdP = { ...C.DEFAULT_PARAMS, ...C.DEFAULT_COSTS, ...(lv === 2 ? C.scenarioParams(r.scenario || "bv8", r.seed) : {}) };
+  const changed = ["price_oil", "drill_cost", "conv_cost", "esp_cost", "frac_cost", "elec_cost", "expl_cost", "seis_cost", "pta_cost", "stim_cost", "lift_cost", "inj_cost", "well_opex", "disc_rate"]
+    .filter((k) => P[k] !== undefined && stdP[k] !== undefined && Math.abs(P[k] - (k === "disc_rate" ? 10 : stdP[k])) > 1e-6 * Math.max(1, Math.abs(stdP[k])));
+  const priceNote = changed.length ? ` <span class="bad">Цены изменены (${changed.length}) — в соревновании результат несопоставим с другими участниками.</span>` : "";
   const mu = lv === 1 && P.mu_o !== C.DEFAULT_PARAMS.mu_o ? ` <span class="bad">(эталон полигона рассчитан при μ нефти = ${C.DEFAULT_PARAMS.mu_o} сП, у вас ${P.mu_o} сП — сравнение приближённое)</span>` : "";
   let h = `<div class="rep-head"><h1>Отчёт о разработке нефтяного месторождения</h1><div class="meta"><span><b>Участник:</b> <span id="rep-who">${nm || "—"}</span></span>` +
-    `<span><b>Объект:</b> ${lv === 2 ? r.scen.name + (G.edu ? " — учебный режим (геология известна)" : " (разведка, сейсмика, ГДИС)") : "учебный полигон (геология известна)"}</span><span><b>Срок:</b> ${nPlay} лет разработки${fc ? " + 10 лет прогноза" : ""}</span><span><b>Дата:</b> ${new Date().toLocaleDateString("ru-RU")}</span></div></div>`;
+    `<span><b>Объект:</b> ${lv === 2 ? `${objCode(r.scenario || "bv8", r.seed)} — ` + r.scen.name.replace(/, сид \d+$/, "") + (G.edu ? " — учебный режим (геология известна)" : " (разведка, сейсмика, ГДИС)") : "учебный полигон (геология известна)"}</span><span><b>Срок:</b> ${nPlay} лет разработки${fc ? " + 10 лет прогноза" : ""}</span><span><b>Дата:</b> ${new Date().toLocaleDateString("ru-RU")}</span></div></div>`;
   if (!finished) h += `<div class="rep-banner"><b>Промежуточный отчёт.</b> Итоговая оценка и прогноз формируются по завершении срока разработки (${Math.round(P.horizon_days / 365.25)} лет) и в режиме песочницы не выставляются.</div>`;
   let n = 1;
   if (sc) {
     h += `<section class="rep-sec"><h2><span>${n++}.</span>Итоговая оценка</h2><div class="score-box"><div class="ring" style="background:conic-gradient(${gcol} ${Math.min(100, sc.total) * 3.6}deg, #e5ecf6 0)"><div><b>${sc.total.toFixed(0)}</b><small>эталон = 100</small></div></div>` +
       `<div class="score-parts"><div><span class="grade" style="background:${gcol}">${sc.grade}</span></div><div style="margin-top:10px">КИН за ${T} лет: <b>${(kinP * 100).toFixed(1)} %</b> (эталон ${(kinR * 100).toFixed(1)} %) — <b>${sc.kin.toFixed(0)}</b> баллов <span class="sub">(${explain(kinP, kinR, sc.kin)})</span></div><div class="bar"><i style="width:${Math.min(100, sc.kin)}%; background:#636efa"></i></div>` +
       `<div>ЧДД за ${T} лет при ставке ${(rate * 100).toFixed(0)} %: <b>${f0(npvPT / 1e6)} млн руб</b> (эталон ${f0(npvRT / 1e6)}) — <b>${sc.npv.toFixed(0)}</b> баллов <span class="sub">(${explain(npvPT, npvRT, sc.npv)})</span></div><div class="bar"><i style="width:${Math.min(100, sc.npv)}%; background:#00cc96"></i></div>` +
-      `<div class="rep-note">Эталон для ${lv === 2 ? "объекта «" + r.scen.short + "»" : "учебного полигона"} сравнивается на тех же ${T} годах; его ЧДД пересчитан по вашим ценам и затратам (цена нефти ${P.price_oil} руб/т, бурение ${(P.drill_cost / 1e6).toFixed(0)} млн руб, ставка ${(rate * 100).toFixed(0)} %). Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант («суперэталон», подобран оптимизацией в условиях этого ${lv === 2 ? "объекта — его пласт, флюиды и цены по умолчанию" : "полигона"}: ${refD.desc}) — это 100 баллов по каждому показателю. Ниже эталона — пропорционально (100 × ваш / эталон); выше — 100 + ${C.SCORE_BONUS}·ln(ваш / эталон): превзойти эталон можно, но каждый следующий процент даётся всё труднее (+10 % ≈ 104, +25 % ≈ 109 баллов); убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
+      `<div class="rep-note">Эталон для ${lv === 2 ? "объекта «" + r.scen.short + "»" : "учебного полигона"} сравнивается на тех же ${T} годах; его ЧДД пересчитан по вашим ценам и затратам (цена нефти ${P.price_oil} руб/т, бурение ${(P.drill_cost / 1e6).toFixed(0)} млн руб, ставка ${(rate * 100).toFixed(0)} %). Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант (${seedRef ? "для сида — " : `«суперэталон», подобран оптимизацией в условиях этого ${lv === 2 ? "объекта — его пласт, флюиды и цены по умолчанию" : "полигона"}: `}${refD.desc}) — это 100 баллов по каждому показателю. Ниже эталона — пропорционально (100 × ваш / эталон); выше — 100 + ${C.SCORE_BONUS}·ln(ваш / эталон): превзойти эталон можно, но каждый следующий процент даётся всё труднее (+10 % ≈ 104, +25 % ≈ 109 баллов); убыточный вариант — 0 баллов по ЧДД.${mu}${priceNote}</div></div></div></section>`;
   }
   // ключевые показатели
   const at = (y, k, nn) => cumSum(y[k], nn);
@@ -3466,7 +3758,7 @@ function buildReport(sim, fc, finished) {
   {
     const ee = (fc || sim).economy, me = C.flowOf(ee.u, ee.cu, P), rs = ref.parts.slice(0, T), sumR = (k) => rs.reduce((a, x) => a + x[k], 0);
     const oilP = ee.u.oil_t, oilR = cumSum(ref.oil_t, T), capByKey = (cu) => { const o = {}; for (const k in cu) o[k] = C.costOf({ [k]: cu[k] }, P); return o; };
-    const cp = capByKey(ee.cu), refCu = {}; for (const c of C.REF[rk].c.slice(0, T)) for (const k in c) refCu[k] = (refCu[k] || 0) + c[k];
+    const cp = capByKey(ee.cu), refCu = {}; for (const c of refD.c.slice(0, T)) for (const k in c) refCu[k] = (refCu[k] || 0) + c[k];
     const cr = capByKey(refCu), CAPN = { drill_cost: "бурение скважин и боковых стволов", frac_cost: "ГРП и МГРП", esp_cost: "ЭЦН (установка и замена)", conv_cost: "перевод под закачку",
       stim_cost: "обработки призабойной зоны", pta_cost: "ГДИС", lost_t: "недобор нефти при ГДИС", seis_cost: "сейсмика 3D", expl_cost: "разведочные скважины" };
     const tr = (lab, a, b, cls = "") => `<tr${cls}><td style="text-align:left">${lab}</td><td>${f0(a / 1e6)}</td><td>${oilP > 0 ? f0(a / oilP) : "—"}</td><td>${f0(b / 1e6)}</td><td>${oilR > 0 ? f0(b / oilR) : "—"}</td></tr>`;
@@ -3540,7 +3832,7 @@ function drawReveal(sim) {
   const r = sim.r;
   const mk = (z, cs, title, extra = {}) => ({ type: "heatmap", x: xs, y: xs, z, colorscale: cs, hovertemplate: "%{z:.2f}<extra></extra>", colorbar: { title: { text: title, side: "right" }, thickness: 14, len: 0.85 }, visible: false, ...extra });
   const layers = [["h нефть, м", mk(field2D((c) => r.hOil[c]), "YlOrBr", "h нефть, м", { zmin: 0, zmax: r.h })],
-    ["Проницаемость", mk(field2D((c) => logk(r.k[c])), "Viridis", "lg k", { zmin: logk(15), zmax: logk(800) })],
+    ["Проницаемость", mk(field2D((c) => logk((r.kTrue || r.k)[c])), "Viridis", "lg k", { zmin: kRange(r)[0], zmax: kRange(r)[1] })],
     ["Насыщенность Sw", mk(field2D((c) => Math.min(1, sim.Sw[c])), "Blues", "S<sub>w</sub>", { zmin: r.Swc, zmax: 1, reversescale: true })],
     ["Давление, атм", mk(field2D((c) => sim.P[c]), "RdBu", "P, атм", { reversescale: true })]];
   layers[0][1].visible = true;
@@ -3603,14 +3895,19 @@ function renderScenPick() {
   $("scen-pick").innerHTML = cards;
   $("scen-pick").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setScenario(b.dataset.scen)));
 }
+const objCode = (id = G.scenario, seed = G.seed) => `${C.SCENARIOS[id].short} · ${seed ? "сид " + seed : "канонический"}`;
+function setSeed(v) {
+  G.seed = Math.max(0, Math.min(C.SEED_MAX, Math.floor(+v || 0))); $("seed-in").value = G.seed;
+  setScenario(G.scenario);
+}
 function setScenario(id) {
-  G.scenario = C.SCENARIOS[id] ? id : "bv8"; const sp = C.scenarioParams(G.scenario);
+  G.scenario = C.SCENARIOS[id] ? id : "bv8"; const sp = C.scenarioParams(G.scenario, G.seed);
   $("pf-drill_cost").value = sp.drill_cost / 1e6; $("pf-expl_cost").value = sp.expl_cost / 1e6;
   setLevel(2);
 }
 function renderSettingsPreview() {
-  const l2 = G.level === 2, sc = C.scenOf(G.scenario);
-  renderScenPick();
+  const l2 = G.level === 2, sc = C.scenarioForSeed(G.scenario, G.seed) || C.scenOf(G.scenario);
+  renderScenPick(); $("seed-code").textContent = `код: ${objCode()}`;
   $("level-desc").innerHTML = "";
   $("obj-hint").innerHTML = hint(`${LEVEL_DESC[2]}<br><br>Галочка «Учебный режим» открывает геологию сразу — на любом объекте.`);
   document.querySelectorAll("#params-form .lvl2-only").forEach((el) => el.classList.toggle("hidden", !l2));
@@ -3625,10 +3922,10 @@ function renderSettingsPreview() {
       ["Связанная вода / остаточная нефть", "0.20 / 0.25"], ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"], ["Плотность нефти", "0.86 т/м³"],
       ["Запасы OOIP", `${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т`]].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
   } else {
-    $("preview-title").textContent = G.edu ? `${sc.short}: карта проницаемости (учебный режим)` : `${sc.short}: лицензионный участок и разведочные скважины`;
-    const r = C.buildReservoir2({ ...C.DEFAULT_PARAMS, ...C.scenarioParams(G.scenario) });
-    const kMap = G.edu ? [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.hOil[c] > 0 ? logk(r.k[c]) : null)), colorscale: "Viridis", zmin: logk(Math.max(0.3, sc.k.min)), zmax: logk(sc.k.chan ? sc.k.chan.hi : sc.k.max),
-      hovertemplate: "k = %{customdata:.1f} мД<extra></extra>", customdata: field2D((c) => r.k[c]), colorbar: { title: { text: "lg k", side: "right" }, thickness: 12 } }] : [];
+    $("preview-title").textContent = `${objCode()}: ${G.edu ? "карта проницаемости (учебный режим)" : "участок и разведочные скважины"}`;
+    const r = C.buildReservoir2({ ...C.DEFAULT_PARAMS, ...C.scenarioParams(G.scenario, G.seed) });
+    const kMap = G.edu ? [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.hOil[c] > 0 ? logk(r.kTrue[c]) : null)), colorscale: "Viridis", zmin: logk(Math.max(0.3, sc.k.min)), zmax: logk(sc.k.chan ? sc.k.chan.hi : sc.k.max),
+      hovertemplate: "k = %{customdata:.1f} мД<extra></extra>", customdata: field2D((c) => r.kTrue[c]), colorbar: { title: { text: "lg k", side: "right" }, thickness: 12 } }] : [];
     Plotly.react("preview-plot", [...kMap, { type: "scatter", mode: "markers+text", x: r.explore.map((e) => ((e.cell % NX) + 0.5) * DX), y: r.explore.map((e) => (Math.floor(e.cell / NX) + 0.5) * DX),
       text: r.explore.map((e) => e.name), textposition: "top center", marker: { symbol: "diamond", size: 14, color: "#fff", line: { color: TXT, width: 2 } }, hovertemplate: "%{text}<extra></extra>" }],
       lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
@@ -3743,13 +4040,15 @@ function initSettings() {
   }).join("");
   setScenario(G.scenario);
   $("tm-step").addEventListener("click", () => setTimeMode("step")); $("tm-rt").addEventListener("click", () => setTimeMode("rt"));
+  $("seed-in").addEventListener("change", (e) => setSeed(e.target.value));
+  $("seed-dice").addEventListener("click", () => setSeed(1 + Math.floor(Math.random() * C.SEED_MAX)));
   $("edu-mode").addEventListener("change", (e) => { G.edu = e.target.checked; if (G.edu) setTimeMode("rt"); renderSettingsPreview(); });
   $("tm-min").addEventListener("change", () => setTimeMode("rt"));
   $("btn-start").addEventListener("click", startGame); $("btn-selftest").addEventListener("click", runSelfTestBrowser);
 }
 async function runSelfTestBrowser() {
   const out = $("selftest-out"); out.classList.remove("hidden"); out.textContent = "Запуск самотеста физики…\n";
-  const groups = ["reservoirTests", "relPermTests", "pressureTests", "wellTests", "saturationTests", "breakthroughTests", "economyTests", "level2Tests", "level2bTests", "scenarioTests"];
+  const groups = ["reservoirTests", "relPermTests", "pressureTests", "wellTests", "saturationTests", "breakthroughTests", "economyTests", "level2Tests", "level2bTests", "scenarioTests", "seedTests"];
   let pass = 0, total = 0;
   for (const g of groups) {
     out.textContent += `▶ ${g}…\n`; out.scrollTop = out.scrollHeight;
@@ -3762,8 +4061,8 @@ async function runSelfTestBrowser() {
 function readParams() {
   const num = (key, def) => { const el = $("pf-" + key), v = el ? +el.value : NaN; return isFinite(v) && v > 0 ? v : def; };
   const d = C.DEFAULT_PARAMS, years = num("horizon_years", 10);
-  const l2 = G.level === 2, sp = l2 ? C.scenarioParams(G.scenario) : null;
-  return { level: G.level, scenario: l2 ? G.scenario : null, mu_o: l2 ? sp.mu_o : num("mu_o", d.mu_o), price_oil: num("price_oil", d.price_oil), drill_cost: num("drill_cost", d.drill_cost) * 1e6,
+  const l2 = G.level === 2, sp = l2 ? C.scenarioParams(G.scenario, G.seed) : null;
+  return { level: G.level, scenario: l2 ? G.scenario : null, seed: l2 ? G.seed : 0, mu_o: l2 ? sp.mu_o : num("mu_o", d.mu_o), price_oil: num("price_oil", d.price_oil), drill_cost: num("drill_cost", d.drill_cost) * 1e6,
     conv_cost: num("conv_cost", 5) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, frac_cost: num("frac_cost", 8) * 1e6, disc_rate: num("disc_rate", 10), elec_cost: num("elec_cost", 5.5), expl_cost: num("expl_cost", 90) * 1e6, seis_cost: num("seis_cost", 40) * 1e6, pta_cost: num("pta_cost", 1) * 1e6,
     stim_cost: num("stim_cost", 2) * 1e6, lift_cost: num("lift_cost", d.lift_cost), inj_cost: num("inj_cost", d.inj_cost), well_opex: num("well_opex", 4) * 1e6,
     horizon_days: G.level === 2 ? Math.round(years) * 365 : Math.round(years * 365.25), init_money: num("init_money", d.init_money) * 1e6 };
@@ -3785,7 +4084,8 @@ function startGame() {
   G.layer = G.level === 2 ? "blank" : "k";
   $("owc-input").value = ""; G.log.sel = null;
   if (G.level === 2) { $("owc-input").min = Math.round(res.owc - 150); $("owc-input").max = Math.round(res.owc + 150); }
-  $("tb-obj").textContent = G.level === 2 ? `Объект: ${res.scen.short}${G.edu ? " · учебный режим" : ""}` : "Учебный полигон";
+  $("tb-obj").textContent = G.level === 2 ? `${objCode(G.scenario, res.seed)}${G.edu ? " · учебный режим" : ""}` : "Учебный полигон";
+  G.seedRef = null; if (G.level === 2 && res.seed) startSeedRef(G.scenario, res.seed);
   if (G.level === 2 && G.edu) { G.seis = res.seis; G.layer = "k"; } G.log.mode = "one"; setTool(null); setSpeed(0);
   $("fc-gather").value = G.sim.field.pGather; $("fc-kns").value = G.sim.field.pKNS; $("fc-gather-v").textContent = G.sim.field.pGather; $("fc-kns-v").textContent = G.sim.field.pKNS;
   stopPlay(); saveSnap(G.sim);
