@@ -2017,8 +2017,8 @@ function equipmentTests() {
   return t;
 }
 
-// Эталонные варианты разработки (для оценки игрока): подобраны оптимизацией и рассчитаны этим же ядром при параметрах по умолчанию
-// (μ нефти 5 сП); экономика и капитальные затраты пересчитываются по параметрам игрока.
+// Эталонные варианты разработки (для оценки игрока): подобраны оптимизацией и рассчитаны этим же ядром в условиях объекта —
+// его пласт и флюиды (вязкость нефти и воды, Swc/Sor, давление) и цены объекта по умолчанию; экономика пересчитывается по ценам игрока.
 const REF = {
   1: { desc: "шахматная сетка через 320 м: 4 добывающие (4 ГС 690–1760 м) на ЭЦН и 12 нагнетательных со штуцером 8 мм; КНС 110 атм, давление сбора 13 атм; отключение 1 нерентабельной скважины; ежегодный подбор частоты и типоразмера ЭЦН", fund: "4 / 12", years: 20, npv: 11669.1,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
@@ -2105,16 +2105,19 @@ function refYearly(level, params) {
 // ключ эталона: учебный полигон — 1, объект уровня 2 — его id (базовый купол — 2)
 function refKey(level, scenario) { return level === 1 ? 1 : scenario && REF[scenario] ? scenario : 2; }
 function npvOf(cf, rate) { return cf.reduce((s, v, n) => s + v / Math.pow(1 + rate, n + 1), 0); }
-// баллы: эталон = 80, выше эталона — до 100 (при +25 %), отрицательный результат = 0; КИН и ЧДД — по 50 %
+// Баллы по показателю: эталон = 100; ниже — пропорционально (100·v/v_эт); выше — 100 + 40·ln(v/v_эт): превзойти можно,
+// но отдача быстро убывает (+10 % к эталону ≈ 104, +25 % ≈ 109, вдвое ≈ 128); отрицательный результат = 0.
+// Итог — среднее баллов за КИН и ЧДД.
+const SCORE_BONUS = 40;
 function scoreComponent(v, ref) {
   if (!(v > 0)) return 0;
   if (!(ref > 0)) return 100;
   const r = v / ref;
-  return r <= 1 ? 80 * r : 80 + 20 * Math.min(1, (r - 1) / 0.25);
+  return r <= 1 ? 100 * r : 100 + SCORE_BONUS * Math.log(r);
 }
 function scoreDevelopment(kin, kinRef, npv, npvRef) {
   const sK = scoreComponent(kin, kinRef), sN = scoreComponent(npv, npvRef), total = 0.5 * sK + 0.5 * sN;
-  return { kin: sK, npv: sN, total, grade: total >= 90 ? "отлично" : total >= 75 ? "хорошо" : total >= 55 ? "удовлетворительно" : "неудовлетворительно" };
+  return { kin: sK, npv: sN, total, grade: total >= 100 ? "выше эталона" : total >= 90 ? "отлично" : total >= 75 ? "хорошо" : total >= 55 ? "удовлетворительно" : "неудовлетворительно" };
 }
 
 // ---------- Тесты оценки ----------
@@ -2139,9 +2142,10 @@ function reportTests() {
   let dP = 0; for (let c = 0; c < sm.P.length; c++) dP = Math.max(dP, Math.abs(sm.P[c] - cl.P[c]));
   t.push({ name: "клон состояния: продолжение даёт тот же результат", pass: dP < 1e-6 && Math.abs(sm.economy.balance - cl.economy.balance) < 1, details: `max|ΔP|=${dP.toExponential(1)}` });
   const ya = yearlyFromSim(cl, DEFAULT_PARAMS);
-  const s1 = scoreDevelopment(0.4, 0.4, 100, 100), s2 = scoreDevelopment(0.5, 0.4, 130, 100), s3 = scoreDevelopment(0.2, 0.4, -5, 100);
-  t.push({ name: "оценка: эталон = 80, выше эталона растёт до 100, убыточный вариант = 0 по ЧДД", pass: Math.abs(s1.total - 80) < 1e-9 && s2.total === 100 && s3.npv === 0 && s3.total < 25 && ya.cf.length === 0,
-           details: `эталон ${s1.total.toFixed(0)}, лучше ${s2.total.toFixed(0)}, хуже ${s3.total.toFixed(0)}` });
+  const s1 = scoreDevelopment(0.4, 0.4, 100, 100), s2 = scoreDevelopment(0.5, 0.4, 130, 100), s3 = scoreDevelopment(0.2, 0.4, -5, 100), s4 = scoreDevelopment(0.382, 0.375, 103, 100);
+  t.push({ name: "оценка: эталон = 100, ниже — пропорционально, выше — с убывающей отдачей (+25 % ≈ 109), убыточный вариант = 0 по ЧДД",
+           pass: Math.abs(s1.total - 100) < 1e-9 && s2.total > 105 && s2.total < 112 && s4.total > 100 && s4.total < 102 && s3.npv === 0 && Math.abs(s3.kin - 50) < 1e-9 && Math.abs(s3.total - 25) < 1e-9 && ya.cf.length === 0,
+           details: `эталон ${s1.total.toFixed(0)}, +25 % и +30 %: ${s2.total.toFixed(1)}, чуть выше эталона: ${s4.total.toFixed(1)}, хуже и убыточный: ${s3.total.toFixed(0)}` });
   return t;
 }
 
@@ -2291,7 +2295,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, suggestWindow, buildSeismic, nearestSealFaultM,
+  SCORE_BONUS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, reportTests, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
@@ -3339,20 +3343,27 @@ function buildReport(sim, fc, finished) {
   const kinP = kin(full, T), kinR = kin(ref, T), npvPT = npvP[T - 1], npvRT = npvR[T - 1];
   const sc = finished ? C.scoreDevelopment(kinP, kinR, npvPT, npvRT) : null;
   const gcol = sc ? (sc.total >= 90 ? "#00a37a" : sc.total >= 75 ? "#636efa" : sc.total >= 55 ? "#d97706" : "#ef553b") : "#636efa";
+  // расшифровка баллов: отношение к эталону и формула
+  const explain = (v, ref, pts) => {
+    if (!(v > 0)) return "результат ≤ 0 → 0 баллов";
+    const q = v / ref, qs = q.toFixed(3).replace(".", ",");
+    return q <= 1 ? `ваш / эталон = ${qs} → 100 × ${qs} = ${pts.toFixed(1).replace(".", ",")}` : `ваш / эталон = ${qs} → 100 + ${C.SCORE_BONUS}·ln ${qs} = ${pts.toFixed(1).replace(".", ",")}`;
+  };
   const sim2 = fc || sim, np = sim.wells.filter((w) => w.type === "prod").length, ni = sim.wells.length - np;
   const refD = C.REF[rk], refCapex = ref.capex.slice(0, T).reduce((a, b) => a + b, 0), capex = e.drillSpent + e.otherSpent;
   const wcEnd = (y, n) => { const l = y.liq_m3[n - 1]; return l > 0 ? y.water_m3[n - 1] / l : 0; };
   const nm = $("rep-name").value.trim(), err = lv === 2 && G.owcGuess !== null ? G.owcGuess - r.owc : null;
-  const mu = P.mu_o !== 5 ? ` <span class="bad">(эталон рассчитан при μ = 5 сП, у вас ${P.mu_o} сП — сравнение приближённое)</span>` : "";
+  // на объектах вязкость задаёт пласт, и эталон считался с ней же; меняется она только на учебном полигоне
+  const mu = lv === 1 && P.mu_o !== C.DEFAULT_PARAMS.mu_o ? ` <span class="bad">(эталон полигона рассчитан при μ нефти = ${C.DEFAULT_PARAMS.mu_o} сП, у вас ${P.mu_o} сП — сравнение приближённое)</span>` : "";
   let h = `<div class="rep-head"><h1>Отчёт о разработке нефтяного месторождения</h1><div class="meta"><span><b>Участник:</b> <span id="rep-who">${nm || "—"}</span></span>` +
     `<span><b>Объект:</b> ${lv === 2 ? r.scen.name + " (разведка, сейсмика, ГДИС)" : "учебный полигон (геология известна)"}</span><span><b>Срок:</b> ${nPlay} лет разработки${fc ? " + 10 лет прогноза" : ""}</span><span><b>Дата:</b> ${new Date().toLocaleDateString("ru-RU")}</span></div></div>`;
   if (!finished) h += `<div class="rep-banner"><b>Промежуточный отчёт.</b> Итоговая оценка и прогноз формируются по завершении срока разработки (${Math.round(P.horizon_days / 365.25)} лет) и в режиме песочницы не выставляются.</div>`;
   let n = 1;
   if (sc) {
-    h += `<section class="rep-sec"><h2><span>${n++}.</span>Итоговая оценка</h2><div class="score-box"><div class="ring" style="background:conic-gradient(${gcol} ${sc.total * 3.6}deg, #e5ecf6 0)"><div><b>${sc.total.toFixed(0)}</b><small>из 100</small></div></div>` +
-      `<div class="score-parts"><div><span class="grade" style="background:${gcol}">${sc.grade}</span></div><div style="margin-top:10px">КИН за ${T} лет: <b>${(kinP * 100).toFixed(1)} %</b> (эталон ${(kinR * 100).toFixed(1)} %) — <b>${sc.kin.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.kin}%; background:#636efa"></i></div>` +
-      `<div>ЧДД за ${T} лет при ставке ${(rate * 100).toFixed(0)} %: <b>${f0(npvPT / 1e6)} млн руб</b> (эталон ${f0(npvRT / 1e6)}) — <b>${sc.npv.toFixed(0)}</b> из 100</div><div class="bar"><i style="width:${sc.npv}%; background:#00cc96"></i></div>` +
-      `<div class="rep-note">Эталон для ${lv === 2 ? "объекта «" + r.scen.short + "»" : "учебного полигона"} сравнивается на тех же ${T} годах; его ЧДД пересчитан по вашим ценам и затратам (цена нефти ${P.price_oil} руб/т, бурение ${(P.drill_cost / 1e6).toFixed(0)} млн руб, ставка ${(rate * 100).toFixed(0)} %). Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант («суперэталон», подобран оптимизацией: ${refD.desc}) даёт 80 баллов по каждому показателю; превышение эталона на 25 % и более — 100; убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
+    h += `<section class="rep-sec"><h2><span>${n++}.</span>Итоговая оценка</h2><div class="score-box"><div class="ring" style="background:conic-gradient(${gcol} ${Math.min(100, sc.total) * 3.6}deg, #e5ecf6 0)"><div><b>${sc.total.toFixed(0)}</b><small>эталон = 100</small></div></div>` +
+      `<div class="score-parts"><div><span class="grade" style="background:${gcol}">${sc.grade}</span></div><div style="margin-top:10px">КИН за ${T} лет: <b>${(kinP * 100).toFixed(1)} %</b> (эталон ${(kinR * 100).toFixed(1)} %) — <b>${sc.kin.toFixed(0)}</b> баллов <span class="sub">(${explain(kinP, kinR, sc.kin)})</span></div><div class="bar"><i style="width:${Math.min(100, sc.kin)}%; background:#636efa"></i></div>` +
+      `<div>ЧДД за ${T} лет при ставке ${(rate * 100).toFixed(0)} %: <b>${f0(npvPT / 1e6)} млн руб</b> (эталон ${f0(npvRT / 1e6)}) — <b>${sc.npv.toFixed(0)}</b> баллов <span class="sub">(${explain(npvPT, npvRT, sc.npv)})</span></div><div class="bar"><i style="width:${Math.min(100, sc.npv)}%; background:#00cc96"></i></div>` +
+      `<div class="rep-note">Эталон для ${lv === 2 ? "объекта «" + r.scen.short + "»" : "учебного полигона"} сравнивается на тех же ${T} годах; его ЧДД пересчитан по вашим ценам и затратам (цена нефти ${P.price_oil} руб/т, бурение ${(P.drill_cost / 1e6).toFixed(0)} млн руб, ставка ${(rate * 100).toFixed(0)} %). Оценка = 50 % × баллы за КИН + 50 % × баллы за ЧДД. Эталонный вариант («суперэталон», подобран оптимизацией в условиях этого ${lv === 2 ? "объекта — его пласт, флюиды и цены по умолчанию" : "полигона"}: ${refD.desc}) — это 100 баллов по каждому показателю. Ниже эталона — пропорционально (100 × ваш / эталон); выше — 100 + ${C.SCORE_BONUS}·ln(ваш / эталон): превзойти эталон можно, но каждый следующий процент даётся всё труднее (+10 % ≈ 104, +25 % ≈ 109 баллов); убыточный вариант — 0 баллов по ЧДД.${mu}</div></div></div></section>`;
   }
   // ключевые показатели
   const at = (y, k, nn) => cumSum(y[k], nn);
@@ -3442,7 +3453,7 @@ function buildReport(sim, fc, finished) {
   }
   h += `<section class="rep-sec"><h2><span>${n++}.</span>Комментарии и рекомендации</h2><ul class="rep-list">${cm.map((x) => `<li>${x}</li>`).join("")}</ul></section>`;
   h += `<div class="rep-note" style="margin-top:20px; border-top:1px solid var(--line); padding-top:8px">Методика: двухфазная модель нефть/вода (IMPES, сетка 50×50), экономика в рублях, ЧДД по годовым денежным потокам при ставке ${(rate * 100).toFixed(0)} %. ` +
-    `Прогноз — продолжение расчёта на 10 лет без изменений фонда и режимов. Эталонный вариант рассчитан тем же симулятором при параметрах по умолчанию; экономика эталона пересчитывается по вашим ценам и затратам. Отчёт учебный и не является проектным документом.</div>`;
+    `Прогноз — продолжение расчёта на 10 лет без изменений фонда и режимов. Эталонный вариант рассчитан тем же симулятором в условиях выбранного объекта (пласт, флюиды, давление и цены объекта по умолчанию); экономика эталона пересчитывается по вашим ценам и затратам. Отчёт учебный и не является проектным документом.</div>`;
   $("report").innerHTML = h;
   const who = $("rep-name"); who.oninput = () => { const t = document.getElementById("rep-who"); if (t) t.textContent = who.value.trim() || "—"; };
   if (lv === 2) drawReveal(sim);
