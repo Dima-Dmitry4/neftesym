@@ -472,7 +472,7 @@
           <button id="tool-expl" class="lvl2-only" data-tip="@expl">◆ Разведочная</button>
           <span id="drill-opts" class="tb-group" title="Заканчивание новой скважины: вертикальная (ВС) или горизонтальная (ГС) — длина и направление ствола">
             <select id="drill-kind" title="Заканчивание новой скважины"><option value="v">ВС</option><option value="vf">ВС + ГРП</option><option value="hs">ГС</option><option value="hsf">ГС + МГРП</option></select>
-            <label id="dk-L" class="hidden" title="Длина горизонтального участка, м (1000–2000)" style="display:flex; align-items:center; gap:3px">L<input id="drill-L" type="number" min="1000" max="2000" step="50" value="1000" style="width:70px">м</label>
+            <label id="dk-L" class="hidden" title="Длина горизонтального участка, м — любая от 100 м; ствол упрётся в соседние скважины, неактивные ячейки и край участка" style="display:flex; align-items:center; gap:3px">L<input id="drill-L" type="number" min="100" max="3000" step="50" value="1000" style="width:70px">м</label>
             <label id="dk-n" class="hidden" title="Число стадий МГРП (интервал между трещинами не меньше 80 м)" style="display:flex; align-items:center; gap:3px">стадий<input id="drill-n" type="number" min="2" max="25" step="1" value="6" style="width:48px"></label>
             <label id="dk-xf" class="hidden" title="Полудлина трещины ГРП" style="display:flex; align-items:center; gap:3px">x<sub>f</sub><select id="drill-xf"><option>40</option><option selected>80</option><option>120</option></select>м</label>
             <label id="dk-az" class="hidden" title="Азимут ствола (0° — север, 90° — восток) или трещины" style="display:flex; align-items:center; gap:3px">аз.<input id="drill-az" type="number" min="0" max="359" step="5" value="90" style="width:58px">°</label>
@@ -2005,7 +2005,7 @@ function pressureBuildup(sim, w, days) {
   let pMax = pc(cs);
   for (let k2 = 0; k2 < 40; k2++) { const before = pc(cs); solvePressure(cs, 3); pMax = Math.max(pMax, pc(cs)); if (pc(cs) - before < 0.005) break; }
   const deriv = bupDerivative(t, p);
-  return { wellName: w.name, cell: w.cell, t, p, deriv, q, pwf0, days, mu,
+  return { wellName: w.name, cell: w.cell, t, p, deriv, q, pwf0, days, mu, tau,
            truth: { k, s, A, eta, pRes: pMax, pCell0: P0c } };
 }
 // производная давления по ln Δt (Бурде, окно L = 0.2)
@@ -2050,10 +2050,19 @@ function buildupPres(bu) {
   return { pRes: null, pEnd: pE, stabilized: false, method: "не вышла на полку" };
 }
 // подсказка: самый длинный участок, где производная постоянна (±12 % от среднего)
+// Качество КВД: подъём давления за остановку против шума датчика (0,01 атм). Подъём < 2 атм — радиальный участок
+// не выделить надёжно (низкий дебит или высокая проводимость kh): интерпретация k и скина ненадёжна.
+function buildupQuality(bu) {
+  const rise = bu.p[bu.p.length - 1] - bu.pwf0;
+  return { rise, ok: rise >= 2, msg: rise >= 2 ? "" : `подъём давления за остановку всего ${rise.toFixed(2)} атм — на уровне шума датчика; k и скин по такой КВД ненадёжны. Увеличьте дебит скважины (ЭЦН, частота) и повторите КВД` };
+}
+// подсказка: самый длинный участок с постоянной производной (±12 %) после эффекта ствола (t > 8τ) и выше шума
 function suggestWindow(bu) {
-  const d = bu.deriv, n = d.length;
+  const d = bu.deriv, n = d.length, t0 = 8 * (bu.tau || 0);
+  if (!buildupQuality(bu).ok) return null;
   let best = null;
   for (let i = 3; i < n - 1; i++) {
+    if (bu.t[i] < t0) continue;
     let sum = 0, cnt = 0;
     for (let j = i; j < n - 1; j++) {
       if (!isFinite(d[j])) break;
@@ -2062,7 +2071,7 @@ function suggestWindow(bu) {
       let ok = true;
       for (let q = i; q <= j; q++) if (Math.abs(d[q] / mean - 1) > 0.12) { ok = false; break; }
       if (!ok) break;
-      if (cnt >= 8 && (!best || cnt > best.cnt)) best = { i, j, cnt };
+      if (cnt >= 8 && mean > 0.2 && (!best || cnt > best.cnt)) best = { i, j, cnt };
     }
   }
   return best ? { t1: bu.t[best.i], t2: bu.t[best.j] } : null;
@@ -2207,6 +2216,14 @@ function level2bTests() {
   const sp2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
   sp2.addWell(sp2.r.explore[2].cell, "prod", 120); sp2.addWell(sp2.r.explore[0].cell, "prod", 120); advance(sp2, 120);
   const bL = pressureBuildup(sp2, sp2.wells[0], 30), pL = buildupPres(bL), bS = pressureBuildup(sp2, sp2.wells[0], 0.3), pS = buildupPres(bS);
+  {
+    // низкий дебит в высокопроницаемом пласте: подъём давления — на уровне шума; подсказка не даёт ложного окна
+    const sw = createSim(buildReservoir2({ ...DEFAULT_PARAMS, ...scenarioParams("bv8") }), { ...DEFAULT_PARAMS, ...scenarioParams("bv8") });
+    const oilw = sw.r.cells.filter((c) => sw.r.hOil[c] >= sw.r.h - 1e-6); sw.addWell(oilw[Math.floor(oilw.length / 2)], "prod", sw.r.P0 - 3); advance(sw, 60);
+    const bw = pressureBuildup(sw, sw.wells[0], 7), qw = buildupQuality(bw);
+    t.push({ name: "ГДИС: слабый сигнал (малый дебит, высокая kh) распознаётся — подсказка не даёт ложного окна", pass: !qw.ok && suggestWindow(bw) === null,
+             details: `дебит ${bw.q.toFixed(0)} м³/сут, подъём ${qw.rise.toFixed(2)} атм` });
+  }
   t.push({ name: "ГДИС: P пл. по 30-суточной КВД ±2 % от давления, на которое выходит остановленная скважина в модели; 7-часовая КВД на полку не выходит",
            pass: pL.stabilized && Math.abs(pL.pRes / bL.truth.pRes - 1) < 0.02 && !pS.stabilized,
            details: `оценка ${pL.pRes ? pL.pRes.toFixed(1) : "—"} (${pL.method}), модель ${bL.truth.pRes.toFixed(1)} атм; короткая: ${pS.method}` });
@@ -2492,6 +2509,11 @@ function* seedRefRun(r, P, group) {
     while (!st.done) { yield (v + st.value) / variants.length; st = g.next(); }
     if (st.value) res.push(st.value);
   }
+  // запасной вариант: если ни одна расстановка не дала пары «добывающая + нагнетательная» — плотная сетка и низкий порог толщины
+  if (!res.length) for (const sh of [0, 3]) {
+    const g = policyRun(r, P, { ...th0, s: 7, ox: (2 + sh) % 7, oy: (2 + sh) % 7, hMin: 0.4, pat: 0 });
+    let st = g.next(); while (!st.done) { yield 0.99; st = g.next(); } if (st.value) res.push(st.value);
+  }
   if (!res.length) return null;
   const nMax = Math.max(1, ...res.map((x) => x.npv)), kMax = Math.max(1e-9, ...res.map((x) => x.kin));
   const J = (x) => 0.5 * Math.max(0, x.npv) / nMax + 0.5 * x.kin / kMax;
@@ -2734,7 +2756,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  SCORE_BONUS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, suggestWindow, buildSeismic, nearestSealFaultM,
+  SCORE_BONUS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, buildupQuality, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, seedTests, reportTests, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
@@ -3569,7 +3591,8 @@ function buySeismic() {
   renderLayerBar(); G.dirty = true; renderAll();
 }
 const capCost = (units) => C.costOf(units, G.params); // FRAC_MULT — из ядра
-function drillLen() { return Math.max(1000, Math.min(2000, +$("drill-L").value || 1000)); }
+// длина ГС — любая от 100 м (верхний предел 3000 м — больше диагонали участка; фактически ствол обрежется по соседям и краю)
+function drillLen() { return Math.max(100, Math.min(3000, +$("drill-L").value || 1000)); }
 function syncDrillOpts() {
   const kv = $("drill-kind").value;
   $("dk-L").classList.toggle("hidden", kv !== "hs" && kv !== "hsf"); $("dk-xf").classList.toggle("hidden", kv !== "vf" && kv !== "hsf");
@@ -4300,12 +4323,16 @@ function updatePtaCost() {
 }
 function runPta() {
   const w = ptaWell(); if (!w) return;
-  if (w.q < 0.5) return toast("Скважина не работала — сначала рассчитайте год добычи", true);
+  if (w.q < 0.5) return toast(w.on === false ? "Скважина остановлена — запустите её (▶ Пуск) и дайте поработать перед КВД"
+    : G.rt && !G.rt.started ? "Время ещё не идёт — нажмите «▶ Старт», дайте скважине поработать, затем проведите КВД"
+    : G.sim.t < 1 ? "Скважина ещё не работала — сначала рассчитайте год (или дайте поработать в непрерывном режиме)"
+    : "Скважина сейчас не даёт жидкости (заглох фонтан?) — переведите на ЭЦН или увеличьте частоту, затем проведите КВД", true);
   const days = +$("pta-days").value;
   G.sim.economy.charge(G.sim.t, { pta_cost: 1, lost_t: w.qo * C.RHO_OIL * days });
   G.bu = C.pressureBuildup(G.sim, w, days);
   G.bu.win = null; $("pta-t1").value = ""; $("pta-t2").value = "";
-  toast(`КВД по ${w.name} получена, −${mln(G.params.pta_cost + ptaLoss(w, days))}`);
+  const qq = C.buildupQuality(G.bu);
+  toast(`КВД по ${w.name} получена, −${mln(G.params.pta_cost + ptaLoss(w, days))}${qq.ok ? "" : ". Внимание: " + qq.msg}`, !qq.ok);
   G.dirty = true; drawPta();
 }
 function drawPta() {
@@ -4339,6 +4366,7 @@ function renderPtaSide(res) {
   if (!bu) h += `<div class="note keep">Остановите добывающую скважину и запишите восстановление забойного давления. Скважина должна уже поработать (рассчитайте хотя бы год). Остановка — это недобор нефти, поэтому длинные тесты дороже.</div>`;
   else {
     h += `<div><b>${bu.wellName}</b> · дебит до остановки ${bu.q.toFixed(0)} м³/сут · P<sub>wf</sub> = ${bu.pwf0.toFixed(0)} атм</div>`;
+    const qq = C.buildupQuality(bu); if (!qq.ok) h += `<div class="note keep" style="border-color:var(--bad)"><b>КВД неинформативна:</b> ${qq.msg}.</div>`;
     h += `<div class="note"><b>Как анализировать.</b><br>1. На диагностическом графике найдите участок, где производная (красные ромбы) постоянна, — это радиальный приток. Ранние точки искажены влиянием ствола скважины, поздние — границами пласта и разломами.<br>` +
       `2. Введите границы участка (или нажмите «Подсказка») — на правом графике через точки пройдёт прямая.<br>3. Наклон <i>m</i> даёт проницаемость, отсечка — скин.<br>` +
       `4. Пластовое давление — уровень, на который выходит КВД (левый график). Если кривая ещё растёт, давление оценивается экстраполяцией или только снизу; поздняя часть отражает соседние скважины, неоднородность и разломы.</div>`;
@@ -4402,6 +4430,8 @@ async function showResults() {
 function buildReport(sim, fc, finished) {
   const P = G.params, r = sim.r, lv = r.level, rate = (P.disc_rate || 10) / 100, e = sim.economy;
   const seedRef = lv === 2 && r.seed && G.seedRef ? { ...G.seedRef, fund: "—" } : null, rk = seedRef || C.refKey(lv, r.scenario);
+  const noRef = lv === 2 && r.seed && !seedRef;
+  if (noRef) finished = false; // эталон для сида не построен — оценку не выставляем (не сравниваем с чужим объектом)
   const play = C.yearlyFromSim(sim, P), full = fc ? C.yearlyFromSim(fc, P) : play, ref = C.refYearly(rk, P);
   const nPlay = play.cf.length, nFull = full.cf.length, T = Math.min(20, nFull), ooipT = r.ooipM3 * C.RHO_OIL;
   const cumNpv = (cf) => { let a = 0; return cf.map((v, n) => (a += v / Math.pow(1 + rate, n + 1))); };
@@ -4429,7 +4459,8 @@ function buildReport(sim, fc, finished) {
   const mu = lv === 1 && P.mu_o !== C.DEFAULT_PARAMS.mu_o ? ` <span class="bad">(эталон полигона рассчитан при μ нефти = ${C.DEFAULT_PARAMS.mu_o} сП, у вас ${P.mu_o} сП — сравнение приближённое)</span>` : "";
   let h = `<div class="rep-head"><h1>Отчёт о разработке нефтяного месторождения</h1><div class="meta"><span><b>Участник:</b> <span id="rep-who">${nm || "—"}</span></span>` +
     `<span><b>Объект:</b> ${lv === 2 ? `${objCode(r.scenario || "bv8", r.seed)} — ` + r.scen.name.replace(/, сид \d+$/, "") + (G.edu ? " — учебный режим (геология известна)" : " (разведка, сейсмика, ГДИС)") : "учебный полигон (геология известна)"}</span><span><b>Срок:</b> ${nPlay} лет разработки${fc ? " + 10 лет прогноза" : ""}</span><span><b>Дата:</b> ${new Date().toLocaleDateString("ru-RU")}</span></div></div>`;
-  if (!finished) h += `<div class="rep-banner"><b>Промежуточный отчёт.</b> Итоговая оценка и прогноз формируются по завершении срока разработки (${Math.round(P.horizon_days / 365.25)} лет) и в режиме песочницы не выставляются.</div>`;
+  if (noRef) h += `<div class="rep-banner"><b>Эталон для этого сида построить не удалось</b> (политика группы не нашла места для пары «добывающая + нагнетательная»), поэтому оценка не выставляется; сравнение ниже — с каноническим объектом группы и только для ориентира.</div>`;
+  else if (!finished) h += `<div class="rep-banner"><b>Промежуточный отчёт.</b> Итоговая оценка и прогноз формируются по завершении срока разработки (${Math.round(P.horizon_days / 365.25)} лет) и в режиме песочницы не выставляются.</div>`;
   let n = 1;
   if (sc) {
     h += `<section class="rep-sec"><h2><span>${n++}.</span>Итоговая оценка</h2><div class="score-box"><div class="ring" style="background:conic-gradient(${gcol} ${Math.min(100, sc.total) * 3.6}deg, #e5ecf6 0)"><div><b>${sc.total.toFixed(0)}</b><small>эталон = 100</small></div></div>` +
