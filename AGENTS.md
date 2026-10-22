@@ -25,7 +25,8 @@ ressim_prototypes/
 │   ├── index.html             приложение целиком (скрипты #sim-core и #app)
 │   ├── README.md              описание прототипа
 │   ├── docs/                  спецификация и план разработки
-│   └── tests/selftest.js      node-харнесс самотеста ядра физики
+│   ├── rust/                  Rust-ядро (давление, потоки, перенос) → WebAssembly, встраивается в index.html (embed.mjs)
+│   └── tests/selftest.js      node-харнесс самотеста ядра физики (--wasm — через WebAssembly)
 ├── v2/                        прототип: Oilgame (TS, суперпозиция давления, BHP)
 │   ├── src/                   исходники TypeScript (несколько десятков TS-модулей)
 │   ├── tests/                 vitest + Playwright (200+ тестов)
@@ -56,7 +57,8 @@ V3 — полностью автономные single-HTML, не требуют 
 
 ```bash
 node tests/check-prototypes.js   # реестр: обязательные поля, уникальность id, наличие файлов
-node v1/tests/selftest.js        # самотест ядра физики прототипа v1
+node v1/tests/selftest.js        # самотест ядра физики прототипа v1 (JS)
+node v1/tests/selftest.js --wasm # то же через Rust/WebAssembly + сверка с JS (нужен v1/rust/pkg)
 node v3_pebi/tests/run.js        # тесты ядра физики прототипа v3_pebi (53 проверки)
 
 # Прототип v2 — TypeScript, требует npm + node ≥ 20. Артефакт —
@@ -172,6 +174,7 @@ Vite-сборка `v2/dist/` — **не** артефакт публикации:
 | Скрипт | Ответственность |
 |---|---|
 | `#sim-core` | Чистое ядро без DOM: параметры и ГПСЧ, геология (`buildReservoir`), ОФП/`fw`/`WI`, давление (`solvePressure`, CG), перенос насыщенности (`transportSubstep`, CFL), скважины (`updateWellRates`), полный цикл (`advance`), экономика (`createEconomy`), самотесты (`runSelfTests`). Регистрируется в `globalThis.OILCORE`. |
+| `#wasm-accel` | Модульный скрипт, генерируется `v1/rust/embed.mjs`: обвязка wasm-bindgen и Rust-ядро в base64; асинхронно подключает ускоритель (`OILCORE.setAccel`). Не править вручную. |
 | `#app` | Интерфейс: рендер карты и шкалы, пять графиков, экраны и игровой цикл `requestAnimationFrame`, бурение, слайдеры Pwf, итоги. |
 
 Разделение позволяет исполнять ядро в node и проверять физику без браузера:
