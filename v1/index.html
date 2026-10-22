@@ -202,7 +202,7 @@
     html, body { height:auto !important; overflow:visible !important; background:#fff !important; }
     .screen { display:none !important; }
     #screen-results.visible { display:block !important; height:auto !important; overflow:visible !important; }
-    .no-print, #toast, .modal { display:none !important; }
+    .no-print, #toast, .modal, #guide, #tip, .guide-btn, .hint { display:none !important; }
     .report-wrap { width:100%; margin:0; }
     .report { box-shadow:none; border:none; padding:0; font-size:11px; }
     .rep-sec h2, .rep-head { break-after:avoid; }
@@ -4368,7 +4368,7 @@ function wellDesc(w) {
 }
 async function showResults() {
   const sim = G.sim; if (!sim || G.reporting) return;
-  G.reporting = true; setSpeed(0); setTool(null);
+  G.reporting = true; setSpeed(0); setTool(null); closeGuide(); tipHide();
   const finished = !G.done && sim.t >= G.params.horizon_days - 1;
   show("screen-results"); $("btn-continue").disabled = true; $("btn-restart").disabled = true; $("btn-pdf").disabled = true;
   const root = $("report");
@@ -4800,6 +4800,7 @@ function applyLevelUI() {
   renderLayerBar();
 }
 function startGame() {
+  closeGuide();
   G.params = readParams();
   const res = G.level === 2 ? C.buildReservoir2(G.params) : C.buildReservoir(G.params);
   G.sim = C.createSim(res, G.params);
@@ -4838,7 +4839,10 @@ $("mt-play").addEventListener("click", togglePlay);
 for (const [id, key] of [["fc-gather", "pGather"], ["fc-kns", "pKNS"]]) $(id).addEventListener("input", (e) => {
   if (!G.sim) return; G.sim.field[key] = +e.target.value; $(id + "-v").textContent = e.target.value; G.sim._fluxValid = false; G.dirty = true; });
 $("btn-results").addEventListener("click", () => { setSpeed(0); showResults(); });
+// перед печатью — закрыть гид и всплывающую подсказку (и из диалога печати браузера, Ctrl+P)
+addEventListener("beforeprint", () => { closeGuide(); tipHide(); });
 $("btn-pdf").addEventListener("click", () => {
+  closeGuide(); tipHide();
   const old = document.title; const nm = ($("rep-name").value || "").trim();
   document.title = `Отчёт о разработке${nm ? " — " + nm : ""}`;
   for (const el of document.querySelectorAll("#report .js-plotly-plot")) Plotly.Plots.resize(el);
