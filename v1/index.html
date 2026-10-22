@@ -58,6 +58,29 @@
   #tip table { border-collapse:collapse; } #tip td { padding:1px 10px 1px 0; vertical-align:top; } #tip td:last-child { text-align:right; white-space:nowrap; font-weight:600; padding-right:0; }
   #tip .tg { font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding-top:6px; }
   #btn-prices { font-weight:600; }
+  /* гид: маленький оранжевый Нефтяша — кнопка, открывающая панель «Нефтяша подскажет» */
+  .guide-btn { display:inline-flex; align-items:center; gap:4px; padding:2px 7px 2px 3px; border-radius:999px; border:1px solid #fdba74;
+               background:#fff7ed; color:#9a3412; font-weight:600; font-size:12.5px; line-height:1; vertical-align:middle; }
+  .guide-btn:hover:not(:disabled) { background:#ffedd5; border-color:#fb923c; color:#7c2d12; }
+  .guide-btn:hover .nefty-mini { animation:nefty-hop .5s ease-in-out; }
+  .nefty-mini { width:26px; height:26px; flex:none; overflow:visible; }
+  .guide-btn.solo { padding:1px; border-radius:50%; }
+  @keyframes nefty-hop { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px) rotate(-6deg); } }
+  #guide { position:fixed; top:0; right:0; bottom:0; width:min(460px, 100vw); z-index:150; background:var(--panel); border-left:1px solid var(--line);
+           box-shadow:-10px 0 30px #2a3f5f26; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .22s ease; }
+  #guide.open { transform:none; }
+  #guide header { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); background:#fff7ed; }
+  #guide header .nefty-mini { width:44px; height:44px; }
+  #guide header b { font-size:16px; color:#9a3412; } #guide header .x { margin-left:auto; }
+  #guide .gbody { overflow:auto; padding:8px 14px 18px; font-size:13.5px; line-height:1.5; }
+  #guide details { border:1px solid var(--line); border-radius:8px; margin:8px 0; background:var(--panel); }
+  #guide details[open] { border-color:#fdba74; }
+  #guide summary { cursor:pointer; padding:8px 10px; font-weight:600; list-style:none; display:flex; gap:6px; align-items:center; }
+  #guide summary::-webkit-details-marker { display:none; }
+  #guide summary::before { content:"▸"; color:#ea580c; transition:transform .15s; } #guide details[open] > summary::before { transform:rotate(90deg); }
+  #guide .gc { padding:0 12px 10px; } #guide .gc ol, #guide .gc ul { margin:4px 0 4px 18px; } #guide .gc li { margin:3px 0; }
+  #guide kbd { font:inherit; background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; white-space:nowrap; }
+  @media (prefers-reduced-motion: reduce) { #guide { transition:none; } .guide-btn:hover .nefty-mini { animation:none; } }
   .note-mini { margin-top:8px; font-size:12px; color:var(--muted); }
   .scen-pick { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-bottom:6px; }
   .scen-card { text-align:left; padding:8px 10px; line-height:1.3; border-radius:8px; background:var(--panel); }
@@ -227,9 +250,100 @@
 </style>
 </head>
 <body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="nefty-sym" viewBox="0 0 64 64">
+    <circle cx="14.5" cy="19" r="6.6" fill="#fb923c"/><circle cx="14.5" cy="19.5" r="3.1" fill="#fecaca"/>
+    <circle cx="49.5" cy="19" r="6.6" fill="#fb923c"/><circle cx="49.5" cy="19.5" r="3.1" fill="#fecaca"/>
+    <ellipse cx="11.5" cy="43" rx="5" ry="6" fill="#fb923c"/><ellipse cx="52.5" cy="43" rx="5" ry="6" fill="#fb923c"/>
+    <ellipse cx="24" cy="57" rx="6.5" ry="4" fill="#ea580c"/><ellipse cx="40" cy="57" rx="6.5" ry="4" fill="#ea580c"/>
+    <ellipse cx="32" cy="36" rx="21.5" ry="20.5" fill="#fb923c"/>
+    <ellipse cx="24" cy="23" rx="9" ry="5" fill="#fff" opacity=".28" transform="rotate(-18 24 23)"/>
+    <ellipse cx="32" cy="45.5" rx="11" ry="9" fill="#ffedd5"/>
+    <path d="M29 17.5 q-1 -5 2.5 -6.5 M32 17 q0.5 -5.5 4 -6 M35 17.5 q2 -4 4.5 -3.5" stroke="#fb923c" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <path d="M34 6.5 C35 8.5 35.7 9.5 35.7 10.5 A1.7 1.7 0 0 1 32.3 10.5 C32.3 9.5 33 8.5 34 6.5 Z" fill="#1f2937"/>
+    <ellipse cx="24.5" cy="33" rx="5.4" ry="6.2" fill="#fff"/><ellipse cx="39.5" cy="33" rx="5.4" ry="6.2" fill="#fff"/>
+    <ellipse cx="24.8" cy="33.5" rx="4.4" ry="5.2" fill="#1f2937"/><ellipse cx="39.2" cy="33.5" rx="4.4" ry="5.2" fill="#1f2937"/>
+    <circle cx="26.3" cy="31.3" r="1.8" fill="#fff"/><circle cx="40.7" cy="31.3" r="1.8" fill="#fff"/>
+    <ellipse cx="18.5" cy="40.5" rx="3.4" ry="2" fill="#f43f5e" opacity=".45"/><ellipse cx="45.5" cy="40.5" rx="3.4" ry="2" fill="#f43f5e" opacity=".45"/>
+    <path d="M29 40.6 q1.5 1.8 3 0 q1.5 1.8 3 0" stroke="#1f2937" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+</svg>
+<aside id="guide" aria-label="Гид по игре" aria-hidden="true">
+  <header><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg><div><b>Нефтяша подскажет</b><div class="sub" style="font-size:12px">как играть и что нажимать</div></div><button class="x" id="guide-close" title="Закрыть (Esc)">✕</button></header>
+  <div class="gbody">
+    <details id="g-goal"><summary>Цель игры</summary><div class="gc">
+      Вы — инженер-разработчик. За <b>10 лет</b> нужно разработать месторождение так, чтобы <b>добыть как можно больше нефти</b> (КИН — доля
+      извлечённых запасов) и <b>заработать</b> (ЧДД — дисконтированный денежный поток). После 10 лет игра считает ещё 10 лет прогноза при ваших
+      скважинах и режимах и ставит оценку: <b>50 % за КИН + 50 % за ЧДД</b>, где эталонный вариант разработки = <b>100 баллов</b>.
+      Превзойти эталон можно, но каждый процент сверху даётся всё труднее.
+    </div></details>
+    <details id="g-start"><summary>С чего начать (стартовый экран)</summary><div class="gc"><ol>
+      <li><b>Объект</b> — карточка с типом пласта (БВ8, АВ1, ЮВ1, ЮК, ачимовка, бобриковский): у каждого свои проницаемость, вязкость, глубина. Наведите на карточку — описание.</li>
+      <li><b>Сид</b> — номер месторождения. <kbd>0</kbd> — стандартный объект; любое число — свой объект; 🎲 — случайный. Если преподаватель назвал сид — введите его.</li>
+      <li><b>Учебный режим</b> (галочка) — для первого знакомства: геология видна сразу.</li>
+      <li><b>Режим времени</b>: «По годам» — спокойно, год считается по кнопке; «Непрерывно» — время идёт само, решения на ходу.</li>
+      <li>Цены можно не трогать. Нажмите <b>«Начать разработку»</b>.</li>
+    </ol></div></details>
+    <details id="g-explore"><summary>Разведка: где нефть и где вода</summary><div class="gc"><ol>
+      <li>На карте ◆ — разведочные скважины. <b>Кликните по ◆</b> → каротаж: <b>оранжевым</b> в РИГИС отмечена нефть, <b>синим</b> — вода.</li>
+      <li>Найдите отметку, где нефть сменяется водой, — это <b>ВНК</b>. Введите его в поле «Ваш ВНК» — на карте появится контур.</li>
+      <li><b>«Заказать сейсмику 3D»</b> — карты кровли, подошвы, толщины и <b>разломы</b> (разлом может отрезать зону от закачки).</li>
+      <li>Не хватает данных — пробурите ещё разведочную (<kbd>◆ Разведочная</kbd>, клик по карте). Это дорого, но дешевле ошибки.</li>
+      <li>В учебном режиме это уже видно: слои «Проницаемость», «h нефть», фактический ВНК.</li>
+    </ol></div></details>
+    <details id="g-drill"><summary>Бурение скважин</summary><div class="gc"><ol>
+      <li>Выберите <b>заканчивание</b> рядом с кнопкой «⛏ Скважина»: <kbd>ВС</kbd> вертикальная, <kbd>ВС + ГРП</kbd>, <kbd>ГС</kbd> горизонтальная (длина, азимут), <kbd>ГС + МГРП</kbd>. Цена выбранного варианта — в подсказке кнопки, полный прайс — <kbd>₽ Цены</kbd>.</li>
+      <li>Нажмите <kbd>⛏ Скважина</kbd> и <b>кликните по карте</b> в нефтяной зоне (выше ВНК). При наведении виден ствол ГС.</li>
+      <li>Каждая новая скважина — добывающая. Часть скважин понадобится <b>под закачку</b> (ППД) — перевод кнопкой 💧→ в строке скважины.</li>
+      <li>Низкая проницаемость (ачимовка, АВ1, ЮВ1) — без ГРП/ГС скважины дают мало. Высокая (БВ8, Бб) — ГРП почти бесполезен.</li>
+    </ol></div></details>
+    <details id="g-wells"><summary>Управление скважинами (панель справа)</summary><div class="gc"><ul>
+      <li><b>Режим</b>: фонтан со штуцером или <b>ЭЦН</b> (насос; платная установка) — выбирается в строке. У ЭЦН — типоразмер и частота: насос должен работать в «зелёной» зоне (кнопка схемы насоса).</li>
+      <li><b>⏸ Стоп / ▶ Пуск</b> — остановить обводнившуюся скважину (обслуживание остановленной дешевле).</li>
+      <li><b>ГРП, ЗБС, МГРП</b> — операции на пробуренной скважине (кнопки под именем).</li>
+      <li><b>💧→</b> — перевести в нагнетательную (ППД), <b>⛏→</b> — вернуть в добычу.</li>
+      <li><b>⏱ ГДИС</b> — КВД: проницаемость, скин и пластовое давление скважины. <b>🧪 ОПЗ</b> — если скин > 3, дебит заметно вырастет.</li>
+      <li>Под таблицей — график скважины или всех сразу (жидкость, нефть, забойное давление). <kbd>Схемы</kbd> — система сбора, конструкция, насос.</li>
+    </ul></div></details>
+    <details id="g-field"><summary>Давление, закачка и обводнённость</summary><div class="gc"><ul>
+      <li>Без закачки пластовое давление падает — дебиты тоже. Нагнетательные скважины <b>поддерживают давление</b>; размещайте их между добывающими или по краю залежи.</li>
+      <li><b>Давление КНС</b> — выше давление → больше закачка, но дороже электроэнергия. <b>Давление сбора</b> — чем ниже, тем легче течь фонтану.</li>
+      <li>Вода прорывается к добывающим — растёт <b>обводнённость</b>. Обводнившиеся (> 95 %) лучше остановить кнопкой над таблицей или перевести под закачку.</li>
+      <li>В учебном режиме и после игры смотрите карты <b>«Давление»</b> и <b>«Насыщенность»</b> — видно, куда идёт вода.</li>
+    </ul></div></details>
+    <details id="g-time"><summary>Как идёт время</summary><div class="gc"><ul>
+      <li><b>По годам</b>: время стоит. Кнопка <kbd>▶ Рассчитать год N</kbd> считает 365 суток; потом можно бурить и менять режимы. Внизу — «Итоги по годам».</li>
+      <li><b>Непрерывно</b>: сначала осмотритесь, потом <kbd>▶ Старт</kbd> — время идёт без пауз, изменения применяются сразу. Часы в верхней панели показывают, сколько осталось.</li>
+      <li>Через 10 лет откроется <b>отчёт</b>; промежуточный — кнопкой <kbd>Итоги</kbd>.</li>
+    </ul></div></details>
+    <details id="g-money"><summary>Деньги и Нефтяша у счётчика</summary><div class="gc"><ul>
+      <li>Вверху — <b>баланс</b> и изменение за месяц. Выручка — проданная нефть; затраты — бурение и операции, подготовка жидкости, водоподготовка, электроэнергия, обслуживание скважин.</li>
+      <li>Синий Нефтяша у счётчика <b>танцует</b>, когда заработок растёт, <b>задумывается</b>, когда падает, <b>боится</b> убытков и <b>плачет</b>, если баланс в минусе.</li>
+      <li>Скважина должна окупиться: дорогое заканчивание оправдано, если дебит заметно выше.</li>
+    </ul></div></details>
+    <details id="g-score"><summary>Отчёт и оценка</summary><div class="gc"><ul>
+      <li>Отчёт: оценка (КИН и ЧДД против эталона, с расшифровкой баллов), ключевые показатели, графики против эталона, доходы и затраты по статьям, фонд скважин, геология (что было на самом деле) и рекомендации.</li>
+      <li>Эталон = 100 баллов по каждому показателю; ниже — пропорционально. <kbd>📄 Выгрузить в PDF</kbd> — для сдачи работы (впишите ФИО).</li>
+      <li>«Продолжить (песочница)» — играть дальше без оценки, карты давления и насыщенности открыты.</li>
+    </ul></div></details>
+    <details id="g-tips"><summary>Советы по объектам</summary><div class="gc"><ul>
+      <li><b>БВ8</b> — высокие дебиты, вода приходит быстро: главное — закачка и отключение обводнившихся.</li>
+      <li><b>АВ1 «рябчик»</b> — низкая проницаемость и много связанной воды: ГС, ГРП, плотнее сетка.</li>
+      <li><b>ЮВ1</b> — неоднородный: ищите лучшие зоны разведкой и ГДИС, ГРП — стандарт.</li>
+      <li><b>ЮК10–11</b> — вода бежит по руслам: не ставьте нагнетательные прямо в русло рядом с добывающими.</li>
+      <li><b>Ачимовка</b> — 0,01–0,5 мД: только ГРП и ГС с МГРП, скважин немного, следите за окупаемостью.</li>
+      <li><b>Бобриковский</b> — вязкая нефть: ранний прорыв воды, КИН ограничен; насосы с запасом.</li>
+    </ul></div></details>
+    <details id="g-class"><summary>Соревнование в классе</summary><div class="gc">
+      Преподаватель называет <b>объект и сид</b> (код вида «БВ8 · сид 4821») — у всех будет одинаковое месторождение и один эталон. Не меняйте
+      цены: иначе отчёт пометит результат как несопоставимый. Сравнивайте баллы и ЧДД в отчётах.
+    </div></details>
+  </div>
+</aside>
 <div id="screen-settings" class="screen visible">
   <div class="settings-box card">
-    <h1>Разработка нефтяного месторождения<sup class="hint" tabindex="0" data-tip="Учебный симулятор: двухфазная модель нефть–вода (IMPES, сетка 50×50), скважины по Писману, интегрированная модель с ЭЦН, штуцерами, КНС и системой сбора, экономика с ЧДД и оценкой против эталона.">?</sup></h1>
+    <h1>Разработка нефтяного месторождения <button class="guide-btn" data-guide="start" title="Нефтяша подскажет"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg><span>Как играть?</span></button><sup class="hint" tabindex="0" data-tip="Учебный симулятор: двухфазная модель нефть–вода (IMPES, сетка 50×50), скважины по Писману, интегрированная модель с ЭЦН, штуцерами, КНС и системой сбора, экономика с ЧДД и оценкой против эталона.">?</sup></h1>
     <p class="sub"><a href="../gallery.html" style="color:var(--accent)">все прототипы</a></p>
     <div class="settings-cols">
       <div>
@@ -341,6 +455,7 @@
     </div>
     <div class="tb-right">
       <button id="btn-schem" title="Система сбора и закачки, конструкция скважин">🗺 Схемы</button>
+      <button class="guide-btn" data-guide="goal" title="Гид: как играть и что нажимать"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg><span>Гид</span></button>
       <button id="btn-prices" data-tip="@prices">₽ Цены</button>
       <button id="btn-logs" class="lvl2-only" title="Каротажи и РИГИС всех скважин, схема корреляции">📈 Каротажи</button>
       <button id="btn-pta" class="lvl2-only" title="Гидродинамические исследования: КВД, проницаемость и скин">⏱ ГДИС</button>
@@ -350,6 +465,7 @@
   <main id="gamemain">
     <section id="leftcol">
       <div class="layerbar">
+        <button class="guide-btn solo" data-guide="explore" title="Карта: разведка, ВНК, бурение"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg></button>
         <span class="lbl">Слой:</span>
         <span id="layers" class="tb-group"></span>
         <span class="tb-right">
@@ -377,8 +493,9 @@
       </div>
     </section>
     <aside id="rightcol">
-      <div class="panel-title" style="margin:0">Скважины и режимы работы <span id="wellcount"></span></div>
+      <div class="panel-title" style="margin:0">Скважины и режимы работы <span id="wellcount"></span> <button class="guide-btn solo" data-guide="wells" title="Как управлять скважинами"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg></button></div>
       <div id="field-ctl" class="row card" style="padding:6px 10px; margin-top:6px">
+        <button class="guide-btn solo" data-guide="field" title="Давление, закачка, обводнённость"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg></button>
         <span title="Давление в сборной сети, на которое работают добывающие">Давление сбора:</span>
         <input id="fc-gather" type="range" min="5" max="40" step="1" value="12" style="width:110px"><b id="fc-gather-v">12</b> атм
         <span style="margin-left:12px" title="Давление на выкиде КНС, из которого питаются нагнетательные">Давление КНС:</span>
@@ -406,6 +523,7 @@
 <div id="screen-results" class="screen">
   <div class="report-wrap">
     <div class="report-toolbar no-print card">
+      <button class="guide-btn" data-guide="score" title="Нефтяша подскажет"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg><span>Как читать отчёт</span></button>
       <button id="btn-pdf" class="primary" title="Откроется диалог печати — выберите «Сохранить как PDF»">📄 Выгрузить в PDF</button>
       <label>Участник: <input id="rep-name" type="text" placeholder="ФИО / группа" style="width:220px"></label>
       <span class="sub" style="flex:1; font-size:12px">PDF: в диалоге печати — «Сохранить как PDF», A4, «Фоновая графика».</span>
@@ -4608,6 +4726,19 @@ function compactNotes(root) {
 }
 new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) if (nd.nodeType === 1) compactNotes(nd.parentElement || nd); })
   .observe(document.body, { childList: true, subtree: true });
+// ---------- гид «Нефтяша подскажет» ----------
+function openGuide(sec) {
+  const g = $("guide"); g.classList.add("open"); g.setAttribute("aria-hidden", "false");
+  const d = sec && document.getElementById("g-" + sec);
+  if (d) { for (const x of g.querySelectorAll("details")) x.open = x === d; setTimeout(() => d.scrollIntoView({ block: "start", behavior: "smooth" }), 230); }
+  tipHide();
+}
+function closeGuide() { const g = $("guide"); g.classList.remove("open"); g.setAttribute("aria-hidden", "true"); }
+document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest(".guide-btn"); if (b) { e.preventDefault(); openGuide(b.dataset.guide); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("guide").classList.contains("open")) closeGuide(); });
+$("guide-close").addEventListener("click", closeGuide);
+// первый заход: гид открывается сам один раз
+try { if (!localStorage.getItem("oilgame-guide-seen")) { localStorage.setItem("oilgame-guide-seen", "1"); setTimeout(() => openGuide("goal"), 600); } } catch (e) {}
 function setTimeMode(mode) {
   G.timeMode = mode;
   $("tm-step").classList.toggle("active", mode === "step"); $("tm-rt").classList.toggle("active", mode === "rt");
