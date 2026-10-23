@@ -12,10 +12,10 @@ const glue = fs.readFileSync(path.join(here, "pkg", "oilcore.js"), "utf8");
 const wasm = fs.readFileSync(path.join(here, "pkg", "oilcore_bg.wasm"));
 const b64 = wasm.toString("base64");
 
-const body = `<!-- wasm:start — сгенерировано v1/rust/embed.mjs из v1/rust (не править вручную) -->
+const body = `<!-- wasm:start – сгенерировано v1/rust/embed.mjs из v1/rust (не править вручную) -->
 <script type="module" id="wasm-accel">
 ${glue.replace(/\/\/# sourceMappingURL=.*$/m, "")}
-// ---- загрузка: .wasm из base64, асинхронно; ошибки и паники Rust — в консоль, расчёт остаётся на JS ----
+// ---- загрузка: .wasm из base64, асинхронно; ошибки и паники Rust – в консоль, расчёт остаётся на JS ----
 const OILCORE_WASM_B64 = "${b64}";
 (async () => {
   try {
@@ -25,7 +25,7 @@ const OILCORE_WASM_B64 = "${b64}";
     globalThis.OILWASM = version();
     console.info("Ускоритель WebAssembly подключён:", version());
   } catch (e) {
-    console.warn("WebAssembly недоступен — расчёт на JS-ядре", e);
+    console.warn("WebAssembly недоступен – расчёт на JS-ядре", e);
   }
 })();
 </script>
@@ -35,7 +35,7 @@ let h = fs.readFileSync(html, "utf8");
 const a = h.indexOf("<!-- wasm:start"), b = h.indexOf("<!-- wasm:end -->");
 if (a >= 0 && b > a) h = h.slice(0, a) + body + h.slice(b + "<!-- wasm:end -->".length);
 else {
-  // первый раз — сразу после ядра (#sim-core), до скрипта интерфейса
+  // первый раз – сразу после ядра (#sim-core), до скрипта интерфейса
   const k = h.indexOf("</script>", h.indexOf('<script id="sim-core">')) + "</script>".length;
   h = h.slice(0, k) + "\n" + body + h.slice(k);
 }
