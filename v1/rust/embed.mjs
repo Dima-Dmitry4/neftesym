@@ -21,7 +21,8 @@ const OILCORE_WASM_B64 = "${b64}";
   try {
     const bytes = Uint8Array.from(atob(OILCORE_WASM_B64), (c) => c.charCodeAt(0));
     await __wbg_init({ module_or_path: bytes });
-    globalThis.OILCORE.setAccel({ Grid, version });
+    globalThis.__oilAccel = { Grid, version };
+    if (globalThis.__accelReady) globalThis.__accelReady(); else globalThis.OILCORE.setAccel(globalThis.__oilAccel); // игра решает, включать ли ускорение (настройка расчёта)
     globalThis.OILWASM = version();
     console.info("Ускоритель WebAssembly подключён:", version());
   } catch (e) {
