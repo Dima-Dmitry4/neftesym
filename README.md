@@ -7,7 +7,7 @@
 **Разведка → сейсмика → бурение → закачка воды → деньги → отчёт с оценкой.**<br>
 Один HTML-файл, работает в браузере без установки и без сети.
 
-[**▶ Играть онлайн**](https://dmitryvoronin.gitverse.site/neftyasha/) · [Как играть](#как-играть) · [Для преподавателя](#для-преподавателя) · [Устройство модели](docs/MODEL.md)
+[**▶ Играть онлайн**](https://dmitryvoronin.gitverse.site/neftesim_neftyasha/) · [Как играть](#как-играть) · [Для преподавателя](#для-преподавателя) · [Устройство модели](docs/MODEL.md)
 
 ![Игровой экран](docs/img/game.jpg)
 
@@ -59,7 +59,7 @@
 
 Игра – один файл [`index.html`](index.html) (плюс локальная копия Plotly в `vendor/`).
 
-- **Онлайн:** https://dmitryvoronin.gitverse.site/neftyasha/
+- **Онлайн:** https://dmitryvoronin.gitverse.site/neftesim_neftyasha/
 - **Локально:** скачайте репозиторий и откройте `index.html` двойным щелчком. Сеть и сервер не нужны.
 
 ## Как играть
