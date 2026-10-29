@@ -1,5 +1,5 @@
 // redirect.mjs – после сборки (post-render) кладёт manual/index.html: короткий адрес методички на Pages
-// (…/manual/ → собранная книга в _book/). Сам Quarto такой файл удаляет как устаревший выход index.qmd.
+// (…/manual/ → собранная книга в book/). Сам Quarto такой файл удаляет как устаревший выход index.qmd.
 import { writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,12 +10,12 @@ writeFileSync(join(ROOT, "index.html"), `<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=_book/">
-<link rel="canonical" href="_book/">
+<meta http-equiv="refresh" content="0; url=book/">
+<link rel="canonical" href="book/">
 <title>Нефтяша: методическое пособие</title>
 </head>
 <body>
-<p>Пособие открывается… Если нет – <a href="_book/">перейдите по ссылке</a>.</p>
+<p>Пособие открывается… Если нет – <a href="book/">перейдите по ссылке</a>.</p>
 </body>
 </html>
 `);

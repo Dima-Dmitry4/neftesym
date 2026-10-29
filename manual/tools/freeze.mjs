@@ -1,5 +1,5 @@
 // freeze.mjs – «замораживает» интерактив методички для печатной (PDF) версии.
-// Открывает собранные HTML-страницы (_book) в Chrome без окна, ждёт окончания расчётов OJS-виджетов,
+// Открывает собранные HTML-страницы (book) в Chrome без окна, ждёт окончания расчётов OJS-виджетов,
 // запускает все живые ячейки (Python и JS) и сохраняет их результаты картинками в images/frozen/<глава>/.
 // Эти картинки подставляет фильтр tools/pdf-freeze.lua при сборке PDF.
 //
@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BOOK = join(ROOT, "_book");
+const BOOK = join(ROOT, "book");
 const OUT = join(ROOT, "images", "frozen");
 const PAGE_TIMEOUT = 8 * 60e3; // долгие разборы (ачимовка, 12 лет) считаются минуты
 const CELL_TIMEOUT = 4 * 60e3;
@@ -201,7 +201,7 @@ async function freezePage(page, base, stem) {
 }
 
 async function main() {
-  if (!existsSync(join(BOOK, "index.html"))) throw new Error("нет _book/index.html – сначала quarto render --to html");
+  if (!existsSync(join(BOOK, "index.html"))) throw new Error("нет book/index.html – сначала quarto render --to html");
   const only = process.argv.slice(2);
   const html = readdirSync(BOOK).filter((f) => f.endsWith(".html")).map((f) => f.replace(/\.html$/, ""));
   const pages = (only.length ? only : html).filter((s) => html.includes(s)).sort();

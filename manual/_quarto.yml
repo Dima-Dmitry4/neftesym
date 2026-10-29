@@ -1,6 +1,6 @@
 project:
   type: book
-  output-dir: _book
+  output-dir: book
   pre-render: node tools/sync-core.mjs
   post-render: node tools/redirect.mjs
   resources:

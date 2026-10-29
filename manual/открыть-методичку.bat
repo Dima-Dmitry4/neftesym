@@ -1,10 +1,10 @@
 @echo off
-rem Открывает собранную методичку (папка _book) в браузере через локальный веб-сервер Python.
+rem Открывает собранную методичку (папка book) в браузере через локальный веб-сервер Python.
 rem Двойной щелчок – и всё. Закройте это окно, чтобы остановить сервер.
 chcp 65001 >nul
 setlocal
 set PORT=8790
-cd /d "%~dp0_book" 2>nul
+cd /d "%~dp0book" 2>nul
 if not exist index.html (
   echo Книга ещё не собрана: в папке manual выполните  quarto render
   pause

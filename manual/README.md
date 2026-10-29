@@ -5,10 +5,10 @@
 **настоящем ядре игры** прямо в браузере.
 
 - **Онлайн:** <https://dmitryvoronin.gitverse.site/neftesim_neftyasha/manual/>
-- **PDF:** <https://dmitryvoronin.gitverse.site/neftesim_neftyasha/manual/_book/neftyasha-manual.pdf> (кнопка «Скачать PDF»
+- **PDF:** <https://dmitryvoronin.gitverse.site/neftesim_neftyasha/manual/book/neftyasha-manual.pdf> (кнопка «Скачать PDF»
   в боковой панели книги)
 - **На своём компьютере:** двойной щелчок по `открыть-методичку.bat` – запустит локальный сервер (нужен Python) и откроет
-  книгу в браузере. Просто открыть `_book/index.html` с диска нельзя: виджеты и живые ячейки не работают через `file://`.
+  книгу в браузере. Просто открыть `book/index.html` с диска нельзя: виджеты и живые ячейки не работают через `file://`.
 
 ## Сборка
 
@@ -19,7 +19,7 @@ cd manual
 quarto preview                # просмотр с автообновлением
 quarto render --to html       # 1. HTML-версия
 node tools/freeze.mjs         # 2. «заморозка» интерактива для PDF
-quarto render                 # 3. HTML и PDF – в manual/_book
+quarto render                 # 3. HTML и PDF – в manual/book
 ```
 
 Шаг 2 открывает каждую главу в Chrome без окна, ждёт окончания расчётов, запускает все живые ячейки и сохраняет
@@ -27,7 +27,7 @@ quarto render                 # 3. HTML и PDF – в manual/_book
 виджетов. Повторять шаг 2 нужно, когда менялись виджеты, живые ячейки или ядро игры; `node tools/freeze.mjs 04-numerics`
 переснимет одну главу.
 
-Собранная книга `_book/` хранится в репозитории – её раздают Pages; `manual/index.html` (его пишет `tools/redirect.mjs` после
+Собранная книга `book/` хранится в репозитории – её раздают Pages; `manual/index.html` (его пишет `tools/redirect.mjs` после
 каждой сборки) перенаправляет на неё.
 
 ## Как устроено

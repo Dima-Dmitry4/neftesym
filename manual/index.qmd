@@ -102,7 +102,7 @@ Python (Pyodide) загружаются из CDN. Первый запуск Pyth
 - **Локально:** скачайте репозиторий и откройте `index.html` – сеть и сервер не нужны.
 
 Само пособие: интерактивная версия – <https://dmitryvoronin.gitverse.site/neftesim_neftyasha/manual/>, печатная –
-[PDF](https://dmitryvoronin.gitverse.site/neftesim_neftyasha/manual/_book/neftyasha-manual.pdf).
+[PDF](https://dmitryvoronin.gitverse.site/neftesim_neftyasha/manual/book/neftyasha-manual.pdf).
 
 Рекомендуемый порядок: прочитайте главы 1–3, сыграйте одну партию на **БВ8 в учебном режиме**, затем читайте главы 4–7 и
 разборы части II – и сыграйте снова. Разница в оценке обычно бывает заметной.
@@ -118,7 +118,7 @@ cd manual
 quarto preview                # просмотр с автообновлением
 quarto render --to html       # 1. HTML-версия
 node tools/freeze.mjs         # 2. снимки виджетов и живых ячеек для PDF (Chrome без окна)
-quarto render                 # 3. HTML и PDF – в manual/_book
+quarto render                 # 3. HTML и PDF – в manual/book
 ```
 
 Шаг 2 нужен, только когда менялись виджеты или ядро: снимки лежат в `images/frozen/` и хранятся в репозитории.
