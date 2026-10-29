@@ -1,0 +1,11 @@
+```{ojs}
+//| echo: false
+//| output: false
+// подключение ядра игры (тот же код, что в index.html) и помощников методички (assets/js/neft.js)
+neft = {
+  const m = await import(new URL("assets/js/neft.js", document.baseURI).href);
+  await m.ready();
+  return m;
+}
+core = neft.core()
+```

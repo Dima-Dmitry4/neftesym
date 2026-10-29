@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" font-family="Segoe UI, Arial, sans-serif" font-size="13">
+  <defs>
+    <pattern id="shale" width="10" height="6" patternUnits="userSpaceOnUse"><path d="M0 3h10" stroke="#8d8a80" stroke-width="1"/></pattern>
+    <clipPath id="res"><path d="M20 250 C 170 250 250 120 380 112 C 510 120 590 250 740 250 L 740 286 C 590 286 510 156 380 148 C 250 156 170 286 20 286 Z"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="760" height="330" fill="#fbfaf7"/>
+  <!-- покрышка -->
+  <path d="M20 250 C 170 250 250 120 380 112 C 510 120 590 250 740 250 L 740 214 C 590 214 510 84 380 76 C 250 84 170 214 20 214 Z" fill="url(#shale)" stroke="#8d8a80"/>
+  <!-- пласт: вода и нефть -->
+  <g clip-path="url(#res)">
+    <rect x="0" y="0" width="760" height="330" fill="#9ec5f4"/>
+    <rect x="0" y="0" width="760" height="196" fill="#f2a477"/>
+  </g>
+  <path d="M20 250 C 170 250 250 120 380 112 C 510 120 590 250 740 250 L 740 286 C 590 286 510 156 380 148 C 250 156 170 286 20 286 Z" fill="none" stroke="#5a4a3a" stroke-width="1.5"/>
+  <!-- подошва -->
+  <path d="M20 286 C 170 286 250 156 380 148 C 510 156 590 286 740 286 L 740 318 L 20 318 Z" fill="url(#shale)" stroke="#8d8a80"/>
+  <!-- ВНК -->
+  <line x1="20" y1="196" x2="740" y2="196" stroke="#1c5cab" stroke-width="2" stroke-dasharray="9,5"/>
+  <text x="612" y="190" fill="#1c5cab" font-weight="600">ВНК (водонефтяной контакт)</text>
+  <!-- контуры -->
+  <line x1="226" y1="196" x2="226" y2="40" stroke="#333" stroke-dasharray="8,3,2,3"/>
+  <line x1="534" y1="196" x2="534" y2="40" stroke="#333" stroke-dasharray="8,3,2,3"/>
+  <line x1="300" y1="196" x2="300" y2="60" stroke="#333" stroke-dasharray="8,3,2,3,2,3"/>
+  <line x1="460" y1="196" x2="460" y2="60" stroke="#333" stroke-dasharray="8,3,2,3,2,3"/>
+  <text x="380" y="34" text-anchor="middle" fill="#333">внешний контур нефтеносности (ВНК на кровле)</text>
+  <text x="380" y="56" text-anchor="middle" fill="#333">внутренний контур (ВНК на подошве)</text>
+  <!-- скважины -->
+  <line x1="380" y1="64" x2="380" y2="130" stroke="#0b0b0b" stroke-width="3"/>
+  <circle cx="380" cy="64" r="6" fill="#fff" stroke="#0b0b0b" stroke-width="2"/>
+  <text x="392" y="98" fill="#0b0b0b">добывающая</text>
+  <line x1="150" y1="64" x2="150" y2="262" stroke="#2a78d6" stroke-width="3"/>
+  <path d="M150 56 l7 12 h-14 z" fill="#2a78d6"/>
+  <text x="70" y="98" fill="#1c5cab">нагнетательная</text>
+  <path d="M158 250 q 30 -6 60 -26" fill="none" stroke="#1c5cab" stroke-width="2" marker-end="url(#a)"/>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1c5cab"/></marker></defs>
+  <!-- подписи зон -->
+  <text x="380" y="140" text-anchor="middle" fill="#7a3510" font-weight="600">нефть (So ≈ 1 − Swc)</text>
+  <text x="250" y="240" fill="#1c3f72">ВНЗ: нефть сверху, вода снизу</text>
+  <text x="40" y="276" fill="#1c3f72">вода (Sw = 1)</text>
+  <text x="640" y="232" fill="#555">покрышка (глина)</text>
+  <text x="640" y="308" fill="#555">подошва</text>
+</svg>

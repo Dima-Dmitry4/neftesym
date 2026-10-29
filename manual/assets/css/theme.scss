@@ -1,0 +1,45 @@
+/*-- scss:defaults --*/
+$primary: #2a78d6;
+$body-bg: #fcfcfb;
+$body-color: #1f1f1d;
+$font-family-sans-serif: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+$font-size-root: 16.5px;
+$link-color: #1c5cab;
+$code-color: #a8431b;
+$callout-color-note: #2a78d6;
+$callout-color-tip: #1baf7a;
+$callout-color-warning: #eda100;
+$callout-color-important: #eb6834;
+
+/*-- scss:rules --*/
+:root {
+  --neft-orange: #eb6834;
+  --neft-blue: #2a78d6;
+  --neft-surface: #f4f3ef;
+  --neft-border: #dddbd3;
+  --neft-muted: #52514e;
+}
+h1.title, .quarto-title .title { letter-spacing: -0.01em; }
+h2 { border-bottom: 1px solid var(--neft-border); padding-bottom: .25rem; margin-top: 2.2rem; }
+.neft-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0 1.5rem; }
+.neft-hero img { width: 100%; border-radius: 8px; border: 1px solid var(--neft-border); }
+@media (max-width: 760px) { .neft-hero { grid-template-columns: 1fr; } }
+.neft-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .8rem; margin: 1rem 0; }
+.neft-cards > div { background: var(--neft-surface); border: 1px solid var(--neft-border); border-radius: 8px; padding: .8rem 1rem; }
+.neft-cards > div h4, .neft-cards > div p:first-child { margin-top: 0; }
+.neft-cards > div p:last-child { margin-bottom: 0; }
+.neft-step { counter-increment: step; }
+table { font-size: .93em; }
+.figure-caption, figcaption { color: var(--neft-muted); font-size: .9em; }
+img.screenshot { border: 1px solid var(--neft-border); border-radius: 6px; }
+.cell-output-display figure { margin: 0; }
+.cell-output-display svg { max-width: 100%; height: auto; }
+.cell-output-display form { margin-bottom: .3rem; }
+.neft-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
+.neft-row > * { flex: 1 1 320px; min-width: 0; }
+.neft-kpi { display: flex; flex-wrap: wrap; gap: .6rem; margin: .5rem 0; }
+.neft-kpi > div { background: var(--neft-surface); border: 1px solid var(--neft-border); border-radius: 8px; padding: .45rem .8rem; min-width: 120px; }
+.neft-kpi b { display: block; font-size: 1.25rem; }
+.neft-kpi span { color: var(--neft-muted); font-size: .82rem; }
+figure[class*="plot"] h2, figure[class*="plot"] h3 { font-size: .95rem; font-weight: 600; border: 0; margin: 0 0 .25rem; padding: 0; }
+figure[class*="plot"] { margin: 0 0 .6rem; }

@@ -1,0 +1,64 @@
+# Шпаргалка формул {#sec-formulas}
+
+Единицы игры: давление – атм, проницаемость – мД, вязкость – сП, дебит – м³/сут, время – сут, длина – м.
+$K_Д = 0{,}00864$ м³/сут·сП/(мД·м·атм).
+
+## Пласт и запасы
+
+| | Формула | Глава |
+|---|---|---|
+| поровый объём ячейки | $V_p=\Delta^2 h\varphi$ | @sec-field |
+| начальная Sw ячейки | $S_{w0}=f_oS_{wc}+(1-f_o)$, $f_o=h_н/h$ | @sec-field |
+| запасы | $\text{OOIP}=\sum V_p(1-S_{w0})$; нефть в т – × 0,86 | @sec-field |
+| КИН | $Q_н/\text{OOIP}=K_{выт}K_{охв}$ | @sec-field |
+| предел вытеснения | $(1-S_{wc}-S_{or})/(1-S_{wc})$ | @sec-field |
+| упругий запас | $\Delta V=V_pc_t\Delta P$ | @sec-field |
+
+## Течение
+
+| | Формула | Глава |
+|---|---|---|
+| Дарси | $q=K_Д\dfrac{kA}{\mu}\dfrac{\Delta P}{L}$ | @sec-darcy |
+| Дюпюи | $q=\dfrac{2\pi K_Dkh}{\mu\ln(r_e/r_w)}(P_e-P_{wf})$ | @sec-darcy |
+| ОФП | $k_{rw}=\dfrac{S_w-S_{wc}}{1-S_{wc}-S_{or}}$, $k_{ro}=\dfrac{1-S_{or}-S_w}{1-S_{wc}-S_{or}}$ | @sec-twophase |
+| подвижность | $\lambda_t=k_{rw}/\mu_w+k_{ro}/\mu_o$ | @sec-twophase |
+| доля воды | $f_w=\dfrac{k_{rw}/\mu_w}{\lambda_t}$ | @sec-twophase |
+
+## Численная схема
+
+| | Формула | Глава |
+|---|---|---|
+| проводимость грани | $T=K_Дk_{harm}h\bar\lambda_t\cdot m_{разлом}$, $k_{harm}=\dfrac{2k_1k_2}{k_1+k_2}$ | @sec-numerics |
+| давление (неявно) | $\dfrac{V_pc_t}{\Delta t}(P^{n+1}-P^n)=\sum T(P_{nb}^{n+1}-P^{n+1})+q$ | @sec-numerics |
+| перенос воды (явно, upwind) | $S_w^{n+1}=S_w^n+\dfrac{\Delta t}{V_p}\left(\sum_{вх}uf_w^{up}-\sum_{вых}uf_w+q_w\right)$ | @sec-numerics |
+| CFL | $\Delta t\le\dfrac{0{,}5}{\max f_w'}\min\dfrac{V_p}{\max(\text{приток},\text{отток})}$ | @sec-numerics |
+
+## Скважины и оборудование
+
+| | Формула | Глава |
+|---|---|---|
+| Писман | $q=WI\lambda_t(P_{яч}-P_{wf})$, $WI=\dfrac{2\pi K_Дkh}{\ln(0{,}2\Delta/r_w)+s}$ | @sec-wells |
+| проводимость трещины | $F_{CD}=k_fw/(kx_f)$, $k_fw=1000$ мД·м | @sec-wells |
+| прирост от ГРП | $J_{ГРП}/J_{ВС}=8{,}59/(8{,}59+s_f)$ | @sec-wells |
+| скин стягивания МГРП | $s_c=\dfrac{kh}{k_fw}\left(\ln\dfrac{h}{2r_w}-\dfrac\pi2\right)$ | @sec-wells |
+| напор ЭЦН | $H=H_0(f/50)^2\left[1-\left(\dfrac{q}{Q_0f/50}\right)^2\right]$ | @sec-wells |
+| мощность ЭЦН | $N=\rho gqH/\eta$ | @sec-wells |
+| штуцер | $\Delta P=\rho v^2/2$, $v=q/(0{,}8A)$ | @sec-wells |
+| забойное на ЭЦН | $P_{wf}=P_{сбор}+\rho gH_{скв}-\rho gH_{ЭЦН}$ | @sec-wells |
+
+## ГДИС
+
+| | Формула | Глава |
+|---|---|---|
+| КВД | $\Delta p=\dfrac{q\mu}{4\pi K_Дkh}\left[E_1\!\left(\dfrac{r_w^2}{4\eta\Delta t}\right)+2s\right]$, $\eta=\dfrac{K_Дk}{\varphi\mu c_t}$ | @sec-geology |
+| проницаемость по наклону | $k=\dfrac{2{,}303q\mu}{4\pi K_Дhm}$ | @sec-geology |
+| Арчи | $R_t=R_w/(K_п^2S_w^2)$ | @sec-geology |
+
+## Экономика
+
+| | Формула | Глава |
+|---|---|---|
+| поток | $CF=Q_нЦ_н-V_жc_{подг}-V_{зак}c_{вод}-Ec_{эл}-n\,c_{обсл}-\text{CAPEX}$ | @sec-economics |
+| ЧДД | $\sum CF_n/(1+r)^n$, $r=10\%$ | @sec-economics |
+| баллы | $100v/v_{эт}$ при $v\le v_{эт}$; $100+40\ln(v/v_{эт})$ выше | @sec-economics |
+| оценка | $\tfrac12$ балл(КИН) + $\tfrac12$ балл(ЧДД) | @sec-economics |

@@ -1,0 +1,7 @@
+/.quarto/
+/assets/js/oilcore.js
+/assets/js/oilcore-wasm.js
+/images/game/
+# _book (собранная книга, HTML + PDF) хранится в репозитории: её раздают Pages
+
+**/*.quarto_ipynb

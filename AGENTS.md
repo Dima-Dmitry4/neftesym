@@ -15,6 +15,7 @@ rust/                   Cargo-проект: решатель давления, �
 tests/selftest.js       node-харнесс самотеста (--wasm: через WebAssembly)
 tools/                  load-core.js (загрузка ядра в Node), search-reference.js (поиск эталонов)
 docs/MODEL.md           описание модели; docs/img – снимки экрана для README
+manual/                 методичка на Quarto (HTML + PDF, сборка в manual/_book хранится в репозитории); см. manual/README.md
 ```
 
 ## Правила

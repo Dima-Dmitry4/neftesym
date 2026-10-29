@@ -1,0 +1,98 @@
+project:
+  type: book
+  output-dir: _book
+  pre-render: node tools/sync-core.mjs
+  post-render: node tools/redirect.mjs
+  resources:
+    - assets/js/*.js
+    - assets/py/*.py
+    - images/**
+
+lang: ru
+
+book:
+  title: "Нефтяша: разработка месторождения на симуляторе"
+  subtitle: "Интерактивное методическое пособие"
+  author: "Учебный курс «Разработка нефтяных месторождений»"
+  date: today
+  date-format: "D MMMM YYYY"
+  search: true
+  repo-actions: none
+  page-navigation: true
+  output-file: neftyasha-manual
+  sidebar:
+    style: docked
+    tools:
+      - icon: file-earmark-pdf
+        href: neftyasha-manual.pdf
+        text: "Скачать PDF"
+  chapters:
+    - index.qmd
+    - part: "Теория и устройство игры"
+      chapters:
+        - 01-field.qmd
+        - 02-darcy.qmd
+        - 03-twophase.qmd
+        - 04-numerics.qmd
+        - 05-wells.qmd
+        - 06-geology.qmd
+        - 07-economics.qmd
+        - 08-inside.qmd
+    - part: "Практика разработки"
+      chapters:
+        - 10-strategy.qmd
+        - 11-bv8.qmd
+        - 12-lowperm.qmd
+        - 13-fault.qmd
+        - 14-channels.qmd
+        - 15-viscous.qmd
+        - 16-achimov.qmd
+        - 17-tasks.qmd
+  appendices:
+    - a1-formulas.qmd
+    - a2-api.qmd
+
+crossref:
+  fig-title: "Рис."
+  tbl-title: "Таблица"
+  eq-prefix: ""
+  fig-prefix: "рис."
+  tbl-prefix: "табл."
+
+format:
+  html:
+    theme:
+      light: [cosmo, assets/css/theme.scss]
+      dark: [darkly, assets/css/theme-dark.scss]
+    css: assets/css/live.css
+    toc: true
+    toc-depth: 3
+    toc-title: "На странице"
+    number-sections: true
+    html-math-method: katex
+    code-copy: true
+    code-overflow: wrap
+    highlight-style: github
+    fig-cap-location: bottom
+    callout-appearance: default
+    include-in-header:
+      - text: |
+          <script src="assets/js/oilcore.js"></script>
+          <script type="module" src="assets/js/oilcore-wasm.js"></script>
+          <script type="module" src="assets/js/live.js"></script>
+
+  # печатная версия: интерактив заменён снимками из images/frozen (node tools/freeze.mjs)
+  typst:
+    filters: [tools/pdf-freeze.lua]
+    papersize: a4
+    margin:
+      x: 2cm
+      y: 2cm
+    fontsize: 11pt
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    fig-align: center
+
+execute:
+  echo: true

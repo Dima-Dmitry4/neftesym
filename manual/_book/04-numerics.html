@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ru" xml:lang="ru"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>4&nbsp; Как считает симулятор: сетка, давление, насыщенность – Нефтяша: разработка месторождения на симуляторе</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./05-wells.html" rel="next">
+<link href="./03-twophase.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bb62276ab45c84d9efd712f51ff97b5a.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-5a1953863e1f72ef3b996ef827f01ca7.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bb62276ab45c84d9efd712f51ff97b5a.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-a5a5fd530fbd245dc0a223d07e40340d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-4fb04ff1607eb45ec870492f33f115ec.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-a5a5fd530fbd245dc0a223d07e40340d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "Поиск не дал результатов",
+    "search-matching-documents-text": "Результаты поиска",
+    "search-copy-link-title": "Скопировать ссылку",
+    "search-hide-matches-text": "Скрыть дополнительные результаты",
+    "search-more-match-text": "дополнительный результат в этом документе",
+    "search-more-matches-text": "дополнительных результата(-ов) в этом документе",
+    "search-clear-button-title": "Очистить",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Отменить",
+    "search-submit-button-title": "Найти",
+    "search-label": "Поиск"
+  }
+}</script>
+<script type="module" src="site_libs/quarto-ojs/quarto-ojs-runtime.js"></script>
+<link href="site_libs/quarto-ojs/quarto-ojs.css" rel="stylesheet">
+<script src="site_libs/quarto-diagram/mermaid.min.js"></script>
+<script src="site_libs/quarto-diagram/mermaid-init.js"></script>
+<link href="site_libs/quarto-diagram/mermaid.css" rel="stylesheet">
+<script src="assets/js/oilcore.js"></script>
+<script type="module" src="assets/js/oilcore-wasm.js"></script>
+<script type="module" src="assets/js/live.js"></script>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="assets/css/live.css">
+</head>
+
+<body class="nav-sidebar docked quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Переключить боковую панель навигации" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./01-field.html">Теория и устройство игры</a></li><li class="breadcrumb-item"><a href="./04-numerics.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Как считает симулятор: сетка, давление, насыщенность</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Переключить боковую панель навигации" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Поиск" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Нефтяша: разработка месторождения на симуляторе</a> 
+        <div class="sidebar-tools-main">
+    <a href="./neftyasha-manual.pdf" title="Скачать PDF" class="quarto-navigation-tool px-1" aria-label="Скачать PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Переключить темный режим"><i class="bi"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Поиск"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Предисловие</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Теория и устройство игры</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Переключить раздел">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./01-field.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Месторождение и его разработка с нуля</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-darcy.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Закон Дарси и единицы игры</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-twophase.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Нефть и вода вместе: ОФП и вытеснение</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-numerics.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Как считает симулятор: сетка, давление, насыщенность</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-wells.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Скважины, заканчивание и оборудование</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-geology.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Объекты, сиды, разведка и ГДИС</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-economics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Экономика, ЧДД и оценка</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-inside.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Игра изнутри: архитектура для разработчика</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Практика разработки</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Переключить раздел">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-strategy.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Алгоритм игры: что за чем делать</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-bv8.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Разбор 1. БВ8: зачем нужна закачка</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-lowperm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Разбор 2. АВ1 «рябчик»: выбор заканчивания</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-fault.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Разбор 3. Купол с разломами: блоки и поддержка</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-channels.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Разбор 4. ЮК10–11: русла и прорыв воды</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-viscous.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Разбор 5. Бобриковский: вязкая нефть</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-achimov.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Разбор 6. Ачимовка: трудноизвлекаемые запасы</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-tasks.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Задания и соревнование в классе</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Приложения</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Переключить раздел">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./a1-formulas.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Шпаргалка формул</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./a2-api.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Справочник для живых ячеек</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">На странице</h2>
+   
+  <ul>
+  <li><a href="#от-закона-сохранения-к-уравнению-давления" id="toc-от-закона-сохранения-к-уравнению-давления" class="nav-link active" data-scroll-target="#от-закона-сохранения-к-уравнению-давления"><span class="header-section-number">4.1</span> От закона сохранения к уравнению давления</a></li>
+  <li><a href="#сетка-игры" id="toc-сетка-игры" class="nav-link" data-scroll-target="#сетка-игры"><span class="header-section-number">4.2</span> Сетка игры</a></li>
+  <li><a href="#проводимость-грани-и-гармоническое-среднее" id="toc-проводимость-грани-и-гармоническое-среднее" class="nav-link" data-scroll-target="#проводимость-грани-и-гармоническое-среднее"><span class="header-section-number">4.3</span> Проводимость грани и гармоническое среднее</a></li>
+  <li><a href="#скважина-в-уравнении-давления" id="toc-скважина-в-уравнении-давления" class="nav-link" data-scroll-target="#скважина-в-уравнении-давления"><span class="header-section-number">4.4</span> Скважина в уравнении давления</a></li>
+  <li><a href="#разлом-множитель-проводимости" id="toc-разлом-множитель-проводимости" class="nav-link" data-scroll-target="#разлом-множитель-проводимости"><span class="header-section-number">4.5</span> Разлом = множитель проводимости</a></li>
+  <li><a href="#как-решается-система" id="toc-как-решается-система" class="nav-link" data-scroll-target="#как-решается-система"><span class="header-section-number">4.6</span> Как решается система</a></li>
+  <li><a href="#sec-fault-python" id="toc-sec-fault-python" class="nav-link" data-scroll-target="#sec-fault-python"><span class="header-section-number">4.7</span> Пример 1. Карта давления с разломом на Python</a></li>
+  <li><a href="#пример-2.-то-же-на-настоящем-ядре-игры" id="toc-пример-2.-то-же-на-настоящем-ядре-игры" class="nav-link" data-scroll-target="#пример-2.-то-же-на-настоящем-ядре-игры"><span class="header-section-number">4.8</span> Пример 2. То же на настоящем ядре игры</a>
+  <ul class="collapse">
+  <li><a href="#сами-пишем-сценарий-на-ядре-игры" id="toc-сами-пишем-сценарий-на-ядре-игры" class="nav-link" data-scroll-target="#сами-пишем-сценарий-на-ядре-игры"><span class="header-section-number">4.8.1</span> Сами пишем сценарий на ядре игры</a></li>
+  </ul></li>
+  <li><a href="#насыщенность-явная-схема-против-потока" id="toc-насыщенность-явная-схема-против-потока" class="nav-link" data-scroll-target="#насыщенность-явная-схема-против-потока"><span class="header-section-number">4.9</span> Насыщенность: явная схема против потока</a></li>
+  <li><a href="#один-шаг-impes-целиком" id="toc-один-шаг-impes-целиком" class="nav-link" data-scroll-target="#один-шаг-impes-целиком"><span class="header-section-number">4.10</span> Один шаг IMPES целиком</a></li>
+  <li><a href="#проверки-модели" id="toc-проверки-модели" class="nav-link" data-scroll-target="#проверки-модели"><span class="header-section-number">4.11</span> Проверки модели</a></li>
+  <li><a href="#вопросы-и-задания" id="toc-вопросы-и-задания" class="nav-link" data-scroll-target="#вопросы-и-задания"><span class="header-section-number">4.12</span> Вопросы и задания</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./01-field.html">Теория и устройство игры</a></li><li class="breadcrumb-item"><a href="./04-numerics.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Как считает симулятор: сетка, давление, насыщенность</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-numerics" class="quarto-section-identifier"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Как считает симулятор: сетка, давление, насыщенность</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<div class="cell hidden">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code hidden" id="cb1" data-startfrom="67" data-source-offset="-99"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript" style="counter-reset: source-line 66;"><span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a>neft <span class="op">=</span> {</span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> m <span class="op">=</span> <span class="cf">await</span> <span class="im">import</span>(<span class="kw">new</span> <span class="fu">URL</span>(<span class="st">"assets/js/neft.js"</span><span class="op">,</span> <span class="bu">document</span><span class="op">.</span><span class="at">baseURI</span>)<span class="op">.</span><span class="at">href</span>)<span class="op">;</span></span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a>  <span class="cf">await</span> m<span class="op">.</span><span class="fu">ready</span>()<span class="op">;</span></span>
+<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> m<span class="op">;</span></span>
+<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a>core <span class="op">=</span> neft<span class="op">.</span><span class="fu">core</span>()</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display hidden">
+<div>
+<div id="ojs-cell-1-1" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+<div class="cell-output cell-output-display hidden">
+<div>
+<div id="ojs-cell-1-2" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+</div>
+<p>В предыдущих главах мы собрали физику: закон Дарси (<a href="02-darcy.html" class="quarto-xref"><span>Глава 2</span></a>) и двухфазное течение (<a href="03-twophase.html" class="quarto-xref"><span>Глава 3</span></a>). Теперь посмотрим, как из этих формул получается <strong>программа</strong>, которая за доли секунды пересчитывает карту давления на 2500 ячейках. Это самое «инженерное» место методички: поняв его, вы будете знать, почему игра ведёт себя именно так, и сможете написать такой же расчёт сами – в конце главы есть живые ячейки, где это делается на Python.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Уведомление</span>Что вы узнаете
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>как уравнение фильтрации превращается в систему линейных уравнений;</li>
+<li>что такое <strong>проводимость грани</strong> и почему проницаемость усредняют гармонически;</li>
+<li>как в уравнение входят <strong>скважины</strong> и <strong>разломы</strong>;</li>
+<li>что такое схема <strong>IMPES</strong> и условие Куранта;</li>
+<li>как самому получить <strong>карту давления с разломом</strong> (Python и ядро игры).</li>
+</ul>
+</div>
+</div>
+<section id="от-закона-сохранения-к-уравнению-давления" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="от-закона-сохранения-к-уравнению-давления"><span class="header-section-number">4.1</span> От закона сохранения к уравнению давления</h2>
+<p>Возьмём кусочек пласта (ячейку) с поровым объёмом <span class="math inline">V_p</span>. Жидкость в нём слегка сжимаема вместе с породой: если давление поднять на <span class="math inline">\Delta P</span>, в ячейку «влезет» дополнительно <span class="math inline">V_p c_t \Delta P</span> кубометров (упругий запас, <span class="math inline">c_t</span> – общая сжимаемость, 1/атм). Закон сохранения объёма для ячейки за время <span class="math inline">\Delta t</span> звучит так:</p>
+<blockquote class="blockquote">
+<p>прирост упругого запаса = приток через грани − отток через грани + закачка − отбор скважин.</p>
+</blockquote>
+<p>Поток через грань между ячейками <span class="math inline">i</span> и соседней <span class="math inline">nb</span> даёт закон Дарси (<a href="02-darcy.html#eq-darcy-face" class="quarto-xref"><span>2.1</span></a>). Если записать всё для каждой ячейки и взять потоки <strong>на новом временном слое</strong> <span class="math inline">n+1</span> (неявная схема), получаем уравнение, которое решает игра:</p>
+<p><span id="eq-pressure"><span class="math display">
+\frac{V_{p,i}\,c_t}{\Delta t}\left(P_i^{n+1}-P_i^{n}\right)=\sum_{f}T_f\left(P_{nb}^{n+1}-P_i^{n+1}\right)+q_i .
+\tag{4.1}</span></span></p>
+<p>Здесь <span class="math inline">T_f</span> – <strong>проводимость грани</strong> (м³/сут/атм), <span class="math inline">q_i</span> – вклад скважин. Неизвестны давления <span class="math inline">P^{n+1}</span> во всех ячейках сразу – это система из <span class="math inline">N</span> линейных уравнений (на сетке 50×50 их 2500).</p>
+</section>
+<section id="сетка-игры" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="сетка-игры"><span class="header-section-number">4.2</span> Сетка игры</h2>
+<p>Участок в игре всегда 2000×2000 м. Он разбит на <span class="math inline">N\times N</span> квадратных ячеек (по умолчанию <span class="math inline">N=50</span>, ячейка <span class="math inline">\Delta=40</span> м; в окне «⚙ Расчёт» можно выбрать 25…100). Пласт двумерный: толщина <span class="math inline">h</span> усреднена по вертикали. Ячейки нумеруются одним индексом:</p>
+<p><span class="math display">
+c = j\cdot n_x + i,\qquad i\text{ – столбец (на восток)},\quad j\text{ – строка (на юг)}.
+</span></p>
+<p>У каждой ячейки четыре соседа (пятиточечный шаблон): восток, запад, север, юг. В ядре хранятся только проводимости <strong>восточной</strong> и <strong>северной</strong> граней ячейки – западная грань ячейки <span class="math inline">c</span> это восточная грань ячейки <span class="math inline">c-1</span>.</p>
+</section>
+<section id="проводимость-грани-и-гармоническое-среднее" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="проводимость-грани-и-гармоническое-среднее"><span class="header-section-number">4.3</span> Проводимость грани и гармоническое среднее</h2>
+<p>Для двух соседних ячеек площадь грани <span class="math inline">A=\Delta\cdot h</span>, длина пути <span class="math inline">L=\Delta</span>, и в законе Дарси <span class="math inline">\Delta</span> сокращается:</p>
+<p><span id="eq-trans"><span class="math display">
+T_f = K_Д\,k_{harm}\,h\,\bar\lambda_t,\qquad k_{harm}=\frac{2k_ik_{nb}}{k_i+k_{nb}},\qquad \bar\lambda_t=\tfrac12\left(\lambda_{t,i}+\lambda_{t,nb}\right).
+\tag{4.2}</span></span></p>
+<p>Почему среднее <strong>гармоническое</strong>? Между центрами ячеек жидкость проходит полпути по одной породе и полпути по другой – это <strong>последовательное</strong> соединение сопротивлений, а при последовательном соединении складываются сопротивления <span class="math inline">\propto 1/k</span>. Арифметическое среднее «не заметило» бы непроницаемую перемычку:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code hidden" id="cb2" data-startfrom="71" data-source-offset="-0"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript" style="counter-reset: source-line 70;"><span id="cb2-71"><a href="#cb2-71" aria-hidden="true" tabindex="-1"></a>viewof k1 <span class="op">=</span> Inputs<span class="op">.</span><span class="fu">range</span>([<span class="fl">0.1</span><span class="op">,</span> <span class="dv">1000</span>]<span class="op">,</span> {<span class="dt">value</span><span class="op">:</span> <span class="dv">500</span><span class="op">,</span> <span class="dt">step</span><span class="op">:</span> <span class="fl">0.1</span><span class="op">,</span> <span class="dt">label</span><span class="op">:</span> <span class="st">"k ячейки 1, мД"</span><span class="op">,</span> <span class="dt">transform</span><span class="op">:</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">log</span>})</span>
+<span id="cb2-72"><a href="#cb2-72" aria-hidden="true" tabindex="-1"></a>viewof k2 <span class="op">=</span> Inputs<span class="op">.</span><span class="fu">range</span>([<span class="fl">0.1</span><span class="op">,</span> <span class="dv">1000</span>]<span class="op">,</span> {<span class="dt">value</span><span class="op">:</span> <span class="dv">1</span><span class="op">,</span> <span class="dt">step</span><span class="op">:</span> <span class="fl">0.1</span><span class="op">,</span> <span class="dt">label</span><span class="op">:</span> <span class="st">"k ячейки 2, мД"</span><span class="op">,</span> <span class="dt">transform</span><span class="op">:</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">log</span>})</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<div id="ojs-cell-2-1" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+<div id="ojs-cell-2-2" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code hidden" id="cb3" data-startfrom="187" data-source-offset="0"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript" style="counter-reset: source-line 186;"><span id="cb3-187"><a href="#cb3-187" aria-hidden="true" tabindex="-1"></a><span class="fu">html</span><span class="vs">`&lt;div class="neft-kpi"&gt;</span></span>
+<span id="cb3-188"><a href="#cb3-188" aria-hidden="true" tabindex="-1"></a><span class="vs">  &lt;div&gt;&lt;b&gt;</span><span class="sc">${</span>((k1 <span class="op">+</span> k2) <span class="op">/</span> <span class="dv">2</span>)<span class="op">.</span><span class="fu">toFixed</span>(<span class="dv">1</span>)<span class="sc">}</span><span class="vs"> мД&lt;/b&gt;&lt;span&gt;арифметическое среднее&lt;/span&gt;&lt;/div&gt;</span></span>
+<span id="cb3-189"><a href="#cb3-189" aria-hidden="true" tabindex="-1"></a><span class="vs">  &lt;div&gt;&lt;b&gt;</span><span class="sc">${</span>(<span class="dv">2</span> <span class="op">*</span> k1 <span class="op">*</span> k2 <span class="op">/</span> (k1 <span class="op">+</span> k2))<span class="op">.</span><span class="fu">toFixed</span>(<span class="dv">2</span>)<span class="sc">}</span><span class="vs"> мД&lt;/b&gt;&lt;span&gt;гармоническое (в игре)&lt;/span&gt;&lt;/div&gt;</span></span>
+<span id="cb3-190"><a href="#cb3-190" aria-hidden="true" tabindex="-1"></a><span class="vs">  &lt;div&gt;&lt;b&gt;</span><span class="sc">${</span><span class="bu">Math</span><span class="op">.</span><span class="fu">sqrt</span>(k1 <span class="op">*</span> k2)<span class="op">.</span><span class="fu">toFixed</span>(<span class="dv">1</span>)<span class="sc">}</span><span class="vs"> мД&lt;/b&gt;&lt;span&gt;геометрическое&lt;/span&gt;&lt;/div&gt;</span></span>
+<span id="cb3-191"><a href="#cb3-191" aria-hidden="true" tabindex="-1"></a><span class="vs">&lt;/div&gt;`</span></span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div id="ojs-cell-3" data-nodetype="expression">
+
+</div>
+</div>
+</div>
+<p>Поставьте <span class="math inline">k_1=500</span>, <span class="math inline">k_2=1</span>: арифметика даёт 250 мД – «дорогу», хотя на самом деле поток почти целиком задерживает плохая ячейка. Гармоническое среднее ≈ 2 мД – это и есть физичный ответ. Есть и математическая причина: с таким выбором матрица системы получается <strong>симметричной и положительно определённой</strong>, и её можно решать быстрым методом сопряжённых градиентов.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Совет</span>Почему <span class="math inline">\bar\lambda_t</span> – среднее, а не «против потока»?
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>В уравнение давления берётся среднее подвижностей соседей – это сохраняет симметрию матрицы. Подвижность «против потока» (upstream) используется только при переносе воды (ниже). Это стандартная линеаризация схемы IMPES.</p>
+</div>
+</div>
+</section>
+<section id="скважина-в-уравнении-давления" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="скважина-в-уравнении-давления"><span class="header-section-number">4.4</span> Скважина в уравнении давления</h2>
+<p>Скважина в ячейке добавляет слагаемое <span class="math inline">q = G\,(P_{wf} - P_i)</span>, где <span class="math inline">G = WI\cdot\lambda_t</span> – проводимость «скважина–ячейка» по Писману (подробно в <a href="05-wells.html" class="quarto-xref"><span>Глава 5</span></a>). Множитель при неизвестном <span class="math inline">P_i</span> уходит в <strong>диагональ</strong> матрицы, а <span class="math inline">G\,P_{wf}</span> – в <strong>правую часть</strong>. Забойное давление <span class="math inline">P_{wf}</span> задают оборудование и режим (ЭЦН, штуцер, КНС) – см. узловой анализ в <a href="05-wells.html" class="quarto-xref"><span>Глава 5</span></a>.</p>
+</section>
+<section id="разлом-множитель-проводимости" class="level2" data-number="4.5">
+<h2 data-number="4.5" class="anchored" data-anchor-id="разлом-множитель-проводимости"><span class="header-section-number">4.5</span> Разлом = множитель проводимости</h2>
+<p>Разлом в игре – ломаная линия. Каждая грань сетки, которую эта линия пересекает, получает множитель <span class="math inline">m\in[0,1]</span>:</p>
+<p><span class="math display">
+T_f \to m\,T_f,\qquad m=0\ \text{– запечатанный (непроницаемый) разлом},\quad m=1\ \text{– разлома для потока нет}.
+</span></p>
+<p>Схема при этом не меняется: матрица остаётся симметричной, баланс сохраняется. Через запечатанную грань поток <strong>ровно ноль</strong>, и блок за разломом получает поддержку только в обход – если обход вообще есть. Сейсмика в игре показывает, <em>где</em> проходит разлом, но <strong>не говорит</strong>, запечатан ли он: это выясняется по поведению скважин и ГДИС.</p>
+</section>
+<section id="как-решается-система" class="level2" data-number="4.6">
+<h2 data-number="4.6" class="anchored" data-anchor-id="как-решается-система"><span class="header-section-number">4.6</span> Как решается система</h2>
+<p>Матрица системы (<a href="#eq-pressure" class="quarto-xref"><span>4.1</span></a>) огромная, но почти пустая: в каждой строке не больше пяти ненулевых чисел. Игра даже не собирает её в памяти: метод <strong>сопряжённых градиентов</strong> (CG) требует лишь уметь умножать матрицу на вектор, а это просто проход по граням сетки («матрично-свободный» метод). Ускоряют сходимость:</p>
+<ul>
+<li><strong>предобуславливатель</strong> – в JS-ядре Якоби (деление на диагональ), в Rust-ядре DILU, в 3–4 раза меньше итераций;</li>
+<li><strong>тёплый старт</strong> – начальное приближение берётся с прошлого шага, давление за сутки меняется мало;</li>
+<li>критерий остановки <span class="math inline">\lVert r\rVert/\lVert r_0\rVert&lt;10^{-6}</span>, не больше 500 итераций (меняется в «⚙ Расчёт»).</li>
+</ul>
+</section>
+<section id="sec-fault-python" class="level2" data-number="4.7">
+<h2 data-number="4.7" class="anchored" data-anchor-id="sec-fault-python"><span class="header-section-number">4.7</span> Пример 1. Карта давления с разломом на Python</h2>
+<p>Ниже – <strong>живые ячейки</strong>: код можно менять и запускать кнопкой «▶ Запустить» (или Ctrl+Enter). Python работает прямо в браузере (Pyodide), первый запуск загружает интерпретатор и numpy – 10–30 секунд. Учебный модуль <code>minisim</code> – это 200 строк на numpy с теми же формулами, что в ядре игры; его исходник лежит в <code>manual/assets/py/minisim.py</code>.</p>
+<p>Однородный пласт 100 мД, сетка 50×50 по 40 м. С севера на юг проходит запечатанный разлом. Нагнетательная Н-1 – на западе, добывающие Д-1 (за разломом) и Д-2 (по эту сторону) – на востоке и северо-западе. Считаем 30 суток:</p>
+<div class="live-py">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> minisim <span class="im">import</span> <span class="op">*</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> Model(nx<span class="op">=</span><span class="dv">50</span>, ny<span class="op">=</span><span class="dv">50</span>, dx<span class="op">=</span><span class="dv">40</span>, h<span class="op">=</span><span class="dv">10</span>, phi<span class="op">=</span><span class="fl">0.2</span>, k<span class="op">=</span><span class="fl">100.0</span>, mu_o<span class="op">=</span><span class="dv">5</span>, P0<span class="op">=</span><span class="dv">250</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>m.add_fault([(<span class="fl">24.5</span>, <span class="op">-</span><span class="dv">2</span>), (<span class="fl">26.5</span>, <span class="dv">20</span>), (<span class="fl">25.0</span>, <span class="dv">52</span>)], trans<span class="op">=</span><span class="fl">0.0</span>)   <span class="co"># ломаная в координатах ячеек; 0 – запечатан</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>m.add_well(<span class="dv">15</span>, <span class="dv">25</span>, <span class="st">"inj"</span>,  pwf<span class="op">=</span><span class="dv">320</span>)    <span class="co"># (i, j): столбец, строка</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>m.add_well(<span class="dv">35</span>, <span class="dv">25</span>, <span class="st">"prod"</span>, pwf<span class="op">=</span><span class="dv">150</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>m.add_well(<span class="dv">10</span>, <span class="dv">10</span>, <span class="st">"prod"</span>, pwf<span class="op">=</span><span class="dv">150</span>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>m.run(<span class="dv">30</span>, dt<span class="op">=</span><span class="dv">5</span>)              <span class="co"># 30 суток шагами давления по 5 сут</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>m.report()</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>show_map(m, <span class="st">"P"</span>, title<span class="op">=</span><span class="st">"Давление через 30 сут"</span>)</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Посмотрите на карту: слева от разлома давление <strong>поднялось</strong> (работает закачка), справа – <strong>упало</strong> до воронки вокруг Д-1, а на линии разлома – резкая ступенька. Теперь проведите опыт: сделайте разлом частично проницаемым и сравните.</p>
+<div class="live-py">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> minisim <span class="im">import</span> <span class="op">*</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">3</span>, figsize<span class="op">=</span>(<span class="dv">15</span>, <span class="fl">4.3</span>))</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>profiles <span class="op">=</span> {}</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ax, tr <span class="kw">in</span> <span class="bu">zip</span>(axes, [<span class="fl">0.0</span>, <span class="fl">0.1</span>, <span class="fl">1.0</span>]):          <span class="co"># попробуйте свои значения</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    m <span class="op">=</span> Model(k<span class="op">=</span><span class="fl">100.0</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    m.add_fault([(<span class="fl">24.5</span>, <span class="op">-</span><span class="dv">2</span>), (<span class="fl">26.5</span>, <span class="dv">20</span>), (<span class="fl">25.0</span>, <span class="dv">52</span>)], trans<span class="op">=</span>tr)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    m.add_well(<span class="dv">15</span>, <span class="dv">25</span>, <span class="st">"inj"</span>, pwf<span class="op">=</span><span class="dv">320</span>)<span class="op">;</span> m.add_well(<span class="dv">35</span>, <span class="dv">25</span>, <span class="st">"prod"</span>, pwf<span class="op">=</span><span class="dv">150</span>)<span class="op">;</span> m.add_well(<span class="dv">10</span>, <span class="dv">10</span>, <span class="st">"prod"</span>, pwf<span class="op">=</span><span class="dv">150</span>)</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    m.run(<span class="dv">60</span>, dt<span class="op">=</span><span class="dv">5</span>)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    show_map(m, <span class="st">"P"</span>, ax<span class="op">=</span>ax, title<span class="op">=</span><span class="ss">f"проводимость разлома ×</span><span class="sc">{</span>tr<span class="sc">}</span><span class="ss">"</span>, vmin<span class="op">=</span><span class="dv">150</span>, vmax<span class="op">=</span><span class="dv">320</span>)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    profiles[tr] <span class="op">=</span> m.P[<span class="dv">25</span>].copy()</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"×</span><span class="sc">{</span>tr<span class="sc">}</span><span class="ss">: дебит Д-1 = </span><span class="sc">{</span>m<span class="sc">.</span>wells[<span class="dv">1</span>][<span class="st">'q'</span>]<span class="sc">:6.1f}</span><span class="ss"> м³/сут, закачка Н-1 = </span><span class="sc">{</span>m<span class="sc">.</span>wells[<span class="dv">0</span>][<span class="st">'q'</span>]<span class="sc">:6.1f}</span><span class="ss"> м³/сут"</span>)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">3.2</span>))</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> tr, p <span class="kw">in</span> profiles.items():</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    plt.plot(p, label<span class="op">=</span><span class="ss">f"×</span><span class="sc">{</span>tr<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>plt.axvline(<span class="fl">25.5</span>, color<span class="op">=</span><span class="st">"#e34948"</span>, ls<span class="op">=</span><span class="st">"--"</span>)<span class="op">;</span> plt.xlabel(<span class="st">"i (строка j = 25)"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"P, атм"</span>)</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>plt.legend(title<span class="op">=</span><span class="st">"разлом"</span>)<span class="op">;</span> plt.title(<span class="st">"Профиль давления через Н-1 и Д-1"</span>)</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Важное уведомление</span>Вывод для игры
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Добывающая за запечатанным разломом <strong>не получает поддержки</strong> от нагнетательных с другой стороны: давление и дебит у неё падают, как будто закачки нет. Правило: <strong>в каждом изолированном блоке – своя нагнетательная</strong>. Признаки запечатанного разлома в игре – быстрое падение пластового давления по ГДИС у скважин одного блока при нормальном давлении у соседей.</p>
+</div>
+</div>
+</section>
+<section id="пример-2.-то-же-на-настоящем-ядре-игры" class="level2" data-number="4.8">
+<h2 data-number="4.8" class="anchored" data-anchor-id="пример-2.-то-же-на-настоящем-ядре-игры"><span class="header-section-number">4.8</span> Пример 2. То же на настоящем ядре игры</h2>
+<p>Теперь та же идея, но на <strong>ядре «Нефтяши»</strong> – том же коде, что считает игру (<code>#sim-core</code> из <code>index.html</code>). Объект – учебный купол (сценарий <code>base</code>): разлом F-1 запечатан, F-2 пропускает 30 % потока. Расставим три скважины: Д-1 – в восточном блоке за F-1, Д-2 – в своде, Н-1 – в центральном блоке. Все добывающие на ЭЦН-250, нагнетательная – на КНС 130 атм через штуцер 12 мм. Меняйте проводимость F-1 – расчёт трёх лет занимает несколько секунд.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code hidden" id="cb6" data-startfrom="194" data-source-offset="-0"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript" style="counter-reset: source-line 193;"><span id="cb6-194"><a href="#cb6-194" aria-hidden="true" tabindex="-1"></a>viewof f1 <span class="op">=</span> Inputs<span class="op">.</span><span class="fu">radio</span>(<span class="kw">new</span> <span class="bu">Map</span>([[<span class="st">"запечатан (×0)"</span><span class="op">,</span> <span class="dv">0</span>]<span class="op">,</span> [<span class="st">"×0,1"</span><span class="op">,</span> <span class="fl">0.1</span>]<span class="op">,</span> [<span class="st">"×0,3"</span><span class="op">,</span> <span class="fl">0.3</span>]<span class="op">,</span> [<span class="st">"проницаем (×1)"</span><span class="op">,</span> <span class="dv">1</span>]])<span class="op">,</span> {<span class="dt">label</span><span class="op">:</span> <span class="st">"Разлом F-1"</span><span class="op">,</span> <span class="dt">value</span><span class="op">:</span> <span class="dv">0</span>})</span>
+<span id="cb6-195"><a href="#cb6-195" aria-hidden="true" tabindex="-1"></a>viewof gaps <span class="op">=</span> Inputs<span class="op">.</span><span class="fu">toggle</span>({<span class="dt">label</span><span class="op">:</span> <span class="st">"Щели в разломе (строгая проверка, как в ядре до исправления)"</span><span class="op">,</span> <span class="dt">value</span><span class="op">:</span> <span class="kw">false</span>})</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<div id="ojs-cell-4-1" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+<div id="ojs-cell-4-2" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Код расчёта (ядро игры)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7" data-startfrom="212" data-source-offset="0"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript" style="counter-reset: source-line 211;"><span id="cb7-212"><a href="#cb7-212" aria-hidden="true" tabindex="-1"></a>faultRun <span class="op">=</span> {</span>
+<span id="cb7-213"><a href="#cb7-213" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> f <span class="op">=</span> neft<span class="op">.</span><span class="fu">field</span>({ <span class="dt">scenario</span><span class="op">:</span> <span class="st">"base"</span><span class="op">,</span> <span class="dt">faultTrans</span><span class="op">:</span> { <span class="st">"F-1"</span><span class="op">:</span> f1 }<span class="op">,</span> <span class="dt">strictGaps</span><span class="op">:</span> gaps })<span class="op">;</span></span>
+<span id="cb7-214"><a href="#cb7-214" aria-hidden="true" tabindex="-1"></a>  f<span class="op">.</span><span class="fu">drill</span>({ <span class="dt">x</span><span class="op">:</span> <span class="dv">1380</span><span class="op">,</span> <span class="dt">y</span><span class="op">:</span> <span class="dv">1100</span><span class="op">,</span> <span class="dt">type</span><span class="op">:</span> <span class="st">"prod"</span> })<span class="op">;</span>            <span class="co">// Д-1: восточный блок, за F-1</span></span>
+<span id="cb7-215"><a href="#cb7-215" aria-hidden="true" tabindex="-1"></a>  f<span class="op">.</span><span class="fu">drill</span>({ <span class="dt">x</span><span class="op">:</span> <span class="dv">900</span><span class="op">,</span>  <span class="dt">y</span><span class="op">:</span> <span class="dv">940</span><span class="op">,</span>  <span class="dt">type</span><span class="op">:</span> <span class="st">"prod"</span> })<span class="op">;</span>            <span class="co">// Д-2: свод</span></span>
+<span id="cb7-216"><a href="#cb7-216" aria-hidden="true" tabindex="-1"></a>  f<span class="op">.</span><span class="fu">drill</span>({ <span class="dt">x</span><span class="op">:</span> <span class="dv">780</span><span class="op">,</span>  <span class="dt">y</span><span class="op">:</span> <span class="dv">700</span><span class="op">,</span>  <span class="dt">type</span><span class="op">:</span> <span class="st">"inj"</span><span class="op">,</span> <span class="dt">choke</span><span class="op">:</span> <span class="dv">12</span> })<span class="op">;</span>  <span class="co">// Н-1: центральный блок</span></span>
+<span id="cb7-217"><a href="#cb7-217" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> frames <span class="op">=</span> []<span class="op">;</span></span>
+<span id="cb7-218"><a href="#cb7-218" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> last <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb7-219"><a href="#cb7-219" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> <span class="cf">await</span> (<span class="kw">const</span> row <span class="kw">of</span> f<span class="op">.</span><span class="fu">run</span>(<span class="dv">3</span><span class="op">,</span> { <span class="dt">step</span><span class="op">:</span> <span class="dv">30</span> })) {</span>
+<span id="cb7-220"><a href="#cb7-220" aria-hidden="true" tabindex="-1"></a>    frames<span class="op">.</span><span class="fu">push</span>({ <span class="dt">t</span><span class="op">:</span> row<span class="op">.</span><span class="at">t</span><span class="op">,</span> <span class="dt">P</span><span class="op">:</span> <span class="bu">Float64Array</span><span class="op">.</span><span class="fu">from</span>(f<span class="op">.</span><span class="at">sim</span><span class="op">.</span><span class="at">P</span>)<span class="op">,</span> <span class="dt">d1</span><span class="op">:</span> f<span class="op">.</span><span class="fu">well</span>(<span class="st">"Д-1"</span>)<span class="op">.</span><span class="at">q</span><span class="op">,</span> <span class="dt">d2</span><span class="op">:</span> f<span class="op">.</span><span class="fu">well</span>(<span class="st">"Д-2"</span>)<span class="op">.</span><span class="at">q</span><span class="op">,</span> <span class="dt">n1</span><span class="op">:</span> f<span class="op">.</span><span class="fu">well</span>(<span class="st">"Н-1"</span>)<span class="op">.</span><span class="at">q</span> })<span class="op">;</span></span>
+<span id="cb7-221"><a href="#cb7-221" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="bu">performance</span><span class="op">.</span><span class="fu">now</span>() <span class="op">-</span> last <span class="op">&gt;</span> <span class="dv">250</span>) { last <span class="op">=</span> <span class="bu">performance</span><span class="op">.</span><span class="fu">now</span>()<span class="op">;</span> <span class="kw">yield</span> { f<span class="op">,</span> frames<span class="op">,</span> <span class="dt">done</span><span class="op">:</span> <span class="kw">false</span> }<span class="op">;</span> }  <span class="co">// прогресс 4 раза в секунду</span></span>
+<span id="cb7-222"><a href="#cb7-222" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-223"><a href="#cb7-223" aria-hidden="true" tabindex="-1"></a>  <span class="kw">yield</span> { f<span class="op">,</span> frames<span class="op">,</span> <span class="dt">done</span><span class="op">:</span> <span class="kw">true</span> }<span class="op">;</span></span>
+<span id="cb7-224"><a href="#cb7-224" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display">
+<div id="ojs-cell-5" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code hidden" id="cb8" data-startfrom="216" data-source-offset="0"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript" style="counter-reset: source-line 215;"><span id="cb8-216"><a href="#cb8-216" aria-hidden="true" tabindex="-1"></a>viewof tday <span class="op">=</span> Inputs<span class="op">.</span><span class="fu">range</span>([<span class="dv">30</span><span class="op">,</span> <span class="dv">1095</span>]<span class="op">,</span> {<span class="dt">step</span><span class="op">:</span> <span class="dv">30</span><span class="op">,</span> <span class="dt">value</span><span class="op">:</span> <span class="dv">1095</span><span class="op">,</span> <span class="dt">label</span><span class="op">:</span> <span class="st">"Момент времени, сут"</span>})</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div id="ojs-cell-6" data-nodetype="declaration">
+
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code hidden" id="cb9" data-startfrom="0" data-source-offset="0"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript" style="counter-reset: source-line -1;"><span id="cb9-0"><a href="#cb9-0" aria-hidden="true" tabindex="-1"></a>{</span>
+<span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> { f<span class="op">,</span> frames<span class="op">,</span> done } <span class="op">=</span> faultRun<span class="op">;</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> fr <span class="op">=</span> frames<span class="op">.</span><span class="fu">reduce</span>((a<span class="op">,</span> b) <span class="kw">=&gt;</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">abs</span>(b<span class="op">.</span><span class="at">t</span> <span class="op">-</span> tday) <span class="op">&lt;</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">abs</span>(a<span class="op">.</span><span class="at">t</span> <span class="op">-</span> tday) <span class="op">?</span> b <span class="op">:</span> a<span class="op">,</span> frames[<span class="dv">0</span>])<span class="op">;</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> rows <span class="op">=</span> frames<span class="op">.</span><span class="fu">map</span>((x) <span class="kw">=&gt;</span> ({ <span class="dt">year</span><span class="op">:</span> x<span class="op">.</span><span class="at">t</span> <span class="op">/</span> <span class="dv">365</span><span class="op">,</span> <span class="st">"Д-1 (за F-1)"</span><span class="op">:</span> x<span class="op">.</span><span class="at">d1</span><span class="op">,</span> <span class="st">"Д-2 (свод)"</span><span class="op">:</span> x<span class="op">.</span><span class="at">d2</span><span class="op">,</span> <span class="st">"Н-1 (закачка)"</span><span class="op">:</span> x<span class="op">.</span><span class="at">n1</span> }))<span class="op">;</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> series <span class="op">=</span> [<span class="st">"Д-1 (за F-1)"</span><span class="op">,</span> <span class="st">"Д-2 (свод)"</span><span class="op">,</span> <span class="st">"Н-1 (закачка)"</span>]<span class="op">.</span><span class="fu">map</span>((n) <span class="kw">=&gt;</span> ({ <span class="dt">name</span><span class="op">:</span> n<span class="op">,</span> <span class="dt">rows</span><span class="op">:</span> rows<span class="op">.</span><span class="fu">map</span>((r) <span class="kw">=&gt;</span> ({ <span class="dt">year</span><span class="op">:</span> r<span class="op">.</span><span class="at">year</span><span class="op">,</span> <span class="dt">q</span><span class="op">:</span> r[n] })) }))<span class="op">;</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> <span class="fu">html</span><span class="vs">`&lt;div class="neft-row"&gt;</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="vs">    &lt;div&gt;</span><span class="sc">${</span>neft<span class="op">.</span><span class="fu">map</span>(f<span class="op">,</span> { <span class="dt">layer</span><span class="op">:</span> <span class="st">"P"</span><span class="op">,</span> <span class="dt">data</span><span class="op">:</span> fr<span class="op">.</span><span class="at">P</span><span class="op">,</span> <span class="dt">domain</span><span class="op">:</span> [<span class="dv">60</span><span class="op">,</span> f<span class="op">.</span><span class="at">r</span><span class="op">.</span><span class="at">P0</span> <span class="op">+</span> <span class="dv">40</span>]<span class="op">,</span> <span class="dt">title</span><span class="op">:</span> <span class="vs">`Давление на </span><span class="sc">${</span><span class="bu">Math</span><span class="op">.</span><span class="fu">round</span>(fr<span class="op">.</span><span class="at">t</span>)<span class="sc">}</span><span class="vs"> сут`</span> })<span class="sc">}</span><span class="vs">&lt;/div&gt;</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="vs">    &lt;div&gt;</span><span class="sc">${</span>done <span class="op">?</span> <span class="st">""</span> <span class="op">:</span> neft<span class="op">.</span><span class="fu">progress</span>(<span class="vs">`идёт расчёт: </span><span class="sc">${</span><span class="bu">Math</span><span class="op">.</span><span class="fu">round</span>(frames<span class="op">.</span><span class="fu">at</span>(<span class="op">-</span><span class="dv">1</span>)<span class="op">.</span><span class="at">t</span>)<span class="sc">}</span><span class="vs"> из 1095 сут · </span><span class="sc">${</span>neft<span class="op">.</span><span class="fu">engineInfo</span>()<span class="sc">}</span><span class="vs">`</span><span class="op">,</span> frames<span class="op">.</span><span class="fu">at</span>(<span class="op">-</span><span class="dv">1</span>)<span class="op">.</span><span class="at">t</span> <span class="op">/</span> <span class="dv">1095</span>)<span class="sc">}</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="vs">      </span><span class="sc">${</span>neft<span class="op">.</span><span class="fu">lines</span>(series<span class="op">,</span> { <span class="dt">y</span><span class="op">:</span> <span class="st">"q"</span><span class="op">,</span> <span class="dt">label</span><span class="op">:</span> <span class="st">"дебит жидкости / закачка, м³/сут"</span><span class="op">,</span> <span class="dt">width</span><span class="op">:</span> <span class="dv">420</span><span class="op">,</span> <span class="dt">height</span><span class="op">:</span> <span class="dv">300</span> })<span class="sc">}</span><span class="vs">&lt;/div&gt;</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="vs">  &lt;/div&gt;`</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div id="ojs-cell-7" data-nodetype="expression">
+
+</div>
+</div>
+</div>
+<p>Что видно:</p>
+<ul>
+<li>при <strong>проницаемом</strong> F-1 закачка Н-1 доходит и до Д-1 – давление выравнивается, ступенька исчезает;</li>
+<li>F-2 (×0,3) на западе виден как мягкий перегиб изобар – частично проницаемый разлом тормозит, но не отрезает;</li>
+<li>при <strong>запечатанном</strong> F-1 восточный блок «проседает»: давление у Д-1 за три года падает до ≈ 66 атм, дебит – с 85 до ≈ 27 м³/сут. А с переключателем «Щели в разломе» (так считала игра до исправления) Д-1 почти не замечает разлома: давление ≈ 200 атм, дебит растёт до ≈ 100 м³/сут. Почему – ниже.</li>
+</ul>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Предупреждение</span>Находка: «запечатанный» разлом с щелями (исправлено в игре)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Разлом режет грань сетки, если отрезок грани (между центрами соседних ячеек) пересекает ломаную разлома. В ядре это проверяет функция <code>segCross</code>. Раньше проверка была <strong>строгой</strong>: касание не считалось пересечением. Но ломаная F-1 задана точками <code>(26.5, −2) → (28.5, 14) → (27.5, 30) → (29.5, 52)</code>, и в строках сетки 2, 10, 14, 22 и 30 она проходит <strong>точно через центр ячейки</strong> или кладёт вершину <strong>точно на линию</strong> между центрами. Там обе соседние грани лишь «касаются» разлома – и ни одна не закрывалась. Получались пять щелей шириной по 40 м, через которые закачка питала восточный блок. У объектов, отражённых с севера на юг (ЮВ1, ЮК10–11, бобриковский), щели были в строках 19, 27, 35, 39 и 47.</p>
+<p>Проверить можно прямо в живой ячейке – она ищет строки сетки, где у запечатанного F-1 не закрыта ни одна грань, в ядре игры и со старой строгой проверкой (<code>strictGaps: true</code>):</p>
+<div class="live-js">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (<span class="kw">const</span> strictGaps <span class="kw">of</span> [<span class="kw">false</span><span class="op">,</span> <span class="kw">true</span>]) <span class="cf">for</span> (<span class="kw">const</span> sc <span class="kw">of</span> [<span class="st">"base"</span><span class="op">,</span> <span class="st">"bv8"</span><span class="op">,</span> <span class="st">"av12"</span><span class="op">,</span> <span class="st">"yuv1"</span><span class="op">,</span> <span class="st">"yuk1011"</span><span class="op">,</span> <span class="st">"ach"</span><span class="op">,</span> <span class="st">"bb"</span>]) {</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> r <span class="op">=</span> neft<span class="op">.</span><span class="fu">field</span>({ <span class="dt">scenario</span><span class="op">:</span> sc<span class="op">,</span> strictGaps })<span class="op">.</span><span class="at">r</span><span class="op">,</span> gaps <span class="op">=</span> []<span class="op">;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (<span class="kw">let</span> j <span class="op">=</span> <span class="dv">0</span><span class="op">;</span> j <span class="op">&lt;</span> r<span class="op">.</span><span class="at">ny</span><span class="op">;</span> j<span class="op">++</span>) {</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> n <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> r<span class="op">.</span><span class="at">nx</span><span class="op">;</span> i<span class="op">++</span>) <span class="cf">if</span> (r<span class="op">.</span><span class="at">tmE</span>[j <span class="op">*</span> r<span class="op">.</span><span class="at">nx</span> <span class="op">+</span> i] <span class="op">===</span> <span class="dv">0</span> <span class="op">||</span> (j <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">&amp;&amp;</span> r<span class="op">.</span><span class="at">tmN</span>[(j <span class="op">-</span> <span class="dv">1</span>) <span class="op">*</span> r<span class="op">.</span><span class="at">nx</span> <span class="op">+</span> i] <span class="op">===</span> <span class="dv">0</span>) <span class="op">||</span> r<span class="op">.</span><span class="at">tmN</span>[j <span class="op">*</span> r<span class="op">.</span><span class="at">nx</span> <span class="op">+</span> i] <span class="op">===</span> <span class="dv">0</span>) n<span class="op">++;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="op">!</span>n) gaps<span class="op">.</span><span class="fu">push</span>(j)<span class="op">;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="vs">`</span><span class="sc">${</span>strictGaps <span class="op">?</span> <span class="st">"строгая проверка"</span> <span class="op">:</span> <span class="st">"ядро игры"</span><span class="sc">}</span><span class="vs">, </span><span class="sc">${</span>sc<span class="sc">}</span><span class="vs">: строки без закрытых граней – </span><span class="sc">${</span>gaps<span class="op">.</span><span class="fu">join</span>(<span class="st">", "</span>) <span class="op">||</span> <span class="st">"нет"</span><span class="sc">}</span><span class="vs">`</span>)<span class="op">;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Это хороший пример того, как <strong>вырожденные случаи вычислительной геометрии</strong> (точка ровно на прямой) меняют физику модели. Просто считать касание пересечением мало: тогда у ячейки, через центр которой проходит разлом, закрываются все четыре грани, и она оказывается отрезанной от обоих блоков. Исправленная <code>segCross</code> относит точку, лежащую точно на прямой другого отрезка, к его левой стороне (<code>o ≥ 0</code>). Тогда в каждой строке закрывается ровно одна грань, и ячейки сетки однозначно делятся на два блока; коллинеарные отрезки по-прежнему не пересекаются. Самотест (<code>level2bTests</code>) проверяет, что у каждого канонического объекта в каждой строке, через которую проходит запечатанный разлом, закрыта грань и что за F-1 купола отбор равен упругому запасу блока, то есть перетока нет. Исправление изменило поведение всех семи объектов (у них та же пара разломов, только отражённая), поэтому эталоны найдены заново.</p>
+</div>
+</div>
+<section id="сами-пишем-сценарий-на-ядре-игры" class="level3" data-number="4.8.1">
+<h3 data-number="4.8.1" class="anchored" data-anchor-id="сами-пишем-сценарий-на-ядре-игры"><span class="header-section-number">4.8.1</span> Сами пишем сценарий на ядре игры</h3>
+<p>Эта ячейка – JavaScript, и в ней доступно всё ядро игры (<code>core</code>) и помощники методички (<code>neft</code>, справочник – в <a href="a2-api.html" class="quarto-xref"><span>Приложение B</span></a>). Добавьте вторую нагнетательную в восточный блок и посмотрите, как изменится карта:</p>
+<div class="live-js">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> f <span class="op">=</span> neft<span class="op">.</span><span class="fu">field</span>({ <span class="dt">scenario</span><span class="op">:</span> <span class="st">"base"</span> })<span class="op">;</span>           <span class="co">// учебный купол: F-1 запечатан, F-2 ×0,3</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>f<span class="op">.</span><span class="fu">drill</span>({ <span class="dt">x</span><span class="op">:</span> <span class="dv">1380</span><span class="op">,</span> <span class="dt">y</span><span class="op">:</span> <span class="dv">1100</span><span class="op">,</span> <span class="dt">type</span><span class="op">:</span> <span class="st">"prod"</span> })<span class="op">;</span>          <span class="co">// Д-1 за разломом</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>f<span class="op">.</span><span class="fu">drill</span>({ <span class="dt">x</span><span class="op">:</span> <span class="dv">900</span><span class="op">,</span>  <span class="dt">y</span><span class="op">:</span> <span class="dv">940</span><span class="op">,</span>  <span class="dt">type</span><span class="op">:</span> <span class="st">"prod"</span> })<span class="op">;</span>          <span class="co">// Д-2 в своде</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>f<span class="op">.</span><span class="fu">drill</span>({ <span class="dt">x</span><span class="op">:</span> <span class="dv">780</span><span class="op">,</span>  <span class="dt">y</span><span class="op">:</span> <span class="dv">700</span><span class="op">,</span>  <span class="dt">type</span><span class="op">:</span> <span class="st">"inj"</span> })<span class="op">;</span>           <span class="co">// Н-1</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="co">// f.drill({ x: 1500, y: 800, type: "inj" });         // ← раскомментируйте: Н-2 в восточном блоке</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> f<span class="op">.</span><span class="fu">runAll</span>(<span class="dv">2</span>)<span class="op">;</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="vs">`Средн. давление </span><span class="sc">${</span>f<span class="op">.</span><span class="fu">stats</span>()<span class="op">.</span><span class="at">avgP</span><span class="op">.</span><span class="fu">toFixed</span>(<span class="dv">0</span>)<span class="sc">}</span><span class="vs"> атм, нефть </span><span class="sc">${</span>(f<span class="op">.</span><span class="fu">stats</span>()<span class="op">.</span><span class="at">cumOil_t</span> <span class="op">/</span> <span class="dv">1000</span>)<span class="op">.</span><span class="fu">toFixed</span>(<span class="dv">0</span>)<span class="sc">}</span><span class="vs"> тыс. т`</span>)<span class="op">;</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="fu">show</span>(neft<span class="op">.</span><span class="fu">map</span>(f<span class="op">,</span> { <span class="dt">layer</span><span class="op">:</span> <span class="st">"P"</span><span class="op">,</span> <span class="dt">title</span><span class="op">:</span> <span class="st">"Давление через 2 года"</span> }))<span class="op">;</span></span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="насыщенность-явная-схема-против-потока" class="level2" data-number="4.9">
+<h2 data-number="4.9" class="anchored" data-anchor-id="насыщенность-явная-схема-против-потока"><span class="header-section-number">4.9</span> Насыщенность: явная схема против потока</h2>
+<p>Решив давление, ядро знает потоки через все грани <span class="math inline">u_f = T_f\,(P_i-P_{nb})</span>. Вода переносится этими потоками «против потока» (upwind): доля воды в потоке через грань берётся из той ячейки, <strong>откуда</strong> течёт жидкость:</p>
+<p><span id="eq-transport"><span class="math display">
+S_{w,i}^{n+1}=S_{w,i}^{n}+\frac{\Delta t}{V_{p,i}}\Big(\sum_{\text{вход}}u_f\,f_w(S_{w,\text{up}})-\sum_{\text{выход}}u_f\,f_w(S_{w,i})+q_{w,i}\Big).
+\tag{4.3}</span></span></p>
+<p>Схема явная, поэтому шаг ограничен <strong>условием Куранта</strong> (CFL): за шаг фронт не должен «перепрыгнуть» ячейку.</p>
+<p><span class="math display">
+\Delta t\le\frac{C}{\max f_w'}\;\min_i\frac{V_{p,i}}{\max\left(\sum_\text{вход}|u_f|+q_\text{зак},\ \sum_\text{выход}|u_f|+q_\text{отб}\right)},\qquad C = 0{,}5 .
+</span></p>
+<p>Крутизна <span class="math inline">\max f_w'</span> растёт с вязкостью нефти (для бобриковской нефти 22 сП она ≈ 3,8, для маловязких – 2–2,5), поэтому вязкая нефть считается мельче шагами. Если нагнетательная мощная, сутки дробятся на десятки субшагов.</p>
+<div class="live-py">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> minisim <span class="im">import</span> <span class="op">*</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># элемент пятиточечной системы 800×800 м: нагнетательная в углу, добывающая в противоположном</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> Model(nx<span class="op">=</span><span class="dv">20</span>, ny<span class="op">=</span><span class="dv">20</span>, dx<span class="op">=</span><span class="dv">40</span>, k<span class="op">=</span><span class="fl">500.0</span>, mu_o<span class="op">=</span><span class="fl">5.0</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>m.add_well(<span class="dv">1</span>, <span class="dv">1</span>, <span class="st">"inj"</span>, pwf<span class="op">=</span><span class="dv">300</span>)<span class="op">;</span> m.add_well(<span class="dv">18</span>, <span class="dv">18</span>, <span class="st">"prod"</span>, pwf<span class="op">=</span><span class="dv">150</span>)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">4</span>, figsize<span class="op">=</span>(<span class="dv">17</span>, <span class="fl">3.8</span>))</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ax, days <span class="kw">in</span> <span class="bu">zip</span>(axes, [<span class="dv">180</span>, <span class="dv">365</span>, <span class="dv">730</span>, <span class="dv">1460</span>]):</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    m.run(days <span class="op">-</span> m.t, dt<span class="op">=</span><span class="dv">5</span>)</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    show_map(m, <span class="st">"Sw"</span>, ax<span class="op">=</span>ax, title<span class="op">=</span><span class="ss">f"</span><span class="sc">{</span>days<span class="sc">}</span><span class="ss"> сут"</span>, vmin<span class="op">=</span><span class="fl">0.2</span>, vmax<span class="op">=</span><span class="fl">0.75</span>)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>m.report()</span></code></pre></div><button title="Скопировать текст" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Поменяйте <code>mu_o=5.0</code> на <code>1.0</code> и на <code>22.0</code>. При вязкой нефти фронт «размазывается»: в долях закачанного порового объёма вода приходит к добывающей раньше, а обводнённость потом растёт медленно и долго (почему – в <a href="03-twophase.html" class="quarto-xref"><span>Глава 3</span></a>). Заметьте и другое: при вязкой нефти закачка за то же время втрое-вшестеро меньше – смесь в пласте малоподвижна. Сравнивайте варианты по закачанному объёму: <code>m.wells[0]["cum_inj"] / m.Vp.sum()</code>.</p>
+</section>
+<section id="один-шаг-impes-целиком" class="level2" data-number="4.10">
+<h2 data-number="4.10" class="anchored" data-anchor-id="один-шаг-impes-целиком"><span class="header-section-number">4.10</span> Один шаг IMPES целиком</h2>
+<p><strong>IMPES</strong> – IMplicit Pressure, Explicit Saturation: давление неявно, насыщенность явно. Так выглядит цикл <code>advance()</code> в ядре:</p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart TD
+  A["Оборудование задаёт Pwf&lt;br/&gt;(ЭЦН, штуцер, КНС – узловой анализ)"] --&gt; B["Проводимости граней T&lt;br/&gt;(k, λt, разломы)"]
+  B --&gt; C["Давление неявно на интервал ≤ 1 сут&lt;br/&gt;(CG, тёплый старт)"]
+  C --&gt; D{"Есть интервалы ствола&lt;br/&gt;с перетоком?"}
+  D -- да --&gt; E["Закрыть их как обратным клапаном&lt;br/&gt;и пересчитать давление"] --&gt; C
+  D -- нет --&gt; F["Потоки через грани u = T·ΔP&lt;br/&gt;дебиты скважин по Писману"]
+  F --&gt; G["Перенос воды субшагами CFL&lt;br/&gt;ровно на тот же интервал"]
+  G --&gt; H["Экономика за шаг, история"]
+  H --&gt; A
+</pre>
+</div>
+<p></p><figcaption> Шаг расчёта в ядре игры (функция advance)</figcaption> </figure><p></p>
+</div>
+</div>
+</div>
+<p>Важная деталь, найденная в истории разработки игры: давление решается <strong>на интервал вперёд</strong>, и потоки по этому решению применяются <strong>ровно на этот же интервал</strong>. Если взять разные интервалы, нарушается баланс «отбор − закачка = упругий запас», и у скважин на пределе ЭЦН появлялось до 15 % «лишней» нефти. Самотест ядра (<code>node tests/selftest.js</code>) проверяет такие балансы.</p>
+</section>
+<section id="проверки-модели" class="level2" data-number="4.11">
+<h2 data-number="4.11" class="anchored" data-anchor-id="проверки-модели"><span class="header-section-number">4.11</span> Проверки модели</h2>
+<p>Как убедиться, что симулятор считает правильно? Так же, как в промышленных пакетах, – балансами и аналитикой:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Проверка</th>
+<th>Что сравнивается</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>упругий баланс</td>
+<td>чистый отбор ≈ <span class="math inline">\sum V_p c_t (P_0-P)</span> в закрытой системе без закачки</td>
+</tr>
+<tr class="even">
+<td>баланс воды</td>
+<td>закачка = прирост воды в пласте + добыча воды (в <code>minisim</code> выше – до 10⁻¹⁰)</td>
+</tr>
+<tr class="odd">
+<td>продуктивность ВС</td>
+<td>против формулы Дитца</td>
+</tr>
+<tr class="even">
+<td>ГС, ГРП</td>
+<td>против Джоши и Cinco-Ley</td>
+</tr>
+<tr class="odd">
+<td>время прорыва</td>
+<td>в 0,5–2,5 раза от оценки по поровому объёму</td>
+</tr>
+</tbody>
+</table>
+<p>Всего в ядре 100 автоматических проверок – подробнее в <a href="08-inside.html" class="quarto-xref"><span>Глава 8</span></a>.</p>
+</section>
+<section id="вопросы-и-задания" class="level2" data-number="4.12">
+<h2 data-number="4.12" class="anchored" data-anchor-id="вопросы-и-задания"><span class="header-section-number">4.12</span> Вопросы и задания</h2>
+<ol type="1">
+<li>Почему матрица уравнения давления симметрична? Что нарушило бы симметрию?</li>
+<li>В примере 1 поставьте нагнетательную <strong>за</strong> разломом (например, <code>(38, 40)</code>). Как изменится карта?</li>
+<li>Разлом с <code>trans=0</code> полностью отрезает блок. Есть ли у блока в примере 1 «обход» по краю? Проверьте, удлинив ломаную.</li>
+<li>Уменьшите <code>dt</code> в <code>m.run(30, dt=5)</code> до 1 сут. Меняется ли результат? Почему почти нет?</li>
+<li>На ядре игры: при каком F-1 (×0,1 или ×0,3) Д-1 ещё «чувствует» закачку? Как это увидеть по ГДИС?</li>
+</ol>
+
+
+</section>
+
+</main> <!-- /main -->
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W3sibWV0aG9kTmFtZSI6ImludGVycHJldCIsImNlbGxOYW1lIjoib2pzLWNlbGwtMSIsImlubGluZSI6ZmFsc2UsInNvdXJjZSI6Ii8vINC/0L7QtNC60LvRjtGH0LXQvdC40LUg0Y/QtNGA0LAg0LjQs9GA0YsgKNGC0L7RgiDQttC1INC60L7QtCwg0YfRgtC+INCyIGluZGV4Lmh0bWwpINC4INC/0L7QvNC+0YnQvdC40LrQvtCyINC80LXRgtC+0LTQuNGH0LrQuCAoYXNzZXRzL2pzL25lZnQuanMpXG5uZWZ0ID0ge1xuICBjb25zdCBtID0gYXdhaXQgaW1wb3J0KG5ldyBVUkwoXCJhc3NldHMvanMvbmVmdC5qc1wiLCBkb2N1bWVudC5iYXNlVVJJKS5ocmVmKTtcbiAgYXdhaXQgbS5yZWFkeSgpO1xuICByZXR1cm4gbTtcbn1cbmNvcmUgPSBuZWZ0LmNvcmUoKVxuIn0seyJtZXRob2ROYW1lIjoiaW50ZXJwcmV0IiwiY2VsbE5hbWUiOiJvanMtY2VsbC0yIiwiaW5saW5lIjpmYWxzZSwic291cmNlIjoidmlld29mIGsxID0gSW5wdXRzLnJhbmdlKFswLjEsIDEwMDBdLCB7dmFsdWU6IDUwMCwgc3RlcDogMC4xLCBsYWJlbDogXCJrINGP0YfQtdC50LrQuCAxLCDQvNCUXCIsIHRyYW5zZm9ybTogTWF0aC5sb2d9KVxudmlld29mIGsyID0gSW5wdXRzLnJhbmdlKFswLjEsIDEwMDBdLCB7dmFsdWU6IDEsIHN0ZXA6IDAuMSwgbGFiZWw6IFwiayDRj9GH0LXQudC60LggMiwg0LzQlFwiLCB0cmFuc2Zvcm06IE1hdGgubG9nfSlcbiJ9LHsibWV0aG9kTmFtZSI6ImludGVycHJldCIsImNlbGxOYW1lIjoib2pzLWNlbGwtMyIsImlubGluZSI6ZmFsc2UsInNvdXJjZSI6Imh0bWxgPGRpdiBjbGFzcz1cIm5lZnQta3BpXCI+XG4gIDxkaXY+PGI+JHsoKGsxICsgazIpIC8gMikudG9GaXhlZCgxKX0g0LzQlDwvYj48c3Bhbj7QsNGA0LjRhNC80LXRgtC40YfQtdGB0LrQvtC1INGB0YDQtdC00L3QtdC1PC9zcGFuPjwvZGl2PlxuICA8ZGl2PjxiPiR7KDIgKiBrMSAqIGsyIC8gKGsxICsgazIpKS50b0ZpeGVkKDIpfSDQvNCUPC9iPjxzcGFuPtCz0LDRgNC80L7QvdC40YfQtdGB0LrQvtC1ICjQsiDQuNCz0YDQtSk8L3NwYW4+PC9kaXY+XG4gIDxkaXY+PGI+JHtNYXRoLnNxcnQoazEgKiBrMikudG9GaXhlZCgxKX0g0LzQlDwvYj48c3Bhbj7Qs9C10L7QvNC10YLRgNC40YfQtdGB0LrQvtC1PC9zcGFuPjwvZGl2PlxuPC9kaXY+YFxuIn0seyJtZXRob2ROYW1lIjoiaW50ZXJwcmV0IiwiY2VsbE5hbWUiOiJvanMtY2VsbC00IiwiaW5saW5lIjpmYWxzZSwic291cmNlIjoidmlld29mIGYxID0gSW5wdXRzLnJhZGlvKG5ldyBNYXAoW1tcItC30LDQv9C10YfQsNGC0LDQvSAow5cwKVwiLCAwXSwgW1wiw5cwLDFcIiwgMC4xXSwgW1wiw5cwLDNcIiwgMC4zXSwgW1wi0L/RgNC+0L3QuNGG0LDQtdC8ICjDlzEpXCIsIDFdXSksIHtsYWJlbDogXCLQoNCw0LfQu9C+0LwgRi0xXCIsIHZhbHVlOiAwfSlcbnZpZXdvZiBnYXBzID0gSW5wdXRzLnRvZ2dsZSh7bGFiZWw6IFwi0KnQtdC70Lgg0LIg0YDQsNC30LvQvtC80LUgKNGB0YLRgNC+0LPQsNGPINC/0YDQvtCy0LXRgNC60LAsINC60LDQuiDQsiDRj9C00YDQtSDQtNC+INC40YHQv9GA0LDQstC70LXQvdC40Y8pXCIsIHZhbHVlOiBmYWxzZX0pXG4ifSx7Im1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJjZWxsTmFtZSI6Im9qcy1jZWxsLTUiLCJpbmxpbmUiOmZhbHNlLCJzb3VyY2UiOiJmYXVsdFJ1biA9IHtcbiAgY29uc3QgZiA9IG5lZnQuZmllbGQoeyBzY2VuYXJpbzogXCJiYXNlXCIsIGZhdWx0VHJhbnM6IHsgXCJGLTFcIjogZjEgfSwgc3RyaWN0R2FwczogZ2FwcyB9KTtcbiAgZi5kcmlsbCh7IHg6IDEzODAsIHk6IDExMDAsIHR5cGU6IFwicHJvZFwiIH0pOyAgICAgICAgICAgIC8vINCULTE6INCy0L7RgdGC0L7Rh9C90YvQuSDQsdC70L7Quiwg0LfQsCBGLTFcbiAgZi5kcmlsbCh7IHg6IDkwMCwgIHk6IDk0MCwgIHR5cGU6IFwicHJvZFwiIH0pOyAgICAgICAgICAgIC8vINCULTI6INGB0LLQvtC0XG4gIGYuZHJpbGwoeyB4OiA3ODAsICB5OiA3MDAsICB0eXBlOiBcImlualwiLCBjaG9rZTogMTIgfSk7ICAvLyDQnS0xOiDRhtC10L3RgtGA0LDQu9GM0L3Ri9C5INCx0LvQvtC6XG4gIGNvbnN0IGZyYW1lcyA9IFtdO1xuICBsZXQgbGFzdCA9IDA7XG4gIGZvciBhd2FpdCAoY29uc3Qgcm93IG9mIGYucnVuKDMsIHsgc3RlcDogMzAgfSkpIHtcbiAgICBmcmFtZXMucHVzaCh7IHQ6IHJvdy50LCBQOiBGbG9hdDY0QXJyYXkuZnJvbShmLnNpbS5QKSwgZDE6IGYud2VsbChcItCULTFcIikucSwgZDI6IGYud2VsbChcItCULTJcIikucSwgbjE6IGYud2VsbChcItCdLTFcIikucSB9KTtcbiAgICBpZiAocGVyZm9ybWFuY2Uubm93KCkgLSBsYXN0ID4gMjUwKSB7IGxhc3QgPSBwZXJmb3JtYW5jZS5ub3coKTsgeWllbGQgeyBmLCBmcmFtZXMsIGRvbmU6IGZhbHNlIH07IH0gIC8vINC/0YDQvtCz0YDQtdGB0YEgNCDRgNCw0LfQsCDQsiDRgdC10LrRg9C90LTRg1xuICB9XG4gIHlpZWxkIHsgZiwgZnJhbWVzLCBkb25lOiB0cnVlIH07XG59XG4ifSx7Im1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJjZWxsTmFtZSI6Im9qcy1jZWxsLTYiLCJpbmxpbmUiOmZhbHNlLCJzb3VyY2UiOiJ2aWV3b2YgdGRheSA9IElucHV0cy5yYW5nZShbMzAsIDEwOTVdLCB7c3RlcDogMzAsIHZhbHVlOiAxMDk1LCBsYWJlbDogXCLQnNC+0LzQtdC90YIg0LLRgNC10LzQtdC90LgsINGB0YPRglwifSlcbiJ9LHsibWV0aG9kTmFtZSI6ImludGVycHJldCIsImNlbGxOYW1lIjoib2pzLWNlbGwtNyIsImlubGluZSI6ZmFsc2UsInNvdXJjZSI6IntcbiAgY29uc3QgeyBmLCBmcmFtZXMsIGRvbmUgfSA9IGZhdWx0UnVuO1xuICBjb25zdCBmciA9IGZyYW1lcy5yZWR1Y2UoKGEsIGIpID0+IE1hdGguYWJzKGIudCAtIHRkYXkpIDwgTWF0aC5hYnMoYS50IC0gdGRheSkgPyBiIDogYSwgZnJhbWVzWzBdKTtcbiAgY29uc3Qgcm93cyA9IGZyYW1lcy5tYXAoKHgpID0+ICh7IHllYXI6IHgudCAvIDM2NSwgXCLQlC0xICjQt9CwIEYtMSlcIjogeC5kMSwgXCLQlC0yICjRgdCy0L7QtClcIjogeC5kMiwgXCLQnS0xICjQt9Cw0LrQsNGH0LrQsClcIjogeC5uMSB9KSk7XG4gIGNvbnN0IHNlcmllcyA9IFtcItCULTEgKNC30LAgRi0xKVwiLCBcItCULTIgKNGB0LLQvtC0KVwiLCBcItCdLTEgKNC30LDQutCw0YfQutCwKVwiXS5tYXAoKG4pID0+ICh7IG5hbWU6IG4sIHJvd3M6IHJvd3MubWFwKChyKSA9PiAoeyB5ZWFyOiByLnllYXIsIHE6IHJbbl0gfSkpIH0pKTtcbiAgcmV0dXJuIGh0bWxgPGRpdiBjbGFzcz1cIm5lZnQtcm93XCI+XG4gICAgPGRpdj4ke25lZnQubWFwKGYsIHsgbGF5ZXI6IFwiUFwiLCBkYXRhOiBmci5QLCBkb21haW46IFs2MCwgZi5yLlAwICsgNDBdLCB0aXRsZTogYNCU0LDQstC70LXQvdC40LUg0L3QsCAke01hdGgucm91bmQoZnIudCl9INGB0YPRgmAgfSl9PC9kaXY+XG4gICAgPGRpdj4ke2RvbmUgPyBcIlwiIDogbmVmdC5wcm9ncmVzcyhg0LjQtNGR0YIg0YDQsNGB0YfRkdGCOiAke01hdGgucm91bmQoZnJhbWVzLmF0KC0xKS50KX0g0LjQtyAxMDk1INGB0YPRgiDCtyAke25lZnQuZW5naW5lSW5mbygpfWAsIGZyYW1lcy5hdCgtMSkudCAvIDEwOTUpfVxuICAgICAgJHtuZWZ0LmxpbmVzKHNlcmllcywgeyB5OiBcInFcIiwgbGFiZWw6IFwi0LTQtdCx0LjRgiDQttC40LTQutC+0YHRgtC4IC8g0LfQsNC60LDRh9C60LAsINC8wrMv0YHRg9GCXCIsIHdpZHRoOiA0MjAsIGhlaWdodDogMzAwIH0pfTwvZGl2PlxuICA8L2Rpdj5gXG59XG4ifSx7Im1ldGhvZE5hbWUiOiJpbnRlcnByZXRRdWlldCIsInNvdXJjZSI6InNoaW55SW5wdXQoJ2sxJykifSx7Im1ldGhvZE5hbWUiOiJpbnRlcnByZXRRdWlldCIsInNvdXJjZSI6InNoaW55SW5wdXQoJ2syJykifSx7Im1ldGhvZE5hbWUiOiJpbnRlcnByZXRRdWlldCIsInNvdXJjZSI6InNoaW55SW5wdXQoJ2YxJykifSx7Im1ldGhvZE5hbWUiOiJpbnRlcnByZXRRdWlldCIsInNvdXJjZSI6InNoaW55SW5wdXQoJ2dhcHMnKSJ9LHsibWV0aG9kTmFtZSI6ImludGVycHJldFF1aWV0Iiwic291cmNlIjoic2hpbnlJbnB1dCgndGRheScpIn1dfQ==
+</script>
+<script type="module">
+if (window.location.protocol === "file:") { alert("The OJS runtime does not work with file:// URLs. Please use a web server to view this document."); }
+window._ojs.paths.runtimeToDoc = "../..";
+window._ojs.paths.runtimeToRoot = "../..";
+window._ojs.paths.docToRoot = "";
+window._ojs.selfContained = false;
+window._ojs.runtime.interpretFromScriptTags();
+</script>
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Скопировано");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Скопировано");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./03-twophase.html" class="pagination-link" aria-label="Нефть и вода вместе: ОФП и вытеснение">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Нефть и вода вместе: ОФП и вытеснение</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./05-wells.html" class="pagination-link" aria-label="Скважины, заканчивание и оборудование">
+        <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Скважины, заканчивание и оборудование</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

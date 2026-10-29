@@ -1,0 +1,27 @@
+/* живые ячейки кода и прогресс расчёта */
+.live-cell { border: 1px solid var(--neft-border, #dddbd3); border-radius: 8px; margin: 1rem 0 1.4rem; overflow: hidden; background: var(--neft-surface, #f4f3ef); }
+.live-bar { display: flex; align-items: center; gap: .5rem; padding: .4rem .6rem; border-bottom: 1px solid var(--neft-border, #dddbd3); flex-wrap: wrap; }
+.live-lang { font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--neft-muted, #52514e); margin-right: .4rem; }
+.live-bar .btn { padding: .12rem .6rem; font-size: .85rem; }
+.live-status { font-size: .82rem; color: var(--neft-muted, #52514e); margin-left: auto; }
+.live-code { display: block; width: 100%; min-height: 4rem; border: 0; resize: vertical; padding: .7rem .9rem; font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+  font-size: .86rem; line-height: 1.45; tab-size: 4; white-space: pre; overflow-x: auto; background: transparent; color: inherit; outline: none; }
+.live-code:focus { box-shadow: inset 3px 0 0 var(--neft-blue, #2a78d6); }
+.live-out { border-top: 1px dashed var(--neft-border, #dddbd3); padding: .6rem .9rem; background: var(--bs-body-bg, #fff); }
+.live-text { margin: 0 0 .5rem; padding: 0; background: none; border: 0; font-size: .85rem; white-space: pre-wrap; }
+.live-err { color: #c0392b; }
+.live-fig { max-width: 100%; display: block; margin: .3rem 0; }
+.live-out svg { max-width: 100%; height: auto; }
+.neft-progress { margin: .4rem 0; }
+.neft-progress .bar { height: 6px; background: var(--neft-border, #dddbd3); border-radius: 3px; overflow: hidden; }
+.neft-progress .bar span { display: block; height: 100%; background: var(--neft-blue, #2a78d6); transition: width .2s; }
+.neft-progress .txt { font-size: .82rem; color: var(--neft-muted, #52514e); margin-top: .2rem; }
+.neft-table table { margin: .5rem 0; }
+.neft-table td, .neft-table th { white-space: nowrap; text-align: right; }
+.neft-table th { white-space: normal; vertical-align: bottom; min-width: 4.5em; }
+.neft-table td:first-child, .neft-table th:first-child { text-align: left; }
+.neft-table { overflow-x: auto; }
+/* широкие формулы прокручиваются внутри себя, а не растягивают страницу */
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: .2rem 0; }
+.katex-display > .katex { max-width: 100%; }
+.katex .katex-mathml { position: absolute; clip: rect(1px, 1px, 1px, 1px); overflow: hidden; width: 1px; height: 1px; }

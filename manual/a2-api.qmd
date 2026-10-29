@@ -1,0 +1,119 @@
+# Справочник для живых ячеек {#sec-api}
+
+## JavaScript-ячейки (ядро игры)
+
+В ячейке `{.live-js}` доступны:
+
+| Имя | Что это |
+|---|---|
+| `neft` | помощники пособия (`assets/js/neft.js`) |
+| `core` | ядро игры `OILCORE` – тот же `#sim-core`, что в `index.html` (@sec-inside) |
+| `Plot` | библиотека графиков Observable Plot |
+| `show(el)` | вывести элемент (график, карту) под ячейкой |
+| `print(...)` | вывести текст |
+| `return x` | вывести значение (объект – как JSON) |
+
+Код выполняется как асинхронная функция: можно писать `await`.
+
+### Объект разработки
+
+```js
+const f = neft.field({
+  scenario: "bv8",      // base | bv8 | av12 | yuv1 | yuk1011 | ach | bb
+  seed: 0,              // 0 – канонический объект; 1…999999 – объект по сиду
+  grid: 50,             // 25 | 40 | 50 | 80 | 100
+  pKNS: 130, pGather: 12,         // давление КНС и сбора, атм
+  faultTrans: { "F-1": 0.3 },     // подменить проводимость разломов (опыт)
+  strictGaps: false,              // щели в разломах, как в ядре до исправления (см. главу 4)
+  mu_o: null,                     // подменить вязкость нефти, сП (опыт)
+  patch: { price_oil: 15000 },    // свои цены
+});
+f.r       // пласт: k, kTrue, zTop, hOil, Sw0, poreVol, faults, explore, owc, P0, …
+f.sim     // состояние: P, Sw, wells, t, economy
+```
+
+Координаты – в метрах от юго-западного угла участка 2000×2000 м: `x` – на восток, `y` – на север.
+`f.cell(x, y)` – индекс ячейки, `f.xy(cell)` – центр ячейки.
+
+### Скважины
+
+```js
+const w = f.drill({
+  x: 900, y: 1000,                // или cell: 1234
+  type: "prod",                   // prod | inj
+  kind: "v",                      // v | frac | hs | mgrp
+  L: 600, az: 90,                 // длина ГС, м; азимут ствола или трещины, ° от севера
+  xf: 80, n: 5,                   // полудлина трещины 40/80/120 м; число стадий МГРП
+  mode: "esp", pump: "250", freq: 50,   // добывающая: esp | flow (choke) | bhp (pwf)
+  choke: 12,                      // штуцер, мм (нагнетательная: КНС через штуцер)
+});
+f.setMode(w, { pump: "500", freq: 55 });   // смена насоса (платно)
+f.convert(w);                               // перевод добывающая ⇄ нагнетательная (5 млн руб)
+f.stop(w); f.start(w);                      // остановить / запустить
+f.well("Д-1");                              // найти по имени
+```
+
+Стоимость бурения, ГРП, МГРП, ЭЦН и перевода списывается так же, как в игре.
+
+### Расчёт и результаты
+
+```js
+await f.runAll(3);                               // 3 года
+for await (const row of f.run(1, { step: 30 })) { /* шаг 30 сут */ }
+f.rows       // по шагам: t, year, avgP, oil_td, liq, inj, wc, cumOil_t, kin, money
+f.snaps      // карты P и Sw на начало и конец каждого года
+f.stats()    // сводка + npv (ЧДД 10 %, млн руб) + yearly (годовые ряды)
+f.wellTable()
+```
+
+### Графики и карты
+
+```js
+neft.map(f, { layer: "P" })      // P | Sw | k | hOil | zTop; year: 2 – снимок на конец 2-го года
+neft.map(f, { layer: "k", explore: true, wells: false })
+neft.lines([{ name: "мой", rows: f.rows }], { y: "oil_td", label: "нефть, т/сут" })
+neft.logPlot(f, cell).el          // каротаж в ячейке
+neft.grid(values, nx, { label })  // карта любого массива
+```
+
+### Сравнение вариантов
+
+```js
+const variants = [
+  ["вариант A", () => { const f = neft.field({ scenario: "bv8" }); f.drill({ x: 900, y: 1000 }); return f; }],
+  ["вариант B", () => { const f = neft.field({ scenario: "bv8" }); f.drill({ x: 900, y: 1000, pump: "800" }); return f; }],
+];
+let last;
+for await (const st of neft.compare(variants, 3)) last = st;
+show(neft.report(last, { layer: "Sw" }));
+```
+
+### Ядро напрямую
+
+Всё, что экспортирует игра, доступно через `core`: `core.advance(f.sim, 30)`, `core.fw(Sw, f.r)`,
+`core.pressureBuildup(f.sim, w, 14)`, `core.scoreDevelopment(...)`, `core.POLICIES` и т. д. (@sec-inside).
+
+## Python-ячейки (minisim)
+
+В ячейке `{.live-py}` работает CPython в браузере (Pyodide 0.26) с numpy и matplotlib. Все фигуры matplotlib выводятся
+под ячейкой автоматически. Учебный модуль `minisim` (`assets/py/minisim.py`):
+
+```python
+from minisim import *
+
+m = Model(nx=50, ny=50, dx=40, h=10, phi=0.2, k=100.0,   # k – число или массив [ny, nx], мД
+          mu_o=5, mu_w=1, Swc=0.2, Sor=0.25, ct=1e-4, P0=250)
+m.add_fault([(24.5, -2), (26.5, 20), (25, 52)], trans=0.0)   # ломаная в координатах ячеек (i, j)
+m.add_well(15, 25, "inj", pwf=320)                           # (i, j), забойное давление, атм
+m.add_well(35, 25, "prod", pwf=150, skin=2)
+
+m.solve_pressure(dt=30)       # один неявный шаг давления (dt=None – стационарное решение)
+m.run(365, dt=5)              # IMPES: давление каждые 5 сут, вода – субшагами CFL
+m.report()                    # дебиты и накопленные
+show_map(m, "P")              # карта: "P" | "Sw" | "k" | любой массив
+m.P, m.Sw, m.k, m.wells       # поля и скважины
+krw(Sw), kro(Sw), fw(Sw, mu_o, mu_w, Swc, Sor), peaceman_wi(k, h, dx, skin=0)
+```
+
+Массивы полей – `[j, i]`: строка `j` (север сверху), столбец `i` (восток вправо). Переменные сохраняются между
+ячейками одной страницы.
