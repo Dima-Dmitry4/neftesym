@@ -155,13 +155,14 @@
   .tb-right { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
   #year-bar { width:90px; height:6px; background:var(--row); border-radius:3px; overflow:hidden; }
   #year-bar i { display:block; height:100%; width:0; background:var(--accent); }
-  #gamemain { display:flex; gap:14px; padding:12px 14px; flex:1; min-height:0; }
-  #leftcol { flex:0 0 650px; display:flex; flex-direction:column; min-height:0; overflow-y:auto; }
-  #rightcol { flex:1; min-width:560px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+  #gamemain { display:flex; gap:14px; padding:12px 14px; flex:1; min-height:0; overflow:hidden; }
+  #leftcol { flex:0 1 650px; min-width:440px; display:flex; flex-direction:column; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+  #rightcol { flex:1; min-width:560px; overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column; gap:10px; }
+  #seis-row { margin-bottom:8px; } #seis-row button { width:100%; padding:8px 12px; font-size:14px; }
   .layerbar { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
   .layerbar .lbl { color:var(--muted); margin-right:2px; }
   .layerbar button { padding:4px 10px; font-size:13px; white-space:nowrap; }
-  #map { width:640px; height:640px; background:#fff; border:1px solid var(--line); border-radius:8px; }
+  #map { width:100%; flex:1 1 auto; min-height:300px; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   #owc-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:8px 0; }
   #owc-bar input[type=number] { width:80px; }
   #owc-bar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
@@ -499,6 +500,7 @@
         <span class="lbl">Слой:</span>
         <span id="layers" class="tb-group"></span>
         <span class="tb-right">
+          <button id="tool-fit" title="Вернуть карту целиком (то же – двойной щелчок по карте). Колесо мыши – приближение, перетаскивание – сдвиг карты">⤢ Вся карта</button>
           <button id="tool-ruler" data-tip="Линейка: зажмите кнопку мыши на карте и протяните - покажет расстояние, азимут и смещения. Esc или повторный клик по кнопке убирает линию.">📏 Линейка</button>
           <button id="tool-expl" class="lvl2-only" data-tip="@expl">◆ Разведочная</button>
           <span id="drill-opts" class="tb-group" title="Заканчивание новой скважины: вертикальная (ВС) или горизонтальная (ГС) – длина и направление ствола">
@@ -511,6 +513,7 @@
           <button id="tool-well" data-tip="@drill">⛏ Скважина</button>
         </span>
       </div>
+      <div id="seis-row" class="hidden"></div>
       <div id="map"></div>
       <div id="map-time" class="row hidden" style="margin-top:6px">
         <span class="sub">Время:</span><button id="mt-prev" title="Предыдущий год">◀</button>
@@ -3480,8 +3483,10 @@ if (typeof Plotly === "undefined") {
 const PAL = ["#636efa", "#EF553B", "#00cc96", "#ab63fa", "#FFA15A", "#19d3f3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52"];
 const TXT = "#2a3f5f", PLOTBG = "#E5ECF6", FONT = "Open Sans, verdana, arial, sans-serif";
 const CFG = { displayModeBar: false, responsive: true };
+const MAPCFG = { ...CFG, scrollZoom: true, doubleClick: false };
 let DX = C.GRID.dx, NX = C.GRID.nx; // меняются при выборе размера сетки
-function setGridDims(n) { NX = n; DX = (C.GRID.nx * C.GRID.dx) / n; xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX); }
+function fitMap() { G.mapView = null; if (G.sim) renderMap(); }
+function setGridDims(n) { NX = n; if (typeof G !== "undefined" && G) G.mapView = null; DX = (C.GRID.nx * C.GRID.dx) / n; xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX); }
 
 // базовый макет в духе шаблона plotly: серо-голубое поле, белая сетка
 function lay(o = {}) {
@@ -3601,11 +3606,14 @@ function renderLayerBar() {
     sel.addEventListener("change", () => { G.bubPeriod = sel.value; G.dirty = true; renderMap(); });
     G.bubYears = years; box.appendChild(sel);
   }
-  if (isL2() && !G.seis) {
+  // кнопка сейсмики – в отдельной строке над картой на всю ширину, чтобы всегда была видна
+  const sr = $("seis-row"), showSeis = isL2() && !G.seis;
+  sr.classList.toggle("hidden", !showSeis); sr.innerHTML = "";
+  if (showSeis) {
     const b = document.createElement("button");
     b.className = "primary"; b.textContent = `🛰 Заказать сейсмику 3D (${(G.params.seis_cost / 1e6).toFixed(0)} млн руб)`;
     b.addEventListener("click", buySeismic);
-    box.appendChild(b);
+    sr.appendChild(b);
   }
 }
 let xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX);
@@ -3711,13 +3719,21 @@ function renderMap() {
     ? [{ xref: "paper", yref: "paper", x: 0.99, y: 0.01, xanchor: "right", yanchor: "bottom", showarrow: false, align: "left", bgcolor: "rgba(255,255,255,.85)", bordercolor: "#dfe6f1", borderwidth: 1, font: { size: 11 },
          text: "ВНК: <b>–·–·–</b> внешний контур (по кровле)<br><b>–··–··–</b> внутренний контур (по подошве)<br>Между ними водонефтяная зона" }] : [];
   const snapNote = G.snapIdx !== null && G.snaps[G.snapIdx] ? [{ xref: "paper", yref: "paper", x: 0.01, y: 0.99, xanchor: "left", yanchor: "top", showarrow: false, bgcolor: "rgba(255,255,255,.85)", text: G.snaps[G.snapIdx].t === 0 ? "<b>Начало разработки</b>" : `<b>Конец года ${Math.round(G.snaps[G.snapIdx].t / 365)}</b>` }] : [];
-  const layout = lay({ height: 640, margin: { l: 56, r: 10, t: 10, b: 44 }, dragmode: false, hovermode: "closest", annotations: [...snapNote, ...owcKey, ...(bub ? [bub.note] : []), ...rulerLayout().annotations], shapes: [...(bub ? bub.shapes : []), ...rulerLayout().shapes],
-    xaxis: { range: [0, NX * DX], title: { text: "Восток, м" }, constrain: "domain" },
-    yaxis: { range: [NX * DX, 0], title: { text: "Север, м" }, scaleanchor: "x" } });
+  // вид карты (зум и сдвиг) запоминается и не сбрасывается перерисовкой; размер – по контейнеру
+  const view = G.mapView || { x: [0, NX * DX], y: [NX * DX, 0] };
+  const layout = lay({ autosize: true, margin: { l: 56, r: 10, t: 10, b: 44 }, dragmode: "pan", hovermode: "closest", annotations: [...snapNote, ...owcKey, ...(bub ? [bub.note] : []), ...rulerLayout().annotations], shapes: [...(bub ? bub.shapes : []), ...rulerLayout().shapes],
+    xaxis: { range: view.x, title: { text: "Восток, м" }, constrain: "domain" },
+    yaxis: { range: view.y, title: { text: "Север, м" }, scaleanchor: "x" } });
   G.mapAnn = [...snapNote, ...owcKey, ...(bub ? [bub.note] : [])]; G.mapShapes = bub ? bub.shapes : [];
-  Plotly.react("map", data, layout, CFG);
+  Plotly.react("map", data, layout, MAPCFG);
   if (!renderMap.bound) {
     renderMap.bound = true;
+    $("map").on("plotly_relayout", (ev) => {
+      if (ev["xaxis.range[0]"] !== undefined && ev["yaxis.range[0]"] !== undefined)
+        G.mapView = { x: [ev["xaxis.range[0]"], ev["xaxis.range[1]"]], y: [ev["yaxis.range[0]"], ev["yaxis.range[1]"]] };
+      else if (ev["xaxis.autorange"] || ev["yaxis.autorange"]) G.mapView = null;
+    });
+    $("map").addEventListener("dblclick", fitMap);
     $("map").on("plotly_click", (ev) => { const p = ev.points && ev.points[0]; if (p) onMapClick(Math.floor(p.x / DX), Math.floor(p.y / DX)); });
     $("map").on("plotly_hover", (ev) => {
       const p = ev.points && ev.points[0], kv = $("drill-kind").value;
@@ -5281,6 +5297,7 @@ function startGame() {
 // ---------------- инициализация ----------------
 initSettings();
 for (const [id, tool] of [["tool-well", "well"], ["tool-expl", "expl"], ["tool-ruler", "ruler"]]) $(id).addEventListener("click", () => setTool(G.tool === tool ? null : tool));
+$("tool-fit").addEventListener("click", fitMap);
 $("sp-pause").addEventListener("click", () => setSpeed(0)); $("sp-1").addEventListener("click", () => setSpeed(2));
 $("sp-10").addEventListener("click", () => setSpeed(20)); $("sp-50").addEventListener("click", () => setSpeed(100));
 $("btn-year").addEventListener("click", startYear);
