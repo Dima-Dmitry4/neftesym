@@ -1229,7 +1229,7 @@ function createSim(reservoir, params) {
                      on: true,             // работает / остановлена
                      mode: "bhp",          // bhp | flow (фонтан, штуцер) | esp (ЭЦН) | choke (КНС, штуцер)
                      choke: type === "prod" ? 12 : 8, // диаметр штуцера, мм
-                     freq: 50, hasESP: false, pump: PUMP_DEFAULT, kW: 0, eq: null,
+                     freq: 50, hasESP: false, pump: PUMP_DEFAULT, duty: 1, kW: 0, eq: null,
                      depth: r.level === 2 ? r.zTop[c] + 5 + l2Altitude(toBase(c % r.nx, r.nx / BASE_N), toBase(Math.floor(c / r.nx), r.nx / BASE_N)) : 2450,
                      cum: { oil: 0, water: 0, inj: 0 } });
   };
@@ -1440,7 +1440,7 @@ function solvePressureOnce(sim, dt) {
     for (let k = 0; k < w.perf.length; k++) {
       const pf = w.perf[k];
       if (!(pf.f > 0) || (w._xm && w._xm[k])) continue;
-      const idx = sim._rowOf[pf.cell], G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r);
+      const idx = sim._rowOf[pf.cell], G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r) * dutyOf(w);
       diag[idx] += G;
       b[idx] += G * w.pwf;
     }
@@ -1542,6 +1542,9 @@ const PUMPS = Object.fromEntries(PUMP_NOMINALS.map((Qn) => [String(Qn), {
 const PUMP_DEFAULT = "250";
 const P_MIN_INTAKE = 20, P_MAX_INJ = 340; // атм: минимальное давление на приёме; предел по давлению закачки
 // суммарная продуктивность скважины G (м³/сут/атм) и среднее по перфорации пластовое давление
+// ПКВ (периодическая кратковременная эксплуатация): ЭЦН включён долю времени duty < 1. Пока насос работает, скважина идёт на
+// рабочей точке (дебит и забойное давление по оборудованию); пласт и деньги видят среднее: дебит и мощность умножаются на duty
+const dutyOf = (w) => (w.type === "prod" && w.mode === "esp" && w.duty > 0 && w.duty < 1 ? w.duty : 1);
 function wellG(sim, w) {
   const r = sim.r; let G = 0, GP = 0;
   for (const pf of w.perf) { const g = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r); G += g; GP += g * sim.P[pf.cell]; }
@@ -1598,7 +1601,7 @@ function applyEquipment(sim) {
     if (w.on === false) { w.kW = 0; continue; }
     if (!w.mode || w.mode === "bhp") { w.kW = 0; continue; }
     const e = solveEquipment(sim, w);
-    w.eq = e; w.kW = e.kW;
+    w.eq = e; w.kW = e.kW * dutyOf(w);
     w.pwf = e.dead ? wellG(sim, w).Pc : 0.5 * w.pwf + 0.5 * e.pwf; // демпфирование от колебаний между сутками
   }
 }
@@ -1614,7 +1617,7 @@ function updateWellRates(sim) {
     const prod = w.type === "prod";
     let q = 0, qo = 0, qw = 0;
     w.perf.forEach((pf, k) => {
-      const c = pf.cell, G = w._xm && w._xm[k] ? 0 : wellIndex(r.k[c], r, w.skin) * pf.f * lambdaT(sim.Sw[c], r);
+      const c = pf.cell, G = w._xm && w._xm[k] ? 0 : wellIndex(r.k[c], r, w.skin) * pf.f * lambdaT(sim.Sw[c], r) * dutyOf(w);
       const dp = prod ? sim.P[c] - w.pwf : w.pwf - sim.P[c], qk = Math.max(0, G * dp);
       q += qk; w.pq[k] = qk;
       if (prod) {
@@ -1640,7 +1643,7 @@ function solvePressureAccel(sim, dt, wg) {
     for (let k = 0; k < w.perf.length; k++) {
       const pf = w.perf[k];
       if (!(pf.f > 0) || (w._xm && w._xm[k])) continue;
-      const G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r);
+      const G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r) * dutyOf(w);
       wd[pf.cell] += G; wr[pf.cell] += G * w.pwf;
     }
   }
@@ -2399,6 +2402,13 @@ function equipmentTests() {
   const s5 = createSim(buildReservoir2({ ...DEFAULT_PARAMS, elec_cost: 0 }), { ...DEFAULT_PARAMS, elec_cost: 0 });
   s5.addWell(s5.r.explore[2].cell, "prod", 150); s5.wells[0].mode = "esp"; advance(s5, 60);
   t.push({ name: "экономика: электроэнергия ЭЦН входит в затраты", pass: p0 > s5.economy.opex, details: `${((p0 - s5.economy.opex) / 1e3).toFixed(0)} тыс. руб за 60 сут` });
+  // ПКВ: насос включён долю времени – средние дебит и мощность в долю duty, на пласт идёт среднее
+  const mkD = (d) => { const sm = mk(); sm.addWell(sm.r.explore[2].cell, "prod", 150); const w = sm.wells[0]; w.mode = "esp"; w.hasESP = true; w.pump = "500"; w.freq = 50; w.duty = d; advance(sm, 90); return sm; };
+  const dC = mkD(1), dP = mkD(0.5), eC = dC.wells[0], eP = dP.wells[0];
+  const kwhC = dC.economy.u.kwhE / Math.max(1e-9, dC.economy.u.liq), kwhP = dP.economy.u.kwhE / Math.max(1e-9, dP.economy.u.liq);
+  t.push({ name: "ПКВ: duty = 0,5 даёт средний дебит меньше непрерывного, но больше половины (давление у скважины выше), ≈ половину мощности и меньший удельный расход энергии",
+           pass: eP.q > 0.5 * eC.q && eP.q < eC.q && eP.kW < 0.65 * eC.kW && eP.kW > 0.35 * eC.kW && kwhP < kwhC,
+           details: `q ${eP.q.toFixed(0)} / ${eC.q.toFixed(0)} м³/сут, ${eP.kW.toFixed(0)} / ${eC.kW.toFixed(0)} кВт, ${kwhP.toFixed(2)} / ${kwhC.toFixed(2)} кВт·ч/м³` });
   // согласованность IMPES: отбор жидкости − закачка = упругий запас (сетка скважин, ЭЦН-1250 на пределе по давлению на приёме;
   // до исправления шага давления невязка здесь была 15 % и вся уходила в «лишнюю» нефть); год одним вызовом = 365 суточным
   const mkV = () => { const sm = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS), R0 = sm.r;
@@ -2921,7 +2931,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  SCORE_BONUS, SEIS_WELLS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, buildupQuality, suggestWindow, buildSeismic, nearestSealFaultM,
+  dutyOf, SCORE_BONUS, SEIS_WELLS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, buildupQuality, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, gridTests, seedTests, reportTests, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
@@ -4039,7 +4049,8 @@ function wellStatus(sim, w) {
   const e = C.solveEquipment(sim, w);
   if (w.type === "prod") {
     if (e.dead) return { t: w.mode === "flow" ? "фонтан не идёт: давление пласта ниже давления столба – установите ЭЦН" : "ЭЦН не поднимает при текущей частоте/давлении", warn: true };
-    return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${w.mode === "esp" ? ` · ${e.kW.toFixed(0)} кВт · загрузка ${(e.load * 100).toFixed(0)} %${e.load < 0.6 ? " (левее оптимума: насос велик, низкий КПД)" : e.load > 1.2 ? " (правее оптимума: перегруз – нужен больший типоразмер)" : " (оптимум)"}` : ""}${e.capped ? " · упёрлись в P<sub>прием</sub> мин." : ""}`, warn: false };
+    const dy = C.dutyOf(w), pk = dy < 1 ? ` · ПКВ ${(dy * 100).toFixed(0)} % времени: в среднем ${(e.q * dy).toFixed(0)} м³/сут, ${(e.kW * dy).toFixed(0)} кВт` : "";
+    return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${pk}${w.mode === "esp" ? ` · ${e.kW.toFixed(0)} кВт · загрузка ${(e.load * 100).toFixed(0)} %${e.load < 0.6 ? " (левее оптимума: насос велик, низкий КПД)" : e.load > 1.2 ? " (правее оптимума: перегруз – нужен больший типоразмер)" : " (оптимум)"}` : ""}${e.capped ? " · упёрлись в P<sub>прием</sub> мин." : ""}`, warn: false };
   }
   if (e.dead) return { t: "закачка не идёт: давление КНС мало для этого пластового давления", warn: true };
   return { t: `прогноз ${e.q.toFixed(0)} м³/сут · P<sub>wf</sub> ${e.pwf.toFixed(0)} · P<sub>уст</sub> ${e.pwh.toFixed(0)} атм${e.capped ? " · предел давления закачки" : ""}`, warn: false };
@@ -4066,7 +4077,7 @@ function renderWellTable(force = false) {
         `<div class="wact" style="margin-top:3px"><button class="a-on ${w.on === false ? "primary" : ""}" title="${w.on === false ? "Запустить скважину" : "Остановить (отключить) скважину: нет добычи, закачки и затрат на подъём"}">${w.on === false ? "▶ Пуск" : "⏸ Стоп"}</button>` +
         (w.kind === "v" ? `<button class="a-frac" title="Гидроразрыв пласта">ГРП</button><button class="a-zbs" title="Зарезка бокового ствола">ЗБС</button>` : "") +
         ((w.kind === "hs" || w.kind === "zbs") && !w.mgrp ? `<button class="a-mgrp" title="Многостадийный ГРП на горизонтальном стволе">МГРП</button>` : "") + `</div></td>` +
-        `<td><select class="s-mode">${opts}</select>${w.type === "prod" && w.mode === "esp" ? `<select class="s-pump" title="Типоразмер насоса (замена платная)">${Object.entries(C.PUMPS).map(([k, P]) => `<option value="${k}"${k === w.pump ? " selected" : ""}>${P.name} (оптимум ${P.QB} м³/сут)${k === w.pump ? " – стоит" : ` – ${(pumpCost(k) / 1e6).toFixed(1)} млн`}</option>`).join("")}</select>` : ""}<div class="w-stat"></div></td>` +
+        `<td><select class="s-mode">${opts}</select>${w.type === "prod" && w.mode === "esp" ? `<select class="s-pump" title="Типоразмер насоса (замена платная)">${Object.entries(C.PUMPS).map(([k, P]) => `<option value="${k}"${k === w.pump ? " selected" : ""}>${P.name} (оптимум ${P.QB} м³/сут)${k === w.pump ? " – стоит" : ` – ${(pumpCost(k) / 1e6).toFixed(1)} млн`}</option>`).join("")}</select><select class="s-duty" title="Режим работы ЭЦН: непрерывный или ПКВ – периодическая кратковременная эксплуатация. В ПКВ насос включён долю времени и работает на рабочей точке, а средний дебит и расход электроэнергии пропорциональны этой доле. Больший насос на ПКВ экономит энергию, когда непрерывно он работал бы далеко от оптимума">${[[1, "непрерывно"], [0.75, "ПКВ 75 % времени"], [0.5, "ПКВ 50 % времени"], [0.33, "ПКВ 33 % времени"], [0.25, "ПКВ 25 % времени"]].map(([v, l]) => `<option value="${v}"${Math.abs((w.duty || 1) - v) < 0.01 ? " selected" : ""}>${l}</option>`).join("")}</select>` : ""}<div class="w-stat"></div></td>` +
         `<td class="w-pwf"><input type="range" min="${sp.min}" max="${sp.max}" step="${sp.step}" value="${cur}"> <span class="pwf-val">${(+cur).toFixed(sp.step < 1 ? 1 : 0)}</span> <span class="sub">${sp.unit}</span></td>` +
         `<td class="qo"></td><td class="qw"></td><td class="fw"></td><td><div class="wact">${acts}</div>${note}</td>`;
       const slider = tr.querySelector("input"), val = tr.querySelector(".pwf-val");
@@ -4076,6 +4087,8 @@ function renderWellTable(force = false) {
       });
       tr.querySelector(".s-mode").addEventListener("change", (e) => setWellMode(w, e.target.value));
       const sp2 = tr.querySelector(".s-pump"); if (sp2) sp2.addEventListener("change", (e) => setPump(w, e.target.value));
+      const sd = tr.querySelector(".s-duty");
+      if (sd) sd.addEventListener("change", (e) => { w.duty = +e.target.value; G.sim._fluxValid = false; G.dirty = true; toast(w.duty < 1 ? `${w.name}: ПКВ – насос включён ${(w.duty * 100).toFixed(0)} % времени` : `${w.name}: непрерывная работа ЭЦН`); });
       const on = (cls, fn) => { const b = tr.querySelector("." + cls); if (b) b.addEventListener("click", fn); };
       on("a-frac", () => openOps(w.name, "frac")); on("a-zbs", () => openOps(w.name, "zbs")); on("a-mgrp", () => openOps(w.name, "mgrp")); on("a-con", () => openSchem("w", w.name)); on("a-pump", () => openSchem("p", w.name)); on("a-on", () => toggleWell(w)); on("a-log", () => openLog(w.name)); on("a-pta", () => openPta(w.name)); on("a-stim", () => stimWell(w)); on("a-conv", () => convertWell(w));
       tb.appendChild(tr);
