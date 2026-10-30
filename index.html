@@ -554,6 +554,13 @@
         <button id="exp-all" class="mini">все</button><button id="exp-none" class="mini">ничего</button><button id="exp-capex" class="mini">капитальные</button><button id="exp-opex" class="mini">эксплуатационные</button></div>
       <div id="exp-chips" class="chips"></div>
       <div class="card" style="margin-top:6px; padding:4px"><div id="ex-one" style="width:100%; height:360px"></div></div>
+      <div class="row" style="margin-top:12px"><b>Расходы текущие</b><sup class="hint" tabindex="0" data-tip="Скорость расходов по статьям, млн руб в год (среднее за последние 60 суток): бурение и ГРП – всплески в момент затрат, эксплуатационные статьи – ровные уровни. Статьи включаются теми же галочками, что у накопленных расходов выше.">?</sup></div>
+      <div class="card" style="margin-top:6px; padding:4px"><div id="ex-cur" style="width:100%; height:340px"></div></div>
+      <div class="row" style="margin-top:12px"><b>Экономика скважин</b><sup class="hint" tabindex="0" data-tip="Операционный результат каждой скважины: выручка от её нефти минус подготовка жидкости, закачка, электроэнергия и обслуживание. Закупочные капзатраты (бурение, ГРП, ЭЦН) сюда не входят. Результат может быть отрицательным: например, у нагнетательных или у обводнившихся добывающих. Скважины включаются и выключаются щелчком по ним.">?</sup>
+        <select id="wn-mode"><option value="cum">накопленный, млн руб</option><option value="cur">текущий, млн руб/год</option></select>
+        <button id="wn-all" class="mini">все</button><button id="wn-none" class="mini">ничего</button><button id="wn-prod" class="mini">добывающие</button><button id="wn-inj" class="mini">нагнетательные</button></div>
+      <div id="wn-chips" class="chips"></div>
+      <div class="card" style="margin-top:6px; padding:4px"><div id="wn-one" style="width:100%; height:360px"></div></div>
       </div>
       <div id="year-card" class="card hidden">
         <div class="panel-title" style="margin-top:0">Итоги по годам</div>
@@ -1735,7 +1742,7 @@ function recordHistory(sim) {
       t: h.length + 1, avgP: sim.avgPressure(),
       cumOilM3: sim.wells.reduce((s, w) => s + w.cum.oil, 0),
       money: sim.economy ? sim.economy.balance : null, eco: sim.economy ? sim.economy.snap() : null,
-      wells: sim.wells.map((w) => ({ qo: w.qo, qw: w.qw, q: w.q, fw: w.fw, pwf: w.pwf, prod: w.type === "prod" })),
+      wells: sim.wells.map((w, i) => ({ qo: w.qo, qw: w.qw, q: w.q, fw: w.fw, pwf: w.pwf, prod: w.type === "prod", net: sim.economy ? sim.economy.wellNet(w, i) : 0 })),
     });
   }
 }
@@ -1950,7 +1957,7 @@ function createEconomy(params) {
   const eco = {
     balance: params.init_money,
     revenue: 0, opex: 0, kwh: 0, drillSpent: 0, otherSpent: 0, drills: [], // drills – сутки решений (для графика)
-    u: zeroUnits(), cu: {}, cuDrill: {}, parts: null,
+    u: zeroUnits(), byWell: {}, cu: {}, cuDrill: {}, parts: null,
     credit: params.credit_limit ?? Infinity,
     // накопленные статьи на сейчас, руб: [выручка, подготовка жидкости, водоподготовка, энергия ЭЦН, энергия КНС, обслуживание,
     // бурение, ГРП, ЭЦН, перевод в ППД, ОПЗ, ГДИС, недобор нефти при ГДИС, сейсмика, разведка] – для графиков экономики
@@ -1966,22 +1973,27 @@ function createEconomy(params) {
       eco.drillSpent = costOf(eco.cuDrill, params); eco.otherSpent = costOf(eco.cu, params) - eco.drillSpent;
       eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent - eco.otherSpent;
     },
+    // учёт идёт и по месторождению (u), и по каждой скважине (byWell[имя]) – для графика экономики скважин
     update(dt, wells) {
       const u = eco.u;
-      for (const w of wells) {
-        if (w.on === false) { u.wy += (WELL_OPEX_IDLE * dt) / 365; continue; }
+      wells.forEach((w, i) => {
+        const p = eco.byWell[w.name ?? i] || (eco.byWell[w.name ?? i] = zeroUnits());
+        const add = (k, v) => { u[k] += v; p[k] += v; };
+        if (w.on === false) { add("wy", (WELL_OPEX_IDLE * dt) / 365); return; }
         if (w.type === "prod") {
-          u.wy += dt / 365;
-          u.oil_t += w.qo * RHO_OIL * dt; u.liq += w.q * dt;     // нефть м³→т; подъём и подготовка всей жидкости
-          if (w.kW) u.kwhE += w.kW * 24 * dt;                     // электроэнергия ЭЦН
+          add("wy", dt / 365);
+          add("oil_t", w.qo * RHO_OIL * dt); add("liq", w.q * dt);     // нефть м³→т; подъём и подготовка всей жидкости
+          if (w.kW) add("kwhE", w.kW * 24 * dt);                      // электроэнергия ЭЦН
         } else {
-          u.wy += (WELL_OPEX_INJ * dt) / 365;
-          u.inj += w.q * dt;
-          if (w.kW) u.kwhK += w.kW * 24 * dt;                     // электроэнергия КНС на эту скважину
+          add("wy", (WELL_OPEX_INJ * dt) / 365);
+          add("inj", w.q * dt);
+          if (w.kW) add("kwhK", w.kW * 24 * dt);                      // электроэнергия КНС на эту скважину
         }
-      }
+      });
       eco.refresh();
     },
+    // накопленный операционный результат скважины (выручка − подготовка − энергия − обслуживание), руб; может быть отрицательным
+    wellNet(w, i) { const p = eco.byWell[w.name ?? i]; return p ? flowOf(p, {}, params).cf : 0; },
     // капитальные затраты и исследования: units – {параметр: количество}; drill – относить к бурению
     charge(day, units, drill = false) {
       addUnits(eco.cu, units); if (drill) addUnits(eco.cuDrill, units);
@@ -2409,6 +2421,9 @@ function equipmentTests() {
   t.push({ name: "ПКВ: duty = 0,5 даёт средний дебит меньше непрерывного, но больше половины (давление у скважины выше), ≈ половину мощности и меньший удельный расход энергии",
            pass: eP.q > 0.5 * eC.q && eP.q < eC.q && eP.kW < 0.65 * eC.kW && eP.kW > 0.35 * eC.kW && kwhP < kwhC,
            details: `q ${eP.q.toFixed(0)} / ${eC.q.toFixed(0)} м³/сут, ${eP.kW.toFixed(0)} / ${eC.kW.toFixed(0)} кВт, ${kwhP.toFixed(2)} / ${kwhC.toFixed(2)} кВт·ч/м³` });
+  // учёт по скважинам: сумма операционных результатов скважин = операционный результат месторождения
+  const ecP = dP.economy, sumW = dP.wells.reduce((s, w, i) => s + ecP.wellNet(w, i), 0), fieldCf = flowOf(ecP.u, {}, dP.params).cf;
+  t.push({ name: "экономика скважин: сумма по скважинам = результат месторождения", pass: Math.abs(sumW - fieldCf) < 1e-6 * Math.max(1, Math.abs(fieldCf)), details: `${(sumW / 1e6).toFixed(3)} / ${(fieldCf / 1e6).toFixed(3)} млн руб` });
   // согласованность IMPES: отбор жидкости − закачка = упругий запас (сетка скважин, ЭЦН-1250 на пределе по давлению на приёме;
   // до исправления шага давления невязка здесь была 15 % и вся уходила в «лишнюю» нефть); год одним вызовом = 365 суточным
   const mkV = () => { const sm = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS), R0 = sm.r;
@@ -2494,7 +2509,7 @@ function cloneSim(sim) {
   c.field = { ...sim.field }; c.t = sim.t; c.cumProdM3 = sim.cumProdM3;
   c.history = { days: sim.history.days.slice() };
   const e = sim.economy, d = c.economy;
-  d.u = { ...e.u }; d.cu = { ...e.cu }; d.cuDrill = { ...e.cuDrill }; d.drills = e.drills.slice(); d.refresh();
+  d.u = { ...e.u }; d.byWell = Object.fromEntries(Object.entries(e.byWell).map(([k, v]) => [k, { ...v }])); d.cu = { ...e.cu }; d.cuDrill = { ...e.cuDrill }; d.drills = e.drills.slice(); d.refresh();
   c._uE.set(sim._uE); c._uN.set(sim._uN); c._Te.set(sim._Te); c._Tn.set(sim._Tn);
   c._fluxValid = sim._fluxValid; c._lastSolveT = sim._lastSolveT; c._solveEnd = sim._solveEnd; // продолжение идентично оригиналу
   return c;
@@ -4120,7 +4135,7 @@ function buildExpChips() {
 function setExp(pred) { G.expOff = new Set(EXP_ITEMS.filter((it) => !pred(it)).map((it) => it[0])); buildExpChips(); renderEconCharts(); }
 function renderEconCharts() {
   const sim = G.sim; if (!sim || G.rightTab !== "charts") return;
-  const h = sim.history.days; if (!h.length) { Plotly.purge("ec-one"); Plotly.purge("ex-one"); return; }
+  const h = sim.history.days; if (!h.length) { Plotly.purge("ec-one"); Plotly.purge("ex-one"); Plotly.purge("ex-cur"); Plotly.purge("wn-one"); return; }
   const step = Math.max(1, Math.ceil(h.length / 320)), x = [], bal = [], rev = [], cost = [], net = [], npv = [], stack = EXP_ITEMS.map(() => []);
   const rate = (G.params.disc_rate || 10) / 100; let prevNet = 0, acc = 0;
   for (let k = 0; k < h.length; k++) {
@@ -4141,7 +4156,33 @@ function renderEconCharts() {
   const on = EXP_ITEMS.filter((it) => !G.expOff.has(it[0]));
   Plotly.react("ex-one", on.map(([id, name, col]) => ({ type: "scatter", mode: "lines", name, x, y: stack[EXP_ITEMS.findIndex((it) => it[0] === id)], stackgroup: "e", fillcolor: col + "cc", line: { color: col, width: 1 }, hovertemplate: `${name}: %{y:.0f}<extra></extra>` })),
     { ...base("Расходы с начала игры (накопительно, по статьям)", "млн руб"), height: 360, margin: { l: 64, r: 16, t: 44, b: 110 }, legend: { orientation: "h", x: 0, y: -0.3 } }, CFG);
+  // текущие показатели: прирост накопленных за окно RATE_WIN суток, пересчитанный в млн руб в год
+  const RATE_WIN = 60, xr = [], cur = EXP_ITEMS.map(() => []), wl = sim.wells, wcur = wl.map(() => []), wcum = wl.map(() => []);
+  for (let k = 0; k < h.length; k++) {
+    if (!(k % step === 0 || k === h.length - 1)) continue;
+    const e = h[k].eco, k0 = k - RATE_WIN, e0 = k0 >= 0 ? h[k0].eco : null, dtY = Math.max(1, h[k].t - (k0 >= 0 ? h[k0].t : 0)) / 365;
+    if (!e) continue;
+    xr.push(h[k].t / 365.25);
+    EXP_ITEMS.forEach(([, , , idx], j) => cur[j].push(idx.reduce((a, i) => a + e[i] - (e0 ? e0[i] : 0), 0) / dtY / 1e6));
+    wl.forEach((w, i) => { const a = h[k].wells[i], b = k0 >= 0 && h[k0].wells[i] ? h[k0].wells[i].net : 0, n = a ? a.net : null;
+      wcum[i].push(n === null ? null : n / 1e6); wcur[i].push(n === null ? null : (n - b) / dtY / 1e6); });
+  }
+  Plotly.react("ex-cur", on.map(([id, name, col]) => ({ type: "scatter", mode: "lines", name, x: xr, y: cur[EXP_ITEMS.findIndex((it) => it[0] === id)], stackgroup: "e", fillcolor: col + "cc", line: { color: col, width: 1 }, hovertemplate: `${name}: %{y:.0f}<extra></extra>` })),
+    { ...base("Расходы текущие (млн руб в год, по статьям)", "млн руб/год"), height: 340, margin: { l: 64, r: 16, t: 44, b: 110 }, legend: { orientation: "h", x: 0, y: -0.3 } }, CFG);
+  const wmode = $("wn-mode").value, wdata = wl.filter((w) => !G.wnOff.has(w.name)).map((w) => { const i = wl.indexOf(w);
+    return { type: "scatter", mode: "lines", name: w.name + (w.type === "inj" ? " (нагн.)" : ""), x: xr, y: (wmode === "cum" ? wcum : wcur)[i], connectgaps: false, line: { color: w.color, width: 2, dash: w.type === "inj" ? "dash" : "solid" }, hovertemplate: `${w.name}: %{y:.1f}<extra></extra>` }; });
+  Plotly.react("wn-one", wdata, { ...base(wmode === "cum" ? "Экономика скважин: накопленный операционный результат" : "Экономика скважин: текущий результат (среднее за 60 суток)", wmode === "cum" ? "млн руб" : "млн руб/год"),
+    height: 360, hovermode: "x unified", margin: { l: 64, r: 16, t: 44, b: 80 }, legend: { orientation: "h", x: 0, y: -0.25 } }, CFG);
+  buildWellChips();
 }
+G.wnOff = new Set();
+function buildWellChips() {
+  const box = $("wn-chips"), wl = G.sim ? G.sim.wells : [], sig = wl.map((w) => w.name + w.type + G.wnOff.has(w.name)).join("|");
+  if (box.dataset.sig === sig) return; box.dataset.sig = sig;
+  box.innerHTML = wl.map((w) => `<span class="chip${G.wnOff.has(w.name) ? "" : " on"}" data-id="${w.name}" style="--c:${w.color}"><i></i>${w.name}${w.type === "inj" ? " (нагн.)" : ""}</span>`).join("");
+  box.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { G.wnOff.has(c.dataset.id) ? G.wnOff.delete(c.dataset.id) : G.wnOff.add(c.dataset.id); renderEconCharts(); }));
+}
+function setWn(pred) { G.wnOff = new Set((G.sim ? G.sim.wells : []).filter((w) => !pred(w)).map((w) => w.name)); renderEconCharts(); }
 function setRightTab(tab) {
   G.rightTab = tab; $("tab-charts").classList.toggle("active", tab === "charts"); $("tab-table").classList.toggle("active", tab === "table");
   $("charts-pane").classList.toggle("hidden", tab !== "charts"); $("year-card").classList.toggle("hidden", tab !== "table");
@@ -5347,6 +5388,8 @@ $("wc-sel").addEventListener("change", renderWellsCharts);
 G.rightTab = "charts"; buildExpChips();
 $("tab-charts").addEventListener("click", () => setRightTab("charts")); $("tab-table").addEventListener("click", () => setRightTab("table"));
 $("exp-all").addEventListener("click", () => setExp(() => true)); $("exp-none").addEventListener("click", () => setExp(() => false));
+$("wn-mode").addEventListener("change", renderEconCharts); $("wn-all").addEventListener("click", () => setWn(() => true)); $("wn-none").addEventListener("click", () => setWn(() => false));
+$("wn-prod").addEventListener("click", () => setWn((w) => w.type === "prod")); $("wn-inj").addEventListener("click", () => setWn((w) => w.type === "inj"));
 $("exp-capex").addEventListener("click", () => setExp((it) => it[4])); $("exp-opex").addEventListener("click", () => setExp((it) => !it[4]));
 $("btn-schem").addEventListener("click", () => openSchem("g")); $("sc-close").addEventListener("click", closeModals); $("op-close").addEventListener("click", closeModals);
 $("sc-tab-g").addEventListener("click", () => { SCH.tab = "g"; drawSchem(); }); $("sc-tab-w").addEventListener("click", () => { SCH.tab = "w"; drawSchem(); }); $("sc-tab-p").addEventListener("click", () => { SCH.tab = "p"; drawSchem(); });
