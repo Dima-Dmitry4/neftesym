@@ -3748,8 +3748,8 @@ function renderMap() {
   // вид карты (зум и сдвиг) запоминается и не сбрасывается перерисовкой; размер – по контейнеру
   const view = G.mapView || { x: [0, NX * DX], y: [NX * DX, 0] };
   const layout = lay({ autosize: true, margin: { l: 56, r: 10, t: 10, b: 44 }, dragmode: "pan", hovermode: "closest", annotations: [...snapNote, ...owcKey, ...(bub ? [bub.note] : []), ...rulerLayout().annotations], shapes: [...(bub ? bub.shapes : []), ...rulerLayout().shapes],
-    xaxis: { range: view.x, title: { text: "Восток, м" }, constrain: "domain" },
-    yaxis: { range: view.y, title: { text: "Север, м" }, scaleanchor: "x" } });
+    xaxis: { range: view.x, title: { text: "Восток, м" }, constrain: "range" },
+    yaxis: { range: view.y, title: { text: "Север, м" }, scaleanchor: "x", constrain: "range" } });
   G.mapAnn = [...snapNote, ...owcKey, ...(bub ? [bub.note] : [])]; G.mapShapes = bub ? bub.shapes : [];
   Plotly.react("map", data, layout, MAPCFG);
   if (!renderMap.bound) {
@@ -4134,6 +4134,12 @@ function buildExpChips() {
   box.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { G.expOff.has(c.dataset.id) ? G.expOff.delete(c.dataset.id) : G.expOff.add(c.dataset.id); c.classList.toggle("on"); renderEconCharts(); }));
 }
 function setExp(pred) { G.expOff = new Set(EXP_ITEMS.filter((it) => !pred(it)).map((it) => it[0])); buildExpChips(); renderEconCharts(); }
+// легенда под графиком: высота и нижний отступ растут с числом строк легенды, высота контейнера подгоняется под график, чтобы он не налезал на соседние блоки
+function legendBelow(id, n, plotH = 250) {
+  const el = $(id), w = el.clientWidth || 600, per = Math.max(1, Math.floor((w - 80) / 190)), rows = Math.max(1, Math.ceil(n / per)), b = 70 + 21 * rows, height = 44 + plotH + b;
+  el.style.height = height + "px";
+  return { height, margin: { l: 64, r: 16, t: 44, b }, showlegend: true, legend: { orientation: "h", x: 0, y: -62 / plotH, yanchor: "top" } };
+}
 function renderEconCharts() {
   const sim = G.sim; if (!sim || G.rightTab !== "charts") return;
   const h = sim.history.days; if (!h.length) { Plotly.purge("ec-one"); Plotly.purge("ex-one"); Plotly.purge("ex-cur"); Plotly.purge("wn-one"); return; }
@@ -4156,7 +4162,7 @@ function renderEconCharts() {
     ln("Чистый поток накоп.", net, "#2563eb", { line: { color: "#2563eb", width: 2, dash: "dot" } }), ln("ЧДД накоп.", npv, "#a855f7")], base("Экономика: накопленные показатели", "млн руб"), CFG);
   const on = EXP_ITEMS.filter((it) => !G.expOff.has(it[0]));
   Plotly.react("ex-one", on.map(([id, name, col]) => ({ type: "scatter", mode: "lines", name, x, y: stack[EXP_ITEMS.findIndex((it) => it[0] === id)], stackgroup: "e", fillcolor: col + "cc", line: { color: col, width: 1 }, hovertemplate: `${name}: %{y:.0f}<extra></extra>` })),
-    { ...base("Расходы с начала игры (накопительно, по статьям)", "млн руб"), height: 360, margin: { l: 64, r: 16, t: 44, b: 110 }, legend: { orientation: "h", x: 0, y: -0.3 } }, CFG);
+    { ...base("Расходы с начала игры (накопительно, по статьям)", "млн руб"), ...legendBelow("ex-one", on.length) }, CFG);
   // текущие показатели: прирост накопленных за окно RATE_WIN суток, пересчитанный в млн руб в год
   const RATE_WIN = 60, xr = [], cur = EXP_ITEMS.map(() => []), wl = sim.wells, wcur = wl.map(() => []), wcum = wl.map(() => []);
   for (let k = 0; k < h.length; k++) {
@@ -4169,11 +4175,12 @@ function renderEconCharts() {
       wcum[i].push(n === null ? null : n / 1e6); wcur[i].push(n === null ? null : (n - b) / dtY / 1e6); });
   }
   Plotly.react("ex-cur", on.map(([id, name, col]) => ({ type: "scatter", mode: "lines", name, x: xr, y: cur[EXP_ITEMS.findIndex((it) => it[0] === id)], stackgroup: "e", fillcolor: col + "cc", line: { color: col, width: 1 }, hovertemplate: `${name}: %{y:.0f}<extra></extra>` })),
-    { ...base("Расходы текущие (млн руб в год, по статьям)", "млн руб/год"), height: 340, margin: { l: 64, r: 16, t: 44, b: 110 }, legend: { orientation: "h", x: 0, y: -0.3 } }, CFG);
+    { ...base("Расходы текущие (млн руб в год, по статьям)", "млн руб/год"), ...legendBelow("ex-cur", on.length) }, CFG);
   const wmode = $("wn-mode").value, wdata = wl.filter((w) => !G.wnOff.has(w.name)).map((w) => { const i = wl.indexOf(w);
     return { type: "scatter", mode: "lines", name: w.name + (w.type === "inj" ? " (нагн.)" : ""), x: xr, y: (wmode === "cum" ? wcum : wcur)[i], connectgaps: false, line: { color: w.color, width: 2, dash: w.type === "inj" ? "dash" : "solid" }, hovertemplate: `${w.name}: %{y:.1f}<extra></extra>` }; });
   Plotly.react("wn-one", wdata, { ...base(wmode === "cum" ? "Экономика скважин: накопленный операционный результат" : "Экономика скважин: текущий результат (среднее за 60 суток)", wmode === "cum" ? "млн руб" : "млн руб/год"),
-    height: 360, hovermode: "x unified", margin: { l: 64, r: 16, t: 44, b: 80 }, legend: { orientation: "h", x: 0, y: -0.25 } }, CFG);
+    height: 360, hovermode: "x unified", margin: { l: 64, r: 16, t: 44, b: 56 }, showlegend: false }, CFG); // легенда не нужна: роль легенды играют цветные кнопки скважин
+  $("wn-one").style.height = "360px";
   buildWellChips();
 }
 G.wnOff = new Set();
