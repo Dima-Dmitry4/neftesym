@@ -556,7 +556,7 @@
       <div class="card" style="margin-top:6px; padding:4px"><div id="ex-one" style="width:100%; height:360px"></div></div>
       <div class="row" style="margin-top:12px"><b>Расходы текущие</b><sup class="hint" tabindex="0" data-tip="Скорость расходов по статьям, млн руб в год (среднее за последние 60 суток): бурение и ГРП – всплески в момент затрат, эксплуатационные статьи – ровные уровни. Статьи включаются теми же галочками, что у накопленных расходов выше.">?</sup></div>
       <div class="card" style="margin-top:6px; padding:4px"><div id="ex-cur" style="width:100%; height:340px"></div></div>
-      <div class="row" style="margin-top:12px"><b>Экономика скважин</b><sup class="hint" tabindex="0" data-tip="Операционный результат каждой скважины: выручка от её нефти минус подготовка жидкости, закачка, электроэнергия и обслуживание. Закупочные капзатраты (бурение, ГРП, ЭЦН) сюда не входят. Результат может быть отрицательным: например, у нагнетательных или у обводнившихся добывающих. Скважины включаются и выключаются щелчком по ним.">?</sup>
+      <div class="row" style="margin-top:12px"><b>Экономика скважин</b><sup class="hint" tabindex="0" data-tip="Операционный результат каждой скважины: выручка от её нефти минус подготовка жидкости, закачка, электроэнергия и обслуживание. Закупочные капзатраты (бурение, ГРП, ЭЦН) сюда не входят. Скважины сложены стопкой: прибыльные растут вверх от нуля, убыточные (нагнетательные, обводнившиеся добывающие) – вниз, пунктир – сумма выбранных. Скважины включаются и выключаются щелчком по ним.">?</sup>
         <select id="wn-mode"><option value="cum">накопленный, млн руб</option><option value="cur">текущий, млн руб/год</option></select>
         <button id="wn-all" class="mini">все</button><button id="wn-none" class="mini">ничего</button><button id="wn-prod" class="mini">добывающие</button><button id="wn-inj" class="mini">нагнетательные</button></div>
       <div id="wn-chips" class="chips"></div>
@@ -4176,8 +4176,14 @@ function renderEconCharts() {
   }
   Plotly.react("ex-cur", on.map(([id, name, col]) => ({ type: "scatter", mode: "lines", name, x: xr, y: cur[EXP_ITEMS.findIndex((it) => it[0] === id)], stackgroup: "e", fillcolor: col + "cc", line: { color: col, width: 1 }, hovertemplate: `${name}: %{y:.0f}<extra></extra>` })),
     { ...base("Расходы текущие (млн руб в год, по статьям)", "млн руб/год"), ...legendBelow("ex-cur", on.length) }, CFG);
-  const wmode = $("wn-mode").value, wdata = wl.filter((w) => !G.wnOff.has(w.name)).map((w) => { const i = wl.indexOf(w);
-    return { type: "scatter", mode: "lines", name: w.name + (w.type === "inj" ? " (нагн.)" : ""), x: xr, y: (wmode === "cum" ? wcum : wcur)[i], connectgaps: false, line: { color: w.color, width: 2, dash: w.type === "inj" ? "dash" : "solid" }, hovertemplate: `${w.name}: %{y:.1f}<extra></extra>` }; });
+  // скважины складываются «стопкой»: положительные результаты растут вверх от нуля, отрицательные – вниз; чёрная линия – сумма выбранных
+  const wmode = $("wn-mode").value, wsel = wl.map((w, i) => i).filter((i) => !G.wnOff.has(wl[i].name)), wser = wmode === "cum" ? wcum : wcur, v0 = (v) => (v === null || v === undefined ? 0 : v);
+  const wdata = [];
+  for (const i of wsel) {
+    const w = wl[i], nm = w.name + (w.type === "inj" ? " (нагн.)" : ""), y = wser[i], common = { type: "scatter", mode: "lines", x: xr, legendgroup: nm, name: nm, line: { color: w.color, width: 1 }, fillcolor: w.color + "cc", customdata: y.map(v0), hovertemplate: `${nm}: %{customdata:.1f}<extra></extra>` };
+    wdata.push({ ...common, y: y.map((v) => Math.max(0, v0(v))), stackgroup: "pos" }, { ...common, y: y.map((v) => Math.min(0, v0(v))), stackgroup: "neg", showlegend: false });
+  }
+  if (wsel.length) wdata.push({ type: "scatter", mode: "lines", name: "Итого по выбранным", x: xr, y: xr.map((_, q) => wsel.reduce((a, i) => a + v0(wser[i][q]), 0)), line: { color: "#0f172a", width: 2.5, dash: "dot" }, hovertemplate: "Итого: %{y:.1f}<extra></extra>" });
   Plotly.react("wn-one", wdata, { ...base(wmode === "cum" ? "Экономика скважин: накопленный операционный результат" : "Экономика скважин: текущий результат (среднее за 60 суток)", wmode === "cum" ? "млн руб" : "млн руб/год"),
     height: 360, hovermode: "x unified", margin: { l: 64, r: 16, t: 44, b: 56 }, showlegend: false }, CFG); // легенда не нужна: роль легенды играют цветные кнопки скважин
   $("wn-one").style.height = "360px";
