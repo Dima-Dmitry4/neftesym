@@ -317,6 +317,7 @@
     </ol></div></details>
     <details id="g-drill"><summary>Бурение скважин</summary><div class="gc"><ol>
       <li>Выберите <b>заканчивание</b> рядом с кнопкой «⛏ Скважина»: <kbd>ВС</kbd> вертикальная, <kbd>ВС + ГРП</kbd>, <kbd>ГС</kbd> горизонтальная (длина, азимут), <kbd>ГС + МГРП</kbd>. Цена выбранного варианта – в подсказке кнопки, полный прайс – <kbd>₽ Цены</kbd>.</li>
+      <li><b>Буровые станки.</b> Скважины можно расставить сразу, но бурятся они по очереди: один станок – одна скважина за 60 суток (ВС) или 90 (ГС). Деньги списываются, когда станок берёт скважину в работу. Хотите быстрее – купите станки в панели «Буровые станки» над таблицей скважин. Заказанные скважины видны на карте пустыми кружками.</li>
       <li>Нажмите <kbd>⛏ Скважина</kbd> и <b>кликните по карте</b> в нефтяной зоне (выше ВНК). При наведении виден ствол ГС.</li>
       <li>Каждая новая скважина – добывающая. Часть скважин понадобится <b>под закачку</b> (ППД) – перевод кнопкой 💧→ в строке скважины.</li>
       <li>Низкая проницаемость (ачимовка, АВ1, ЮВ1) – без ГРП/ГС скважины дают мало. Высокая (БВ8, Бб) – ГРП почти бесполезен.</li>
@@ -539,6 +540,7 @@
         <button id="fc-wc-btn">Отключить</button>
       </div>
       
+      <div id="rig-panel" class="card" style="padding:6px 10px; margin-top:6px"></div>
       <div id="wellpanel" class="card"><table id="welltable" class="t">
         <thead><tr><th></th><th>Скв.</th><th>Режим</th><th>Параметр</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
         <tbody></tbody>
@@ -547,7 +549,7 @@
       <div id="charts-pane">
       <div class="row" style="margin-top:6px"><b>Добыча и давление</b><span class="sub">скважина:</span><select id="wc-sel"></select>
         <sup class="hint" tabindex="0" data-tip="«Все скважины» – суммарные дебиты жидкости и нефти и среднее забойное давление добывающих; ось времени – только рассчитанные годы.">?</sup></div>
-      <div class="card" style="margin-top:6px; padding:4px"><div id="wc-one" style="width:100%; height:330px"></div></div>
+      <div class="card" style="margin-top:6px; padding:4px"><div id="wc-one" style="width:100%; height:360px"></div></div>
       <div class="row" style="margin-top:12px"><b>Экономика</b><sup class="hint" tabindex="0" data-tip="Накопленные показатели с начала игры, млн руб. Баланс = то, что на счёте (с учётом кредита). ЧДД накопленный считается по ставке дисконтирования из настроек. Линии можно отключать щелчком по легенде.">?</sup></div>
       <div class="card" style="margin-top:6px; padding:4px"><div id="ec-one" style="width:100%; height:340px"></div></div>
       <div class="row" style="margin-top:12px"><b>Расходы накопительно</b><sup class="hint" tabindex="0" data-tip="Расходы с начала игры, накопленные и сложенные по статьям. Отметьте галочками, какие статьи показывать: например, только капитальные (бурение, ГРП, ЭЦН) или только эксплуатационные.">?</sup>
@@ -695,6 +697,9 @@ const DEFAULT_PARAMS = {
   init_money: 0,      // стартовый капитал, руб (игра начинается с нуля и идёт в кредит до credit_limit)
   credit_limit: 1500e6, // максимальный долг, руб: покупки, уводящие баланс ниже -лимита, недоступны
   elec_cost: 5.5,     // руб/кВт·ч – ЭЦН и насосы КНС
+  rigs0: 1,           // буровых станков на старте
+  drill_days_v: 60,   // суток на скважину одним станком: вертикальная (в т.ч. с ГРП)
+  drill_days_h: 90,   // то же для горизонтальной (в т.ч. с МГРП)
 };
 // постоянные затраты: нагнетательная – доля от добывающей, остановленная (консервация) – доля
 const WELL_OPEX_INJ = 0.5, WELL_OPEX_IDLE = 0.25;
@@ -716,7 +721,7 @@ function costOf(units, params) {
 }
 // сейсмика 3D стоит как 12 скважин (по умолчанию для объекта: 12 × стоимость его скважины); ГРП – 20 млн руб за трещину 40 м
 const SEIS_WELLS = 12;
-const DEFAULT_COSTS = { esp_cost: 6e6, conv_cost: 5e6, frac_cost: 20e6, stim_cost: 2e6, pta_cost: 1e6, seis_cost: SEIS_WELLS * 80e6, expl_cost: 90e6 };
+const DEFAULT_COSTS = { esp_cost: 6e6, conv_cost: 5e6, frac_cost: 20e6, stim_cost: 2e6, pta_cost: 1e6, seis_cost: SEIS_WELLS * 80e6, expl_cost: 90e6, rig_cost: 120e6 };
 const addUnits = (acc, u, m = 1) => { for (const k in u) acc[k] = (acc[k] || 0) + u[k] * m; return acc; };
 
 // ---------- ГПСЧ (детерминированный seed) ----------
@@ -1227,6 +1232,7 @@ function createSim(reservoir, params) {
     _diag: new Float64Array(N), _b: new Float64Array(N),
   };
   r.cells.forEach((c, idx) => (sim._rowOf[c] = idx));
+  sim.drill = { rigs: (params && params.rigs0) ?? DEFAULT_PARAMS.rigs0, queue: [], active: [], on: null }; // станки и очередь бурения (см. orderWell)
   sim.addWell = (c, type, pwf) => {
     if (!r.active[c]) throw new Error("ячейка вне контура");
     if (sim.wells.some((w) => w.perf.some((p) => p.cell === c))) throw new Error("ячейка занята");
@@ -1747,7 +1753,7 @@ function recordHistory(sim) {
     });
   }
 }
-function advance(sim, days) {
+function advanceRaw(sim, days) {
   let remaining = days;
   while (remaining > 1e-9) {
     // давление – неявно на интервал вперёд (≤ 1 сут): P в конце интервала, потоки и дебиты по нему применяются
@@ -1777,6 +1783,52 @@ function advance(sim, days) {
     sim.t += dtSub;
     remaining -= dtSub;
     recordHistory(sim);
+  }
+}
+// ---------- Бурение: станки и очередь ----------
+// Скважины можно расставить сразу (заказать), а бурятся они по очереди: один станок – одна скважина за drill_days_v суток
+// (вертикальная, с ГРП) или drill_days_h (горизонтальная, с МГРП). Деньги списываются, когда станок берёт скважину в работу
+// (не хватает средств – станок ждёт); готовая скважина попадает в sim.wells и сразу работает. Больше станков – очередь короче.
+// Заказ – объект {well, units, kind, name}: well уже собрана (addWell + setCompletion) и убрана из sim.wells, units – капзатраты.
+const drillDays = (kind, params) => (kind === "hs" || kind === "hsf" ? params.drill_days_h ?? DEFAULT_PARAMS.drill_days_h : params.drill_days_v ?? DEFAULT_PARAMS.drill_days_v);
+function drillStart(sim) {
+  const D = sim.drill, e = sim.economy;
+  while (D.active.length < D.rigs && D.queue.length) {
+    const j = D.queue[0], cost = costOf(j.units, sim.params);
+    if (e && !e.canSpend(cost)) { if (!j.blocked) { j.blocked = true; if (D.on && D.on.blocked) D.on.blocked(j, cost); } return; }
+    if (e) e.charge(sim.t, j.units, true);
+    D.queue.shift(); j.blocked = false; j.started = sim.t; D.active.push(j);
+    if (D.on && D.on.started) D.on.started(j, cost);
+  }
+}
+function drillFinish(sim) {
+  const D = sim.drill, done = D.active.filter((j) => j.remain <= 1e-9);
+  for (const j of done) {
+    D.active.splice(D.active.indexOf(j), 1); j.well.on = true; sim.wells.push(j.well); sim._fluxValid = false;
+    if (D.on && D.on.finished) D.on.finished(j);
+  }
+}
+function orderWell(sim, job) { job.days = drillDays(job.kind, sim.params); job.remain = job.days; sim.drill.queue.push(job); drillStart(sim); return job; }
+function cancelOrder(sim, job) { const i = sim.drill.queue.indexOf(job); if (i < 0) return false; sim.drill.queue.splice(i, 1); return true; }
+function buyRig(sim) {
+  const e = sim.economy, cost = costOf({ rig_cost: 1 }, sim.params);
+  if (e && !e.canSpend(cost)) return false;
+  if (e) e.charge(sim.t, { rig_cost: 1 }, true);
+  sim.drill.rigs++; drillStart(sim); return true;
+}
+// время идёт до ближайшего события бурения: окончания работ на станке (дальше станок берёт следующую скважину); пока очередь ждёт денег – проверка раз в 10 сут
+function advance(sim, days) {
+  const D = sim.drill;
+  if (!D || (!D.queue.length && !D.active.length)) return advanceRaw(sim, days);
+  let left = days;
+  while (left > 1e-9) {
+    drillStart(sim);
+    if (!D.queue.length && !D.active.length) return advanceRaw(sim, left);
+    const ev = D.active.length ? Math.min(...D.active.map((j) => j.remain)) : Infinity;
+    const step = Math.max(1e-6, Math.min(left, ev, D.queue.length ? 10 : Infinity));
+    advanceRaw(sim, step); left -= step;
+    for (const j of D.active) j.remain -= step;
+    drillFinish(sim);
   }
 }
 function simStats(sim) {
@@ -1964,7 +2016,7 @@ function createEconomy(params) {
     // бурение, ГРП, ЭЦН, перевод в ППД, ОПЗ, ГДИС, недобор нефти при ГДИС, сейсмика, разведка] – для графиков экономики
     snap() {
       const f = flowOf(eco.u, {}, params), c = (k) => costOf({ [k]: eco.cu[k] || 0 }, params);
-      return [f.revenue, f.lift, f.inj, f.elecESP, f.elecKNS, f.wells, c("drill_cost"), c("frac_cost"), c("esp_cost"), c("conv_cost"), c("stim_cost"), c("pta_cost"), c("lost_t"), c("seis_cost"), c("expl_cost")];
+      return [f.revenue, f.lift, f.inj, f.elecESP, f.elecKNS, f.wells, c("drill_cost"), c("frac_cost"), c("esp_cost"), c("conv_cost"), c("stim_cost"), c("pta_cost"), c("lost_t"), c("seis_cost"), c("expl_cost"), c("rig_cost")];
     },
     // можно ли потратить cost: баланс после траты не ниже -кредитного лимита
     canSpend(cost) { return eco.balance - cost >= -eco.credit - 1e-6; },
@@ -2422,6 +2474,15 @@ function equipmentTests() {
   t.push({ name: "ПКВ: duty = 0,5 даёт средний дебит меньше непрерывного, но больше половины (давление у скважины выше), ≈ половину мощности и меньший удельный расход энергии",
            pass: eP.q > 0.5 * eC.q && eP.q < eC.q && eP.kW < 0.65 * eC.kW && eP.kW > 0.35 * eC.kW && kwhP < kwhC,
            details: `q ${eP.q.toFixed(0)} / ${eC.q.toFixed(0)} м³/сут, ${eP.kW.toFixed(0)} / ${eC.kW.toFixed(0)} кВт, ${kwhP.toFixed(2)} / ${kwhC.toFixed(2)} кВт·ч/м³` });
+  // бурение: один станок – одна скважина за 60 сут (ВС), больше станков – быстрее; деньги списываются, когда станок берёт скважину
+  const mkRig = (rigs) => { const sm = mk(); if (rigs > 1) for (let q = 1; q < rigs; q++) buyRig(sm); const ex = sm.r.explore;
+    for (let q = 0; q < 4; q++) { sm.addWell(ex[q].cell, "prod", 150); orderWell(sm, { well: sm.wells.pop(), units: CAPEX.vert(), kind: "v", name: "T" + q }); } return sm; };
+  const rg1 = mkRig(1), rg2 = mkRig(2), sp0 = rg1.economy.cuDrill.drill_cost || 0;
+  const ng1 = [rg1.wells.length]; advance(rg1, 61); ng1.push(rg1.wells.length); advance(rg1, 60); ng1.push(rg1.wells.length); advance(rg1, 120); ng1.push(rg1.wells.length);
+  const ng2 = [rg2.wells.length]; advance(rg2, 61); ng2.push(rg2.wells.length); advance(rg2, 60); ng2.push(rg2.wells.length);
+  t.push({ name: "бурение: 1 станок – 1 скважина за 60 сут, 2 станка вдвое быстрее; очередь и списание денег по порядку",
+           pass: JSON.stringify(ng1) === "[0,1,2,4]" && JSON.stringify(ng2) === "[0,2,4]" && sp0 === 1 && rg1.economy.cuDrill.drill_cost === 4 && rg1.drill.queue.length === 0,
+           details: `1 станок: ${ng1.join("→")} скв., 2 станка: ${ng2.join("→")} скв.; при заказе списана 1 скв. из 4 (затем по мере бурения)` });
   // учёт по скважинам: сумма операционных результатов скважин = операционный результат месторождения
   const ecP = dP.economy, sumW = dP.wells.reduce((s, w, i) => s + ecP.wellNet(w, i), 0), fieldCf = flowOf(ecP.u, {}, dP.params).cf;
   t.push({ name: "экономика скважин: сумма по скважинам = результат месторождения", pass: Math.abs(sumW - fieldCf) < 1e-6 * Math.max(1, Math.abs(fieldCf)), details: `${(sumW / 1e6).toFixed(3)} / ${(fieldCf / 1e6).toFixed(3)} млн руб` });
@@ -2506,7 +2567,9 @@ const REF = {
 function cloneSim(sim) {
   const c = createSim(sim.r, sim.params);
   c.P.set(sim.P); c.Sw.set(sim.Sw);
-  c.wells = sim.wells.map((w) => ({ ...w, cum: { ...w.cum }, eq: null, perf: w.perf.map((pf) => ({ ...pf })), pq: w.pq && w.pq.slice(), pqw: w.pqw && w.pqw.slice(), frac: w.frac && { ...w.frac }, mgrp: w.mgrp && { ...w.mgrp, stages: w.mgrp.stages.map((q) => q.slice()) }, traj: w.traj && w.traj.map((q) => q.slice()) }));
+  const cw = (w) => ({ ...w, cum: { ...w.cum }, eq: null, perf: w.perf.map((pf) => ({ ...pf })), pq: w.pq && w.pq.slice(), pqw: w.pqw && w.pqw.slice(), frac: w.frac && { ...w.frac }, mgrp: w.mgrp && { ...w.mgrp, stages: w.mgrp.stages.map((q) => q.slice()) }, traj: w.traj && w.traj.map((q) => q.slice()) });
+  c.wells = sim.wells.map(cw);
+  c.drill = { rigs: sim.drill.rigs, on: null, queue: sim.drill.queue.map((j) => ({ ...j, well: cw(j.well) })), active: sim.drill.active.map((j) => ({ ...j, well: cw(j.well) })) };
   c.field = { ...sim.field }; c.t = sim.t; c.cumProdM3 = sim.cumProdM3;
   c.history = { days: sim.history.days.slice() };
   const e = sim.economy, d = c.economy;
@@ -2947,7 +3010,7 @@ registerCore({
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  dutyOf, Q_INJ_MAX, SCORE_BONUS, SEIS_WELLS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, buildupQuality, suggestWindow, buildSeismic, nearestSealFaultM,
+  dutyOf, Q_INJ_MAX, orderWell, cancelOrder, buyRig, drillStart, drillDays, SCORE_BONUS, SEIS_WELLS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, buildupQuality, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
   saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, gridTests, seedTests, reportTests, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
@@ -3703,6 +3766,18 @@ function faultTraces(r, force = false) {
   if (isL2() && (force || revealed())) r.faults.forEach((F) => draw(F.pts, F.name, "#111827", "solid", `${F.name}: ${F.trans === 0 ? "запечатан" : `проницаем ×${F.trans}`}`));
   return out;
 }
+// заказанные, но ещё не пробуренные скважины: пустые кружки (бурится / в очереди), траектория ГС – пунктиром
+function plannedTraces(sim) {
+  const jobs = [...sim.drill.active, ...sim.drill.queue]; if (!jobs.length) return [];
+  const pos = (cell) => [((cell % NX) + 0.5) * DX, (Math.floor(cell / NX) + 0.5) * DX];
+  const tip = (j) => (j.started === undefined ? "в очереди на бурение" : `бурится, ещё ${Math.ceil(j.remain)} сут`);
+  const out = [{ type: "scatter", mode: "markers+text", x: jobs.map((j) => pos(j.well.cell)[0]), y: jobs.map((j) => pos(j.well.cell)[1]), text: jobs.map((j) => j.name), textposition: "top center", textfont: { size: 11, color: "#64748b" },
+    marker: { symbol: "circle-open", size: 15, color: jobs.map((j) => j.well.color), line: { width: 3 } }, hovertemplate: jobs.map((j) => `<b>${j.name}</b> ${kindLabel(j.well)} – ${tip(j)}<extra></extra>`), showlegend: false }];
+  const X = [], Y = [];
+  for (const j of jobs) if (j.well.perf.length > 1) { for (const pf of j.well.perf) { const q = pos(pf.cell); X.push(q[0]); Y.push(q[1]); } X.push(null); Y.push(null); }
+  if (X.length) out.push({ type: "scatter", mode: "lines", x: X, y: Y, hoverinfo: "skip", showlegend: false, line: { color: "#94a3b8", width: 3, dash: "dot" } });
+  return out;
+}
 function wellTraces(sim) {
   const r = sim.r, pos = (cell) => [((cell % NX) + 0.5) * DX, (Math.floor(cell / NX) + 0.5) * DX];
   const mk = (list, symbol, fill, hover) => ({ type: "scatter", mode: "markers+text", x: list.map((w) => pos(w.cell)[0]), y: list.map((w) => pos(w.cell)[1]),
@@ -3736,7 +3811,7 @@ function renderMap() {
   if (isL2() && revealed()) {
     data.push(line1(r.zTop, r.owc, "#111827", OWC_OUT, "ВНК факт: внешний контур"), line1(r.zTop.map((z, c) => z + r.gross[c]), r.owc, "#111827", OWC_IN, "ВНК факт: внутренний контур"));
   }
-  data.push(...faultTraces(r), ...wellTraces(sim));
+  data.push(...faultTraces(r), ...wellTraces(sim), ...plannedTraces(sim));
   // предпросмотр траектории ГС при наведении (инструмент «Скважина» с заканчиванием ГС)
   G.previewIdx = data.length;
   data.push({ type: "scatter", mode: "lines", x: G.preview ? G.preview.x : [], y: G.preview ? G.preview.y : [], hoverinfo: "skip", showlegend: false, line: { color: "#2a3f5f", width: 3, dash: "dot" } });
@@ -3853,43 +3928,74 @@ function togglePlay() {
   playTimer = setInterval(() => { i++; if (i >= G.snaps.length) { setSnap(G.snaps.length); stopPlay(); } else setSnap(i); }, 700);
 }
 function guardRun() { if (G.running) { toast("Идёт расчёт года – подождите", true); return true; } return false; }
+// клик по карте не бурит сразу, а заказывает скважину: она встаёт в очередь станков (см. orderWell в ядре)
+const plannedCells = () => new Set([...G.sim.drill.active, ...G.sim.drill.queue].flatMap((j) => j.well.perf.map((pf) => pf.cell)));
 function drillWell(cell) {
-  const sim = G.sim, r = sim.r;
+  const sim = G.sim, r = sim.r, planned = plannedCells(), blocked = (c) => blockedByExpl(c) || planned.has(c);
   if (guardRun()) return;
   if (!r.active[cell]) return toast("Вне контура нефтеносности", true);
-  if (sim.wells.some((w) => w.perf.some((pf) => pf.cell === cell))) return toast("В этой ячейке уже есть скважина", true);
+  if (sim.wells.some((w) => w.perf.some((pf) => pf.cell === cell)) || planned.has(cell)) return toast("В этой ячейке уже есть скважина (или она заказана)", true);
   if (G.expl.some((e) => e.cell === cell)) return toast("Здесь разведочная скважина", true);
   const kv = $("drill-kind").value, az = +$("drill-az").value || 0;
-  {
-    const L0 = drillLen(), xf0 = +$("drill-xf").value, n0 = Math.max(1, Math.min(Math.floor(L0 / 80), +$("drill-n").value || 6));
-    const est = kv === "hs" || kv === "hsf" ? C.CAPEX.hs(L0) : { ...C.CAPEX.vert() };
-    if (kv === "hsf") Object.assign(est, C.CAPEX.mgrp(n0, xf0)); if (kv === "vf") Object.assign(est, C.CAPEX.frac(xf0));
-    if (!afford(capCost(est), "скважина")) return;
-  }
   sim.addWell(cell, "prod", 150);
   const w = sim.wells[sim.wells.length - 1];
   let units = C.CAPEX.vert();
   if (kv === "hs" || kv === "hsf") {
-    const res = sim.setCompletion(w, "hs", { L: drillLen(), az }, blockedByExpl);
-    if (!res.ok) { sim.wells.pop(); return toast(`ГС не пробурена: ${res.msg}`, true); }
+    const res = sim.setCompletion(w, "hs", { L: drillLen(), az }, blocked);
+    if (!res.ok) { sim.wells.pop(); return toast(`ГС не заказана: ${res.msg}`, true); }
     units = C.CAPEX.hs(w.L);
     if (kv === "hsf") {
-      const xf = +$("drill-xf").value, rf = sim.setCompletion(w, "mgrp", { n: +$("drill-n").value || 6, xf }, blockedByExpl);
-      if (!rf.ok) { sim.wells.pop(); return toast(`МГРП не выполнен: ${rf.msg}`, true); }
+      const xf = +$("drill-xf").value, rf = sim.setCompletion(w, "mgrp", { n: +$("drill-n").value || 6, xf }, blocked);
+      if (!rf.ok) { sim.wells.pop(); return toast(`МГРП не заказан: ${rf.msg}`, true); }
       Object.assign(units, C.CAPEX.mgrp(w.mgrp.n, xf));
     }
   } else if (kv === "vf") {
-    const xf = +$("drill-xf").value, res = sim.setCompletion(w, "frac", { xf, az }, blockedByExpl);
-    if (!res.ok) { sim.wells.pop(); return toast(`ГРП не выполнен: ${res.msg}`, true); }
+    const xf = +$("drill-xf").value, res = sim.setCompletion(w, "frac", { xf, az }, blocked);
+    if (!res.ok) { sim.wells.pop(); return toast(`ГРП не заказан: ${res.msg}`, true); }
     Object.assign(units, C.CAPEX.frac(xf));
   }
-  const cost = sim.economy.charge(sim.t, units, true);
+  sim.wells.pop(); // скважина попадёт в фонд, когда её пробурит станок
   const name = "С" + ++G.wellNames.prod;
   w.name = name; w.color = PAL[G.colorSeq++ % PAL.length];
   w.mode = "flow"; // интегрированная модель: скважина стартует фонтаном через штуцер (далее – ЭЦН)
-  let msg = `Пробурена ${name} (${kindLabel(w)}), −${mln(cost)}. Режим и назначение (добыча / ППД) – в панели скважин справа`;
-  if (isL2()) { const L = C.wellLog(r, cell); msg += `. ГИС: h нефть ${L.hOil.toFixed(1)} м, вода ${L.hWater.toFixed(1)} м`; }
-  toast(msg); renderWellTable(true); G.dirty = true; renderAll();
+  const job = C.orderWell(sim, { well: w, units, kind: kv, name }), qn = sim.drill.queue.indexOf(job);
+  if (qn >= 0) toast(`Заказана ${name} (${kindLabel(w)}, ${mln(capCost(units))}): в очереди №${qn + 1}, свободных станков нет. Купите станок в панели «Буровые станки» или подождите`);
+  G.dirty = true; renderRigPanel(); renderAll();
+}
+function bindDrillHooks(sim) {
+  sim.drill.on = {
+    started: (j, cost) => { toast(`Начато бурение ${j.name} (${kindLabel(j.well)}), −${mln(cost)}; будет готова через ${j.days} сут`); G.dirty = true; },
+    finished: (j) => {
+      let msg = `Пробурена ${j.name} (${kindLabel(j.well)}) – скважина в работе. Режим и назначение (добыча / ППД) – в панели скважин справа`;
+      if (isL2()) { const L = C.wellLog(sim.r, j.well.cell); msg += `. ГИС: h нефть ${L.hOil.toFixed(1)} м, вода ${L.hWater.toFixed(1)} м`; }
+      toast(msg); renderWellTable(true); G.dirty = true;
+    },
+    blocked: (j, cost) => toast(`Бурение ${j.name} ждёт средств: нужно ${mln(cost)}, доступно ${mln(Math.max(0, sim.economy.balance + sim.economy.credit))}. Станок начнёт, когда деньги появятся`, true),
+  };
+}
+function renderRigPanel() {
+  const sim = G.sim, box = $("rig-panel"); if (!sim) return;
+  const D = sim.drill, P = G.params, jobs = [...D.active.map((j) => ({ j, a: true })), ...D.queue.map((j, i) => ({ j, a: false, n: i + 1 }))];
+  const sig = [D.rigs, jobs.map(({ j, a }) => `${j.name}${a ? Math.ceil(j.remain) : j.blocked ? "!" : "q"}`).join(",")].join("|");
+  if (box.dataset.sig === sig) return; box.dataset.sig = sig;
+  const dv = C.drillDays("v", P), dh = C.drillDays("hs", P);
+  box.innerHTML = `<div class="row"><b>🏗 Буровые станки: ${D.rigs}</b><span class="sub">заняты ${D.active.length}, свободны ${D.rigs - D.active.length} · ВС ${dv} сут, ГС ${dh} сут на скважину</span>` +
+    `<button id="rig-buy" class="primary" style="margin-left:auto" title="Ещё один станок: очередь разбирается быстрее. Станок остаётся до конца игры">＋ Станок (${mln(P.rig_cost ?? C.DEFAULT_COSTS.rig_cost)})</button></div>` +
+    (jobs.length ? `<div class="chips" style="margin-top:6px">${jobs.map(({ j, a, n }) => `<span class="chip on" style="--c:${j.well.color}"><i></i>${j.name} · ${a ? `бурится, ещё ${Math.ceil(j.remain)} сут` : `очередь ${n}${j.blocked ? ", ждёт средств" : ""} <b class="rig-x" data-n="${j.name}" title="Отменить заказ">✕</b>`}</span>`).join("")}</div>`
+      : `<div class="sub" style="margin-top:4px">Очередь пуста: кликните по карте инструментом «⛏ Скважина» – скважина встанет в очередь на бурение.</div>`);
+}
+function buyRigUI() {
+  if (guardRun()) return;
+  const sim = G.sim, cost = capCost({ rig_cost: 1 });
+  if (!afford(cost, "буровой станок")) return;
+  C.buyRig(sim); toast(`Куплен буровой станок (теперь ${sim.drill.rigs}), −${mln(cost)}`);
+  G.dirty = true; renderRigPanel(); renderAll();
+}
+function cancelOrderUI(name) {
+  if (guardRun()) return;
+  const job = G.sim.drill.queue.find((j) => j.name === name); if (!job) return;
+  C.cancelOrder(G.sim, job); toast(`Заказ ${name} отменён (деньги ещё не списывались)`);
+  G.dirty = true; renderRigPanel(); renderAll();
 }
 function drillExplore(cell) {
   if (G.expl.some((e) => e.cell === cell)) return toast("Здесь уже есть разведочная скважина", true);
@@ -4124,7 +4230,7 @@ function renderWellTable(force = false) {
 
 // ---------------- графики по скважинам (в окне «Скважины») ----------------
 // статьи накопленных расходов: [id, название, цвет, индексы в снимке eco, капитальная?]
-const EXP_ITEMS = [["drill", "Бурение", "#6366f1", [6], true], ["frac", "ГРП и МГРП", "#ef4444", [7], true], ["esp", "ЭЦН", "#f59e0b", [8], true], ["conv", "Перевод в ППД", "#06b6d4", [9], true],
+const EXP_ITEMS = [["drill", "Бурение и станки", "#6366f1", [6, 15], true], ["frac", "ГРП и МГРП", "#ef4444", [7], true], ["esp", "ЭЦН", "#f59e0b", [8], true], ["conv", "Перевод в ППД", "#06b6d4", [9], true],
   ["res", "ОПЗ, ГДИС, недобор", "#a855f7", [10, 11, 12], true], ["seis", "Сейсмика и разведка", "#14b8a6", [13, 14], true],
   ["lift", "Подготовка жидкости", "#84cc16", [1], false], ["inj", "Водоподготовка ППД", "#3b82f6", [2], false], ["elE", "Энергия ЭЦН", "#f97316", [3], false],
   ["elK", "Энергия КНС", "#ec4899", [4], false], ["wo", "Обслуживание скважин", "#64748b", [5], false]];
@@ -4487,17 +4593,18 @@ function setMascotMood(sim, m, dm) {
   el.dataset.mood = mood; el.setAttribute("class", "mood-" + mood);
   el.querySelector("title").textContent = MASCOT_MOODS[mood]; el.setAttribute("aria-label", MASCOT_MOODS[mood]);
 }
-function renderAll() { updateMapTime(); renderMap(); renderWellTable(); renderYearTable(); renderWellsCharts(); renderEconCharts(); drawSchem(); updateTopbar(); G.dirty = false; G.mapSig = mapSig(); G.heavyLast = performance.now(); }
+function renderAll() { updateMapTime(); renderMap(); renderRigPanel(); renderWellTable(); renderYearTable(); renderWellsCharts(); renderEconCharts(); drawSchem(); updateTopbar(); G.dirty = false; G.mapSig = mapSig(); G.heavyLast = performance.now(); }
 // Перерисовка по ходу расчёта (каждые 250 мс): дешёвое – всегда (верхняя панель, таблицы); карта – только если на ней
 // что-то изменилось (слой, скважины, сейсмика, ВНК, снимок) или слой меняется во времени (давление, насыщенность) –
 // тогда не чаще раза в секунду; графики скважин и схема – раз в секунду. Действия игрока по-прежнему вызывают renderAll.
 function mapSig() {
   const sim = G.sim; if (!sim) return "";
   return [G.layer, G.bubPeriod, G.seis ? 1 : 0, G.owcGuess, G.showGuess, G.snapIdx, G.expl.length, revealed() ? 1 : 0, G.tool,
-          sim.wells.map((w) => `${w.cell}${w.type[0]}${w.on === false ? 0 : 1}${w.perf.length}${w.kind}`).join(",")].join("|");
+          sim.wells.map((w) => `${w.cell}${w.type[0]}${w.on === false ? 0 : 1}${w.perf.length}${w.kind}`).join(","),
+          sim.drill.active.map((j) => j.name).join("+") + "/" + sim.drill.queue.map((j) => j.name).join("+")].join("|");
 }
 function renderTick(ts) {
-  updateTopbar(); renderWellTable(); renderYearTable();
+  updateTopbar(); renderRigPanel(); renderWellTable(); renderYearTable();
   const heavy = ts - (G.heavyLast || 0) >= 1000, sig = mapSig(), timeLayer = G.layer === "P" || G.layer === "Sw" || G.layer === "bub";
   if (G.layer === "bub" && Math.floor(G.sim.history.days.length / 365) !== G.bubYears) renderLayerBar(); // появился новый год в списке
   if (!G.rulerDrag && (sig !== G.mapSig || (timeLayer && heavy))) { updateMapTime(); renderMap(); G.mapSig = sig; }
@@ -4884,7 +4991,7 @@ function buildReport(sim, fc, finished) {
   // на объектах вязкость задаёт пласт, и эталон считался с ней же; меняется она только на учебном полигоне
   // честность соревнования: цены отличаются от стандартных для объекта
   const stdP = { ...C.DEFAULT_PARAMS, ...C.DEFAULT_COSTS, ...(lv === 2 ? C.scenarioParams(r.scenario || "bv8", r.seed) : {}) };
-  const changed = ["price_oil", "drill_cost", "conv_cost", "esp_cost", "frac_cost", "elec_cost", "expl_cost", "seis_cost", "pta_cost", "stim_cost", "lift_cost", "inj_cost", "well_opex", "disc_rate"]
+  const changed = ["price_oil", "drill_cost", "conv_cost", "esp_cost", "frac_cost", "elec_cost", "expl_cost", "seis_cost", "pta_cost", "stim_cost", "lift_cost", "inj_cost", "well_opex", "disc_rate", "rig_cost", "rigs0", "drill_days_v", "drill_days_h"]
     .filter((k) => P[k] !== undefined && stdP[k] !== undefined && Math.abs(P[k] - (k === "disc_rate" ? 10 : stdP[k])) > 1e-6 * Math.max(1, Math.abs(stdP[k])));
   const calcNote = sim.cfg && calcIsCustom({ grid: r.nx, ...sim.cfg }) ? ` <span class="bad">Нестандартные настройки расчёта (${calcText({ grid: r.nx, ...sim.cfg })}): для соревнования у всех участников они должны совпадать.</span>` : "";
   const priceNote = calcNote + (changed.length ? ` <span class="bad">Цены изменены (${changed.length}) – в соревновании результат несопоставим с другими участниками.</span>` : "");
@@ -4942,7 +5049,7 @@ function buildReport(sim, fc, finished) {
     const oilP = ee.u.oil_t, oilR = cumSum(ref.oil_t, T), capByKey = (cu) => { const o = {}; for (const k in cu) o[k] = C.costOf({ [k]: cu[k] }, P); return o; };
     const cp = capByKey(ee.cu), refCu = {}; for (const c of refD.c.slice(0, T)) for (const k in c) refCu[k] = (refCu[k] || 0) + c[k];
     const cr = capByKey(refCu), CAPN = { drill_cost: "бурение скважин и боковых стволов", frac_cost: "ГРП и МГРП", esp_cost: "ЭЦН (установка и замена)", conv_cost: "перевод под закачку",
-      stim_cost: "обработки призабойной зоны", pta_cost: "ГДИС", lost_t: "недобор нефти при ГДИС", seis_cost: "сейсмика 3D", expl_cost: "разведочные скважины" };
+      stim_cost: "обработки призабойной зоны", pta_cost: "ГДИС", lost_t: "недобор нефти при ГДИС", seis_cost: "сейсмика 3D", expl_cost: "разведочные скважины", rig_cost: "буровые станки" };
     const tr = (lab, a, b, cls = "") => `<tr${cls}><td style="text-align:left">${lab}</td><td>${f0(a / 1e6)}</td><td>${oilP > 0 ? f0(a / oilP) : "–"}</td><td>${f0(b / 1e6)}</td><td>${oilR > 0 ? f0(b / oilR) : "–"}</td></tr>`;
     h += `<section class="rep-sec"><h2><span>${n++}.</span>Доходы и затраты за ${T} лет${fc ? " (факт + прогноз)" : ""}</h2><table class="rep"><thead><tr><th style="text-align:left">Статья</th><th>Ваш вариант, млн руб</th><th>руб/т нефти</th><th>Эталон, млн руб</th><th>руб/т нефти</th></tr></thead><tbody>` +
       tr("Выручка (netback)", me.revenue, sumR("revenue")) +
@@ -5051,6 +5158,10 @@ const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, м�
   ["elec_cost", "Электроэнергия, руб/кВт·ч", 5.5, 0, 30, 0.5, false, "ЭЦН – по мощности насоса в рабочей точке; КНС – P<sub>КНС</sub>·V/η, η = 0,7."],
   ["expl_cost", "Разведочная скважина, млн руб", 90, 5, 400, 5, true, "Только каротаж и РИГИС, без добычи."],
   ["seis_cost", "Сейсмика 3D, млн руб", 960, 1, 5000, 10, true, "Карты кровли, подошвы, толщины и разломов (с ошибками). По умолчанию стоит как 12 скважин объекта."],
+  ["rig_cost", "Буровой станок, млн руб", 120, 10, 1000, 10, false, "Покупка дополнительного станка. Скважины можно расставить сразу, но бурятся они по очереди: один станок – одна скважина за срок ниже. Больше станков – быстрее разбуривание."],
+  ["rigs0", "Станков на старте, шт", 1, 1, 20, 1, false, "Сколько станков есть до начала бурения."],
+  ["drill_days_v", "Бурение ВС, сут на скважину", 60, 10, 365, 5, false, "Вертикальная скважина (в том числе с ГРП) одним станком. Деньги списываются, когда станок берёт скважину в работу."],
+  ["drill_days_h", "Бурение ГС, сут на скважину", 90, 10, 500, 5, false, "Горизонтальная скважина (в том числе с МГРП) одним станком."],
   ["pta_cost", "ГДИС (КВД), млн руб", 1, 0.1, 10, 0.1, true, "Плюс недобор нефти за время остановки скважины."],
   ["stim_cost", "ОПЗ, млн руб", 2, 0.5, 30, 0.5, true, "Обработка призабойной зоны: снижает скин скважины до −1."],
   ["disc_rate", "Ставка дисконтирования, %", 10, 0, 30, 0.5, false, "Для расчёта ЧДД по годовым денежным потокам."],
@@ -5166,6 +5277,7 @@ function pricesHtml() {
     row("ГС 1000 м + МГРП 6×80 м", `${mlnS(cc({ ...C.CAPEX.hs(1000), ...C.CAPEX.mgrp(6, 80) }))} млн`) +
     row("Боковой ствол 300 / 600 / 1000 м", [300, 600, 1000].map((L) => mlnS(cc(C.CAPEX.zbs(L)))).join(" / ") + " млн");
   if (isL2()) h += row("Разведочная скважина", `${mlnS(P.expl_cost)} млн`);
+  h += row("Буровой станок (покупка)", `${mlnS(P.rig_cost ?? C.DEFAULT_COSTS.rig_cost)} млн`) + row("Бурение одним станком: ВС / ГС", `${P.drill_days_v ?? C.DEFAULT_PARAMS.drill_days_v} / ${P.drill_days_h ?? C.DEFAULT_PARAMS.drill_days_h} сут`);
   h += g("Операции") + row("ГРП 40 / 80 / 120 м", [40, 80, 120].map((x) => mlnS(cc(C.CAPEX.frac(x)))).join(" / ") + " млн") +
     row("МГРП 4 / 6 / 8 стадий × 80 м", [4, 6, 8].map((n) => mlnS(cc(C.CAPEX.mgrp(n, 80)))).join(" / ") + " млн") +
     row("ЭЦН (ЭЦН-20 … ЭЦН-1250)", `${mlnS(Math.min(...esp))}–${mlnS(Math.max(...esp))} млн`) + row("Перевод добыча ⇄ ППД", `${mlnS(P.conv_cost)} млн`);
@@ -5325,7 +5437,7 @@ function readParams() {
   const d = C.DEFAULT_PARAMS, years = num("horizon_years", 10);
   const l2 = G.level === 2, sp = l2 ? C.scenarioParams(G.scenario, G.seed) : null;
   return { level: G.level, scenario: l2 ? G.scenario : null, seed: l2 ? G.seed : 0, mu_o: l2 ? sp.mu_o : num("mu_o", d.mu_o), price_oil: num("price_oil", d.price_oil), drill_cost: num("drill_cost", d.drill_cost) * 1e6,
-    conv_cost: num("conv_cost", 5) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, frac_cost: num("frac_cost", 20) * 1e6, disc_rate: num("disc_rate", 10), elec_cost: num("elec_cost", 5.5), expl_cost: num("expl_cost", 90) * 1e6, seis_cost: num("seis_cost", 960) * 1e6, credit_limit: num("credit_limit", 1500) * 1e6, grid: G.level === 2 ? G.calc.grid : 50, calc: { dtMax: G.calc.dtMax, courant: G.calc.courant, tol: G.calc.tol, maxit: G.calc.maxit, dtP: G.calc.dtP }, pta_cost: num("pta_cost", 1) * 1e6,
+    conv_cost: num("conv_cost", 5) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, frac_cost: num("frac_cost", 20) * 1e6, disc_rate: num("disc_rate", 10), elec_cost: num("elec_cost", 5.5), expl_cost: num("expl_cost", 90) * 1e6, seis_cost: num("seis_cost", 960) * 1e6, rig_cost: num("rig_cost", 120) * 1e6, rigs0: Math.round(num("rigs0", 1)), drill_days_v: num("drill_days_v", 60), drill_days_h: num("drill_days_h", 90), credit_limit: num("credit_limit", 1500) * 1e6, grid: G.level === 2 ? G.calc.grid : 50, calc: { dtMax: G.calc.dtMax, courant: G.calc.courant, tol: G.calc.tol, maxit: G.calc.maxit, dtP: G.calc.dtP }, pta_cost: num("pta_cost", 1) * 1e6,
     stim_cost: num("stim_cost", 2) * 1e6, lift_cost: num("lift_cost", d.lift_cost), inj_cost: num("inj_cost", d.inj_cost), well_opex: num("well_opex", 4) * 1e6,
     horizon_days: G.level === 2 ? Math.round(years) * 365 : Math.round(years * 365.25), init_money: (+($("pf-init_money") || {}).value || 0) * 1e6 };
 }
@@ -5341,7 +5453,7 @@ function startGame() {
   closeGuide();
   G.params = readParams();
   const res = G.level === 2 ? C.buildReservoir2(G.params) : C.buildReservoir(G.params);
-  G.sim = C.createSim(res, G.params);
+  G.sim = C.createSim(res, G.params); bindDrillHooks(G.sim); $("rig-panel").dataset.sig = "";
   Object.assign(G, { snaps: [], snapYear: 0, snapIdx: null, reportCache: null, wellNames: { prod: 0, inj: 0 }, colorSeq: 0, done: false, running: null, seis: null, owcGuess: null, pta: {}, bu: null, yearInj: [], dirty: true });
   G.expl = G.level === 2 ? res.explore.map((e) => ({ ...e })) : [];
   G.layer = G.level === 2 ? "blank" : "k";
@@ -5366,6 +5478,7 @@ function startGame() {
 initSettings();
 for (const [id, tool] of [["tool-well", "well"], ["tool-expl", "expl"], ["tool-ruler", "ruler"]]) $(id).addEventListener("click", () => setTool(G.tool === tool ? null : tool));
 $("tool-fit").addEventListener("click", fitMap);
+$("rig-panel").addEventListener("click", (e) => { if (e.target.closest("#rig-buy")) buyRigUI(); const x = e.target.closest(".rig-x"); if (x) cancelOrderUI(x.dataset.n); });
 $("sp-pause").addEventListener("click", () => setSpeed(0)); $("sp-1").addEventListener("click", () => setSpeed(2));
 $("sp-10").addEventListener("click", () => setSpeed(20)); $("sp-50").addEventListener("click", () => setSpeed(100));
 $("btn-year").addEventListener("click", startYear);
