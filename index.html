@@ -6,19 +6,36 @@
 <style>
   /* оформление в духе Plotly: белые карточки, серо-голубые поля графиков, акцент #636efa */
   :root { --bg:#f3f6fb; --panel:#ffffff; --panel2:#f7f9fc; --line:#dfe6f1; --row:#eaeff7; --text:#2a3f5f; --muted:#6b7c93;
-          --accent:#636efa; --accent2:#4f5bd5; --good:#00a37a; --bad:#ef553b; }
+          --accent:#636efa; --accent2:#4f5bd5; --good:#00a37a; --bad:#ef553b;
+          --paper:#ffffff; --plotbg:#E5ECF6; --grid:#ffffff; --onaccent:#ffffff; --font:"Open Sans", verdana, arial, sans-serif; }
+  /* темы оформления: переключаются списком «Тема» (запоминаются в браузере) */
+  :root[data-theme="night"] { --bg:#0f172a; --panel:#1e293b; --panel2:#17213a; --line:#334155; --row:#2b3850; --text:#e2e8f0; --muted:#94a3b8;
+          --accent:#818cf8; --accent2:#6366f1; --good:#34d399; --bad:#fb7185; --paper:#1e293b; --plotbg:#162033; --grid:#27354d; --onaccent:#0f172a; }
+  :root[data-theme="oil"] { --bg:#0b0b0d; --panel:#17171a; --panel2:#121214; --line:#2e2e34; --row:#222226; --text:#f1e8d4; --muted:#a39a85;
+          --accent:#f59e0b; --accent2:#d97706; --good:#a3e635; --bad:#fb4b6a; --paper:#17171a; --plotbg:#101012; --grid:#25252a; --onaccent:#1a1205; }
+  :root[data-theme="taiga"] { --bg:#eaf3ea; --panel:#ffffff; --panel2:#f3f8f2; --line:#cfe0cd; --row:#e3eee1; --text:#1f3a2b; --muted:#5b7766;
+          --accent:#2f855a; --accent2:#276749; --good:#0f9d58; --bad:#d9534f; --paper:#ffffff; --plotbg:#dfece0; --grid:#ffffff; --onaccent:#ffffff; }
+  :root[data-theme="sunset"] { --bg:#fdf0e6; --panel:#fffaf6; --panel2:#fff3ea; --line:#f2d3bd; --row:#fbe4d3; --text:#4a2a2a; --muted:#9a6b5b;
+          --accent:#e8590c; --accent2:#c2410c; --good:#0d9488; --bad:#be123c; --paper:#fffaf6; --plotbg:#fbe6d8; --grid:#fffaf6; --onaccent:#ffffff; }
+  :root[data-theme="shelf"] { --bg:#e6f3f8; --panel:#ffffff; --panel2:#eef8fb; --line:#c4e0ea; --row:#d9ecf3; --text:#0c3b4e; --muted:#4d7e8f;
+          --accent:#0891b2; --accent2:#0e7490; --good:#059669; --bad:#e11d48; --paper:#ffffff; --plotbg:#d5ebf3; --grid:#ffffff; --onaccent:#ffffff; }
+  :root[data-theme="terminal"] { --bg:#020a04; --panel:#06150a; --panel2:#041009; --line:#0f4d1f; --row:#0a2a12; --text:#3dff7a; --muted:#2bbd5a;
+          --accent:#22c55e; --accent2:#16a34a; --good:#4ade80; --bad:#ff5c5c; --paper:#06150a; --plotbg:#041009; --grid:#0c3317; --onaccent:#021005;
+          --font:ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  .theme-sel { max-width:190px; }
+  #theme-float { position:fixed; top:8px; right:12px; z-index:60; } #screen-game.visible ~ #theme-float, body:has(#screen-game.visible) #theme-float { display:none; }
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { height:100%; }
-  body { background:var(--bg); color:var(--text); font:14px/1.45 "Open Sans", verdana, arial, sans-serif; overflow:hidden; }
-  button { background:#fff; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
+  body { background:var(--bg); color:var(--text); font:14px/1.45 var(--font); overflow:hidden; }
+  button { background:var(--paper); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
   button:hover:not(:disabled) { border-color:var(--accent); color:var(--accent2); }
   button:disabled { opacity:.45; cursor:default; }
-  button.active { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
-  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
-  button.primary:hover:not(:disabled) { background:var(--accent2); color:#fff; }
+  button.active { background:var(--accent); color:var(--onaccent); border-color:var(--accent); font-weight:600; }
+  button.primary { background:var(--accent); color:var(--onaccent); border-color:var(--accent); font-weight:600; }
+  button.primary:hover:not(:disabled) { background:var(--accent2); color:var(--onaccent); }
   button.lock { color:var(--muted); border-style:dashed; }
   input[type=range] { accent-color:var(--accent); }
-  input[type=number], select { background:#fff; border:1px solid var(--line); color:var(--text); border-radius:5px; padding:4px 8px; font:inherit; }
+  input[type=number], select { background:var(--paper); border:1px solid var(--line); color:var(--text); border-radius:5px; padding:4px 8px; font:inherit; }
   .screen { display:none; height:100%; } .screen.visible { display:flex; flex-direction:column; }
   h1 { font-size:21px; margin-bottom:4px; }
   h2 { font-size:12.5px; color:var(--muted); margin:12px 0 6px; text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
@@ -80,7 +97,7 @@
   @media (prefers-reduced-motion: reduce) { #owc-input.attn { animation:none; } }
   /* гид: маленький оранжевый Нефтяша – кнопка, открывающая панель «Нефтяша подскажет» */
   .guide-btn { display:inline-flex; align-items:center; gap:4px; padding:2px 7px 2px 3px; border-radius:999px; border:1px solid #fdba74;
-               background:#fff7ed; color:#9a3412; font-weight:600; font-size:12.5px; line-height:1; vertical-align:middle; }
+               background:var(--paper)7ed; color:#9a3412; font-weight:600; font-size:12.5px; line-height:1; vertical-align:middle; }
   .guide-btn:hover:not(:disabled) { background:#ffedd5; border-color:#fb923c; color:#7c2d12; }
   .guide-btn:hover .nefty-mini { animation:nefty-hop .5s ease-in-out; }
   .nefty-mini { width:26px; height:26px; flex:none; overflow:visible; }
@@ -89,7 +106,7 @@
   #guide { position:fixed; top:0; right:0; bottom:0; width:min(460px, 100vw); z-index:150; background:var(--panel); border-left:1px solid var(--line);
            box-shadow:-10px 0 30px #2a3f5f26; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .22s ease; }
   #guide.open { transform:none; }
-  #guide header { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); background:#fff7ed; }
+  #guide header { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); background:var(--paper)7ed; }
   #guide header .nefty-mini { width:44px; height:44px; }
   #guide header b { font-size:16px; color:#9a3412; } #guide header .x { margin-left:auto; }
   #guide .gbody { overflow:auto; padding:8px 14px 18px; font-size:13.5px; line-height:1.5; }
@@ -162,7 +179,7 @@
   .layerbar { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
   .layerbar .lbl { color:var(--muted); margin-right:2px; }
   .layerbar button { padding:4px 10px; font-size:13px; white-space:nowrap; }
-  #map { width:100%; flex:1 1 auto; min-height:300px; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  #map { width:100%; flex:1 1 auto; min-height:300px; background:var(--paper); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   #owc-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:8px 0; }
   #owc-bar input[type=number] { width:80px; }
   #owc-bar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
@@ -196,14 +213,14 @@
   .rep-sec h2 span { color:var(--accent); margin-right:6px; }
   .score-box { display:flex; gap:26px; align-items:center; flex-wrap:wrap; padding:14px 18px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; }
   .ring { width:150px; height:150px; border-radius:50%; display:grid; place-items:center; flex:none; }
-  .ring > div { width:112px; height:112px; border-radius:50%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .ring > div { width:112px; height:112px; border-radius:50%; background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; }
   .ring b { font-size:38px; line-height:1; } .ring small { color:var(--muted); font-size:12px; }
   .score-parts { flex:1; min-width:300px; }
   .score-parts .bar { height:10px; border-radius:5px; background:var(--row); overflow:hidden; margin:3px 0 10px; }
   .score-parts .bar i { display:block; height:100%; border-radius:5px; }
   .grade { display:inline-block; padding:3px 12px; border-radius:14px; color:#fff; font-weight:600; font-size:13px; }
   .rep-note { color:var(--muted); font-size:11.5px; line-height:1.5; margin-top:6px; }
-  .rep-banner { background:#fff7e0; border:1px solid #f3d98b; border-radius:8px; padding:8px 12px; margin-bottom:14px; }
+  .rep-banner { background:var(--paper)7e0; border:1px solid #f3d98b; border-radius:8px; padding:8px 12px; margin-bottom:14px; }
   .rep-progress { padding:60px 20px; text-align:center; font-size:15px; }
   .rep-progress .bar { width:60%; height:10px; background:var(--row); border-radius:5px; margin:14px auto 0; overflow:hidden; }
   .rep-progress .bar i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
@@ -220,7 +237,7 @@
   @media print {
     @page { size: A4; margin: 11mm; }
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    html, body { height:auto !important; overflow:visible !important; background:#fff !important; }
+    html, body { height:auto !important; overflow:visible !important; background:var(--paper) !important; }
     .screen { display:none !important; }
     #screen-results.visible { display:block !important; height:auto !important; overflow:visible !important; }
     .no-print, #toast, .modal, #guide, #tip, .guide-btn, .hint { display:none !important; }
@@ -266,7 +283,7 @@
   #pta-plots > div { flex:1; min-width:0; }
   #pta-side { flex:0 0 300px; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#fff; border:1px solid var(--accent); box-shadow:0 4px 14px #2a3f5f2e; color:var(--text); border-radius:8px; padding:9px 16px; z-index:60; max-width:90vw; }
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--paper); border:1px solid var(--accent); box-shadow:0 4px 14px #2a3f5f2e; color:var(--text); border-radius:8px; padding:9px 16px; z-index:60; max-width:90vw; }
   #toast.warn { border-color:var(--bad); }
 </style>
 </head>
@@ -371,6 +388,7 @@
   <div class="cp-foot"><span class="sub">Сейчас: <b id="calc-state"></b></span><button id="calc-reset">Сбросить</button></div>
   <div class="cp-note sub">Мельче сетка – подробнее карты и скважины, но расчёт заметно дольше (≈ N³); крупнее – быстрее и грубее. Для соревнования в классе у всех должны быть одинаковые настройки: любое изменение попадает в код объекта и отмечается в отчёте. Эталон для нестандартной сетки считается заново.</div>
 </div>
+<div id="theme-float"><select id="theme-sel2" class="theme-sel" title="Тема оформления"></select></div>
 <div id="screen-settings" class="screen visible">
   <div class="settings-box card">
     <h1>Нефтяша: разработка нефтяного месторождения <button class="guide-btn" data-guide="start" title="Нефтяша подскажет"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg><span>Как играть?</span></button><sup class="hint" tabindex="0" data-tip="Учебный симулятор: двухфазная модель нефть–вода (IMPES, сетка 50×50), скважины по Писману, интегрированная модель с ЭЦН, штуцерами, КНС и системой сбора, экономика с ЧДД и оценкой против эталона.">?</sup></h1>
@@ -485,6 +503,7 @@
     <span id="tb-obj"></span>
     </div>
     <div class="tb-right">
+      <select id="theme-sel" class="theme-sel" title="Тема оформления"></select>
       <button id="btn-schem" title="Система сбора и закачки, конструкция скважин">🗺 Схемы</button>
       <button class="guide-btn" data-guide="goal" title="Гид: как играть и что нажимать"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg><span>Гид</span></button>
       <button id="btn-prices" data-tip="@prices">₽ Цены</button>
@@ -3570,7 +3589,13 @@ if (typeof Plotly === "undefined") {
   throw new Error("Plotly не загружен");
 }
 const PAL = ["#636efa", "#EF553B", "#00cc96", "#ab63fa", "#FFA15A", "#19d3f3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52"];
-const TXT = "#2a3f5f", PLOTBG = "#E5ECF6", FONT = "Open Sans, verdana, arial, sans-serif";
+let TXT = "#2a3f5f", PLOTBG = "#E5ECF6", FONT = "Open Sans, verdana, arial, sans-serif", PAPER = "#fff", GRIDC = "#fff", LINEC = "#dfe6f1", ROWC = "#eaeff7";
+// цвета графиков берутся из переменных текущей темы (см. :root[data-theme] в стилях)
+function readThemeColors() {
+  const cs = getComputedStyle(document.documentElement), v = (n, d) => cs.getPropertyValue(n).trim() || d;
+  TXT = v("--text", TXT); PLOTBG = v("--plotbg", PLOTBG); PAPER = v("--paper", PAPER); GRIDC = v("--grid", GRIDC); LINEC = v("--line", LINEC); ROWC = v("--row", ROWC);
+  FONT = v("--font", FONT);
+}
 const CFG = { displayModeBar: false, responsive: true };
 const MAPCFG = { ...CFG, scrollZoom: true, doubleClick: false };
 let DX = C.GRID.dx, NX = C.GRID.nx; // меняются при выборе размера сетки
@@ -3579,8 +3604,8 @@ function setGridDims(n) { NX = n; if (typeof G !== "undefined" && G) G.mapView =
 
 // базовый макет в духе шаблона plotly: серо-голубое поле, белая сетка
 function lay(o = {}) {
-  const ax = { gridcolor: "#fff", linecolor: "#EBF0F8", zerolinecolor: "#fff", ticks: "outside", tickcolor: "#c8d4e3", automargin: true };
-  const out = { paper_bgcolor: "#fff", plot_bgcolor: PLOTBG, font: { family: FONT, color: TXT, size: 12 },
+  const ax = { gridcolor: GRIDC, linecolor: LINEC, zerolinecolor: GRIDC, ticks: "outside", tickcolor: LINEC, automargin: true };
+  const out = { paper_bgcolor: PAPER, plot_bgcolor: PLOTBG, font: { family: FONT, color: TXT, size: 12 },
                 margin: { l: 52, r: 14, t: 34, b: 38 }, showlegend: false, hoverlabel: { font: { family: FONT } },
                 xaxis: { ...ax }, yaxis: { ...ax } };
   for (const k of Object.keys(o)) out[k] = (/^(x|y)axis\d*$/.test(k) && out[k]) ? { ...out[k], ...o[k] } : (typeof o[k] === "object" && !Array.isArray(o[k]) && out[k] ? { ...out[k], ...o[k] } : o[k]);
@@ -3751,7 +3776,7 @@ function layerTrace(sim) {
       contours: { coloring: "heatmap", showlabels: true, start: mn, end: mx, size: 5, labelfont: { size: 10, color: "#fff" } },
       line: { width: 0.8, color: "rgba(255,255,255,.7)" }, colorbar: bar("абс., м") };
   }
-  return { type: "heatmap", ...common, z: field2D(() => 0), colorscale: [[0, "#f4f7fb"], [1, "#f4f7fb"]], showscale: false, hoverinfo: "skip" };
+  return { type: "heatmap", ...common, z: field2D(() => 0), colorscale: [[0, PAPER], [1, PAPER]], showscale: false, hoverinfo: "skip" };
 }
 // условные знаки контуров ВНК: внешний – штрих-пунктир (точка-тире), внутренний – штрих с двумя точками (две точки-тире)
 const OWC_OUT = "14px,4px,3px,4px", OWC_IN = "14px,4px,3px,4px,3px,4px";
@@ -4260,8 +4285,8 @@ function renderEconCharts() {
       EXP_ITEMS.forEach(([, , , idx], j) => stack[j].push(idx.reduce((a, i) => a + e[i], 0) / 1e6));
     }
   }
-  const xMax = Math.max(sim.t / 365.25, 0.1), grid = { gridcolor: "#eef1f6", zerolinecolor: "#cbd5e1", linecolor: "#cfd8e6", ticks: "outside", tickcolor: "#cfd8e6" };
-  const base = (title, ytitle) => ({ paper_bgcolor: "#fff", plot_bgcolor: "#fff", font: { family: FONT, color: TXT, size: 12 }, height: 340, hovermode: "x unified", margin: { l: 64, r: 16, t: 44, b: 96 },
+  const xMax = Math.max(sim.t / 365.25, 0.1), grid = { gridcolor: ROWC, zerolinecolor: LINEC, linecolor: LINEC, ticks: "outside", tickcolor: LINEC };
+  const base = (title, ytitle) => ({ paper_bgcolor: PAPER, plot_bgcolor: PAPER, font: { family: FONT, color: TXT, size: 12 }, height: 340, hovermode: "x unified", margin: { l: 64, r: 16, t: 44, b: 96 },
     title: { text: title, x: 0.02, xanchor: "left", font: { size: 14 } }, legend: { orientation: "h", x: 0, y: -0.28 }, xaxis: { ...grid, range: [0, xMax], title: { text: "годы" } }, yaxis: { ...grid, title: { text: ytitle } } });
   const ln = (name, y, color, extra = {}) => ({ type: "scatter", mode: "lines", name, x, y, line: { color, width: 3, shape: "spline", smoothing: 0.4 }, hovertemplate: `${name}: %{y:.0f}<extra></extra>`, ...extra });
   Plotly.react("ec-one", [ln("Баланс", bal, "#0f172a", { line: { color: "#0f172a", width: 3.5 } }), ln("Выручка накоп.", rev, "#16a34a"), ln("Затраты накоп.", cost, "#dc2626"),
@@ -4334,7 +4359,7 @@ function renderWellsCharts() {
     line("Нефть, т/сут", oil, "#dc2626", { hovertemplate: "нефть %{y:.1f} т/сут<extra></extra>" })] : []),
     ...(hasInj ? [line("Закачка воды, м³/сут", inj, "#2563eb", { fill: "tozeroy", fillcolor: "rgba(37,99,235,.14)", hovertemplate: "закачка %{y:.1f} м³/сут<extra></extra>" })] : []),
     line("Забойное давление, атм", pwf, "#64748b", { yaxis: "y2", line: { color: "#64748b", width: 2, dash: "dot", shape: "spline", smoothing: 0.5 }, hovertemplate: "P<sub>wf</sub> %{y:.0f} атм<extra></extra>" })],
-    { paper_bgcolor: "#fff", plot_bgcolor: "#fff", font: { family: FONT, color: TXT, size: 12 }, height: 360, hovermode: "x unified",
+    { paper_bgcolor: PAPER, plot_bgcolor: PAPER, font: { family: FONT, color: TXT, size: 12 }, height: 360, hovermode: "x unified",
       margin: { l: 64, r: 64, t: 46, b: 72 }, title: { text: title, x: 0.02, xanchor: "left", font: { size: 14 } },
       legend: { orientation: "h", x: 0, y: -0.26 },
       xaxis: { ...grid, range: [0, xMax], title: { text: "годы" } },
@@ -4510,7 +4535,7 @@ function drawPumpChar() {
     { type: "scatter", mode: "lines", x: q, y: kw, name: "Мощность, кВт", yaxis: "y3", line: { color: "#dc2626", width: 2.5 }, hovertemplate: "%{y:.0f} кВт<extra></extra>" },
     { type: "scatter", mode: "markers", x: [e.q], y: [etaOp], yaxis: "y2", marker: { symbol: "star", size: 14, color: zc, line: { color: "#fff", width: 1.5 } }, showlegend: false, hoverinfo: "skip" }];
   const grid = { gridcolor: "#eef1f6", zerolinecolor: "#dfe5ee", linecolor: "#cfd8e6" };
-  const layout = { paper_bgcolor: "#fff", plot_bgcolor: "#fff", font: { family: FONT, color: TXT, size: 12 }, height: 660, margin: { l: 66, r: 70, t: 40, b: 50 }, hovermode: "x unified",
+  const layout = { paper_bgcolor: PAPER, plot_bgcolor: PAPER, font: { family: FONT, color: TXT, size: 12 }, height: 660, margin: { l: 66, r: 70, t: 40, b: 50 }, hovermode: "x unified",
     title: { text: `${w.name}: насос ${P.name} на ${f} Гц – рабочая зона (зелёная) ${lo.toFixed(0)}–${hi.toFixed(0)} м³/сут`, x: 0.02, xanchor: "left", font: { size: 14 } },
     legend: { orientation: "h", x: 0, y: -0.12 },
     shapes: [{ type: "rect", xref: "x", yref: "paper", x0: lo, x1: hi, y0: 0, y1: 1, fillcolor: "rgba(22,163,74,.10)", line: { width: 0 }, layer: "below" }],
@@ -5102,7 +5127,7 @@ function buildReport(sim, fc, finished) {
   if (fc) {
     const yrs = Array.from({ length: T }, (_, i) => i + 1), ln = (name, arr, color, extra = {}) => ({ type: "scatter", mode: "lines", name, x: yrs, y: arr, line: { color, width: 3 }, ...extra });
     const split = (arr) => [arr.slice(0, nPlay), arr.slice(nPlay - 1, T)], mk = (arr, name, color, k = 1) => { const [a, b] = split(arr.slice(0, T).map((v) => v / k)); return [{ type: "scatter", mode: "lines", name, x: yrs.slice(0, nPlay), y: a, line: { color, width: 3 } }, { type: "scatter", mode: "lines", name: name + " (прогноз)", x: yrs.slice(nPlay - 1), y: b, line: { color, width: 3, dash: "dash" }, showlegend: false }]; };
-    const cl = (t, yt) => ({ paper_bgcolor: "#fff", plot_bgcolor: "#fff", font: { family: FONT, color: TXT, size: 11 }, height: 290, margin: { l: 56, r: 12, t: 34, b: 52 }, title: { text: t, x: 0.02, xanchor: "left", font: { size: 13 } }, hovermode: "x unified",
+    const cl = (t, yt) => ({ paper_bgcolor: PAPER, plot_bgcolor: PAPER, font: { family: FONT, color: TXT, size: 11 }, height: 290, margin: { l: 56, r: 12, t: 34, b: 52 }, title: { text: t, x: 0.02, xanchor: "left", font: { size: 13 } }, hovermode: "x unified",
       legend: { orientation: "h", x: 0, y: -0.2 }, xaxis: { title: { text: "годы" }, gridcolor: "#eef1f6", linecolor: "#cfd8e6", dtick: 2 }, yaxis: { title: { text: yt }, gridcolor: "#eef1f6", linecolor: "#cfd8e6", rangemode: "tozero" },
       shapes: [{ type: "line", xref: "x", yref: "paper", x0: nPlay + 0.5, x1: nPlay + 0.5, y0: 0, y1: 1, line: { color: "#8a97ab", width: 1.5, dash: "dot" } }], annotations: [{ xref: "x", yref: "paper", x: nPlay + 0.6, y: 1, xanchor: "left", yanchor: "top", text: "прогноз →", showarrow: false, font: { size: 10, color: "#6b7c93" } }] });
     const refT = (arr, k) => ln("Эталон", arr.slice(0, T).map((v) => v / k), "#9aa7b8", { line: { color: "#9aa7b8", width: 2.5 } });
@@ -5344,6 +5369,20 @@ initRuler(); globalThis.__accelReady = applyAccel; applyAccel();
 function setNoScroll(on) { document.body.classList.toggle("no-scrollbars", on); document.querySelectorAll(".chk-noscroll").forEach((c) => (c.checked = on)); try { localStorage.setItem("oilgame-noscroll", on ? "1" : "0"); } catch (e) {} }
 document.querySelectorAll(".chk-noscroll").forEach((c) => c.addEventListener("change", () => setNoScroll(c.checked)));
 try { setNoScroll(localStorage.getItem("oilgame-noscroll") === "1"); } catch (e) {}
+// ---------------- темы оформления ----------------
+const THEMES = [["classic", "Классика"], ["night", "🌙 Ночная вахта"], ["oil", "🛢 Чёрное золото"], ["taiga", "🌲 Тайга"], ["sunset", "🌅 Закат на промысле"], ["shelf", "🌊 Шельф"], ["terminal", "💾 Ретро-терминал"]];
+function applyTheme(id, save = true, redraw = true) {
+  if (!THEMES.some((q) => q[0] === id)) id = "classic";
+  if (id === "classic") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", id);
+  readThemeColors();
+  document.querySelectorAll(".theme-sel").forEach((e) => (e.value = id));
+  if (save) try { localStorage.setItem("oilgame-theme", id); } catch (e) {}
+  if (!redraw) return;
+  if (G.sim && $("screen-game").classList.contains("visible")) { G.mapSig = ""; G.dirty = true; renderAll(); }
+  else if ($("screen-settings").classList.contains("visible") && typeof renderSettingsPreview === "function") renderSettingsPreview();
+}
+document.querySelectorAll(".theme-sel").forEach((e) => { e.innerHTML = THEMES.map(([v, l]) => `<option value="${v}">${l}</option>`).join(""); e.addEventListener("change", () => applyTheme(e.value)); });
+try { applyTheme(localStorage.getItem("oilgame-theme") || "classic", false, false); } catch (e) { applyTheme("classic", false, false); }
 // ---------- гид «Нефтяша подскажет» ----------
 function openGuide(sec) {
   const g = $("guide"); g.classList.add("open"); g.setAttribute("aria-hidden", "false");
