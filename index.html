@@ -1639,6 +1639,7 @@ function applyEquipment(sim) {
     const e = solveEquipment(sim, w);
     w.eq = e; w.kW = e.kW * dutyOf(w);
     w.pwf = e.dead ? wellG(sim, w).Pc : 0.5 * w.pwf + 0.5 * e.pwf; // демпфирование от колебаний между сутками
+    if (w.type === "inj" && !e.dead) { const g = wellG(sim, w); if (g.G > 0) w.pwf = Math.min(w.pwf, g.Pc + Q_INJ_MAX / g.G); } // предел приёмистости действует и в переходных режимах (демпфирование от заданного давления)
   }
 }
 
@@ -2496,6 +2497,11 @@ function equipmentTests() {
   t.push({ name: "ПКВ: duty = 0,5 даёт средний дебит меньше непрерывного, но больше половины (давление у скважины выше), ≈ половину мощности и меньший удельный расход энергии",
            pass: eP.q > 0.5 * eC.q && eP.q < eC.q && eP.kW < 0.65 * eC.kW && eP.kW > 0.35 * eC.kW && kwhP < kwhC,
            details: `q ${eP.q.toFixed(0)} / ${eC.q.toFixed(0)} м³/сут, ${eP.kW.toFixed(0)} / ${eC.kW.toFixed(0)} кВт, ${kwhP.toFixed(2)} / ${kwhC.toFixed(2)} кВт·ч/м³` });
+  // предел приёмистости: фактическая закачка не выше 500 м³/сут и при самых широких настройках (штуцер 30 мм, КНС 200 атм)
+  const sq = mk(); sq.addWell(sq.r.explore[2].cell, "prod", 150); sq.addWell(sq.r.explore[0].cell, "inj", 300);
+  const pq = sq.wells[0], iq = sq.wells[1]; pq.mode = "esp"; pq.hasESP = true; pq.pump = "500"; iq.mode = "choke"; iq.choke = 30; sq.field.pKNS = 200;
+  let qMaxInj = 0; for (let d = 0; d < 30; d++) { advance(sq, 5); qMaxInj = Math.max(qMaxInj, iq.q); }
+  t.push({ name: "закачка: приёмистость скважины не выше 500 м³/сут даже при штуцере 30 мм и КНС 200 атм", pass: qMaxInj > 10 && qMaxInj <= Q_INJ_MAX + 1e-6, details: `максимум ${qMaxInj.toFixed(0)} м³/сут за 150 сут` });
   // бурение: один станок – одна скважина за 60 сут (ВС), больше станков – быстрее; деньги списываются, когда станок берёт скважину
   const mkRig = (rigs) => { const sm = mk(); if (rigs > 1) for (let q = 1; q < rigs; q++) buyRig(sm); const ex = sm.r.explore;
     for (let q = 0; q < 4; q++) { sm.addWell(ex[q].cell, "prod", 150); orderWell(sm, { well: sm.wells.pop(), units: CAPEX.vert(), kind: "v", name: "T" + q }); } return sm; };
