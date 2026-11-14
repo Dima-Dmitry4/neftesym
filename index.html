@@ -477,7 +477,7 @@
     <p class="splash-sub">учебная игра-симулятор разработки нефтяного месторождения</p>
     <button id="splash-start" class="primary" title="К выбору объекта разработки и настройкам">▶ Играть</button>
     <p class="splash-note">Разведка · сейсмика · бурение · ГРП и ГС · закачка воды · экономика · отчёт с оценкой</p>
-    <p class="splash-keys">Enter – начать · растаскивайте капли нефти мышью · щёлкните по Нефтяше</p>
+    <p class="splash-keys">Enter – начать · растаскивайте капли мышью · щёлкните по Нефтяше</p>
   </div>
 </div>
 <div id="screen-settings" class="screen">
@@ -5652,13 +5652,13 @@ function splashSprite() {
   const S = document.createElement("canvas"); S.width = S.height = 64;
   const c = S.getContext("2d");
   const drop = () => { c.beginPath(); c.moveTo(32, 3); c.bezierCurveTo(37, 14, 50, 24, 50, 39); c.arc(32, 39, 18, 0, Math.PI); c.bezierCurveTo(14, 24, 27, 14, 32, 3); c.closePath(); };
-  c.save(); c.shadowColor = "rgba(245,158,11,.32)"; c.shadowBlur = 11; drop(); c.fillStyle = "rgba(120,84,30,.26)"; c.fill(); c.restore();
+  c.save(); c.shadowColor = "rgba(59,130,246,.38)"; c.shadowBlur = 11; drop(); c.fillStyle = "rgba(37,99,235,.28)"; c.fill(); c.restore();
   const g = c.createRadialGradient(30, 36, 3, 32, 40, 22);
-  g.addColorStop(0, "rgba(64,46,24,.62)"); g.addColorStop(0.65, "rgba(38,27,14,.52)"); g.addColorStop(1, "rgba(24,17,9,.38)");
+  g.addColorStop(0, "rgba(59,130,246,.72)"); g.addColorStop(0.65, "rgba(37,99,235,.62)"); g.addColorStop(1, "rgba(30,64,175,.5)");
   drop(); c.fillStyle = g; c.fill();
-  drop(); c.lineWidth = 1.4; c.strokeStyle = "rgba(14,10,5,.34)"; c.stroke();
-  c.save(); c.translate(24, 33); c.rotate(-0.5); c.fillStyle = "rgba(251,191,36,.3)"; c.beginPath(); c.ellipse(0, 0, 8, 4, 0, 0, 6.2832); c.fill(); c.restore();
-  c.fillStyle = "rgba(255,240,213,.5)"; c.beginPath(); c.arc(26.5, 30.5, 2, 0, 6.2832); c.fill();
+  drop(); c.lineWidth = 1.4; c.strokeStyle = "rgba(30,58,138,.5)"; c.stroke();
+  c.save(); c.translate(24, 33); c.rotate(-0.5); c.fillStyle = "rgba(147,197,253,.45)"; c.beginPath(); c.ellipse(0, 0, 8, 4, 0, 0, 6.2832); c.fill(); c.restore();
+  c.fillStyle = "rgba(239,246,255,.75)"; c.beginPath(); c.arc(26.5, 30.5, 2, 0, 6.2832); c.fill();
   return S;
 }
 function splashResize() {
@@ -5668,7 +5668,7 @@ function splashResize() {
 }
 // россыпь по всей площади: «домашние» точки на дрожащей сетке – капли равномерно усеивают экран и после растаскивания возвращаются
 function splashSeed() {
-  const target = Math.round(Math.max(90, Math.min(260, (SPLASH.w * SPLASH.h) / 5200)));
+  const target = Math.round(Math.max(160, Math.min(420, (SPLASH.w * SPLASH.h) / 3000)));
   const cols = Math.max(1, Math.round(Math.sqrt((target * SPLASH.w) / SPLASH.h))), rows = Math.max(1, Math.round(target / cols));
   const jx = (SPLASH.w / cols) * 0.7, jy = (SPLASH.h / rows) * 0.7;
   SPLASH.pts = [];
@@ -5722,7 +5722,7 @@ function splashDraw() {
   const cv = $("splash-fx"), ctx = cv.getContext("2d"), P = SPLASH.pts, S = SPLASH.sprite, d = SPLASH.dpr;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
   for (const p of P) {
-    const sz = 30 * p.r, co = Math.cos(p.rot) * d, si = Math.sin(p.rot) * d;
+    const sz = 10 * p.r, co = Math.cos(p.rot) * d, si = Math.sin(p.rot) * d;
     ctx.setTransform(co, si, -si, co, p.x * d, p.y * d);
     ctx.drawImage(S, -sz / 2, -sz / 2, sz, sz);
   }
