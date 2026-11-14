@@ -45,6 +45,28 @@
   .hidden { display:none !important; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 1px 4px #2a3f5f12; }
 
+  /* ---------- экран входа ---------- */
+  #screen-splash { position:relative; overflow:hidden; }
+  #screen-splash.visible { display:flex; align-items:center; justify-content:center; }
+  #splash-fx { position:absolute; inset:0; width:100%; height:100%; }
+  .splash-card { position:relative; z-index:1; text-align:center; padding:20px; }
+  .splash-hero { position:relative; display:inline-block; animation:splash-float 4.5s ease-in-out infinite; will-change:transform; }
+  .splash-hero::after { content:""; position:absolute; left:50%; bottom:0; width:72%; height:24px; transform:translateX(-50%);
+                        background:radial-gradient(closest-side, #2a3f5f30, transparent 72%); pointer-events:none; } /* мягкая тень вместо дорогого filter */
+  #splash-mascot { width:clamp(140px, 24vh, 210px); height:auto; overflow:visible; cursor:pointer; }
+  .splash-title { font-size:clamp(38px, 7vw, 62px); margin:8px 0 2px; letter-spacing:.01em; }
+  .splash-sub { font-size:clamp(13.5px, 2.2vw, 16.5px); color:var(--muted); margin-bottom:26px; }
+  #splash-start { position:relative; font-size:19px; padding:13px 46px; border-radius:999px; border-width:2px; transition:transform .16s ease; }
+  #splash-start::after { content:""; position:absolute; inset:-2px; border-radius:inherit; pointer-events:none;
+                         box-shadow:0 10px 28px #2a3f5f40, 0 0 0 8px color-mix(in srgb, var(--accent) 10%, transparent);
+                         opacity:0; animation:splash-glow 2.6s ease-in-out infinite; } /* мерцает только opacity – без repaint кнопки */
+  #splash-start:hover:not(:disabled) { transform:translateY(-2px) scale(1.03); }
+  .splash-note { margin-top:28px; font-size:12.5px; color:var(--muted); }
+  .splash-keys { margin-top:6px; font-size:11.5px; color:var(--muted); opacity:.8; }
+  @keyframes splash-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-9px); } }
+  @keyframes splash-glow { 0%,100% { opacity:0; } 50% { opacity:1; } }
+  @media (prefers-reduced-motion: reduce) { .splash-hero, #splash-start::after { animation:none; } #splash-start:hover:not(:disabled) { transform:none; } }
+
   /* ---------- настройки ---------- */
   #screen-settings { overflow:auto; align-items:stretch; justify-content:flex-start; }
   .settings-box { width:min(1040px, 96vw); margin:22px auto; padding:20px 24px; }
@@ -139,29 +161,29 @@
   #tb-money.good { color:var(--good); font-weight:600; } #tb-money.bad { color:var(--bad); font-weight:600; }
   /* Маскот «Нефтяша» у счётчика денег: настроение – по денежному потоку за месяц */
   .money-box { display:flex; align-items:center; gap:4px; }
-  #mascot { width:48px; height:48px; flex:none; overflow:visible; cursor:help; }
-  #mascot * { transform-box:view-box; }
-  #mascot .mg-all { transform-origin:32px 60px; }
-  #mascot .arm-l { transform-origin:14px 39px; } #mascot .arm-r { transform-origin:50px 39px; }
-  #mascot [class^="m-"], #mascot .tear, #mascot .q, #mascot .sweat, #mascot .brow, #mascot .eyes-happy { display:none; }
-  #mascot.mood-dance .eyes-happy { display:inline; } #mascot.mood-dance .eyes-open { display:none; }
-  #mascot.mood-idle .m-idle, #mascot.mood-dance .m-dance, #mascot.mood-think .m-think, #mascot.mood-scared .m-scared, #mascot.mood-cry .m-cry { display:inline; }
-  #mascot.mood-think .q, #mascot.mood-think .brow, #mascot.mood-scared .sweat, #mascot.mood-scared .brow, #mascot.mood-cry .tear, #mascot.mood-cry .brow { display:inline; }
-  #mascot.mood-idle .mg-all { animation:mg-breathe 3s ease-in-out infinite; }
-  #mascot.mood-dance .mg-all { animation:mg-dance .62s ease-in-out infinite; }
-  #mascot.mood-dance .arm-l { animation:mg-wave-l .31s ease-in-out infinite alternate; }
-  #mascot.mood-dance .arm-r { animation:mg-wave-r .31s ease-in-out infinite alternate; }
-  #mascot.mood-think .mg-all { animation:mg-ponder 3.2s ease-in-out infinite; }
-  #mascot.mood-think .arm-r { transform:rotate(-95deg) translate(-2px,2px); }
-  #mascot.mood-think .pupil { transform:translate(1.6px,-2.2px); }
-  #mascot.mood-think .q { animation:mg-q 1.6s ease-in-out infinite; }
-  #mascot.mood-scared .mg-all { animation:mg-shake .11s linear infinite; }
-  #mascot.mood-scared .body { filter:saturate(.55) brightness(1.12); }
-  #mascot.mood-scared .pupil { transform:scale(.45); transform-origin:center; transform-box:fill-box; }
-  #mascot.mood-scared .arm-l { transform:rotate(70deg); } #mascot.mood-scared .arm-r { transform:rotate(-70deg); }
-  #mascot.mood-cry .mg-all { animation:mg-sob 1s ease-in-out infinite; }
-  #mascot.mood-cry .pupil { transform:translateY(1.2px) scale(.92); transform-origin:center; transform-box:fill-box; }
-  #mascot.mood-cry .tear { animation:mg-tear 1.1s ease-in infinite; } #mascot.mood-cry .tear.t2 { animation-delay:.55s; }
+  .mascot { width:48px; height:48px; flex:none; overflow:visible; cursor:help; }
+  .mascot * { transform-box:view-box; }
+  .mascot .mg-all { transform-origin:32px 60px; }
+  .mascot .arm-l { transform-origin:14px 39px; } .mascot .arm-r { transform-origin:50px 39px; }
+  .mascot [class^="m-"], .mascot .tear, .mascot .q, .mascot .sweat, .mascot .brow, .mascot .eyes-happy { display:none; }
+  .mascot.mood-dance .eyes-happy { display:inline; } .mascot.mood-dance .eyes-open { display:none; }
+  .mascot.mood-idle .m-idle, .mascot.mood-dance .m-dance, .mascot.mood-think .m-think, .mascot.mood-scared .m-scared, .mascot.mood-cry .m-cry { display:inline; }
+  .mascot.mood-think .q, .mascot.mood-think .brow, .mascot.mood-scared .sweat, .mascot.mood-scared .brow, .mascot.mood-cry .tear, .mascot.mood-cry .brow { display:inline; }
+  .mascot.mood-idle .mg-all { animation:mg-breathe 3s ease-in-out infinite; }
+  .mascot.mood-dance .mg-all { animation:mg-dance .62s ease-in-out infinite; }
+  .mascot.mood-dance .arm-l { animation:mg-wave-l .31s ease-in-out infinite alternate; }
+  .mascot.mood-dance .arm-r { animation:mg-wave-r .31s ease-in-out infinite alternate; }
+  .mascot.mood-think .mg-all { animation:mg-ponder 3.2s ease-in-out infinite; }
+  .mascot.mood-think .arm-r { transform:rotate(-95deg) translate(-2px,2px); }
+  .mascot.mood-think .pupil { transform:translate(1.6px,-2.2px); }
+  .mascot.mood-think .q { animation:mg-q 1.6s ease-in-out infinite; }
+  .mascot.mood-scared .mg-all { animation:mg-shake .11s linear infinite; }
+  .mascot.mood-scared .body { filter:saturate(.55) brightness(1.12); }
+  .mascot.mood-scared .pupil { transform:scale(.45); transform-origin:center; transform-box:fill-box; }
+  .mascot.mood-scared .arm-l { transform:rotate(70deg); } .mascot.mood-scared .arm-r { transform:rotate(-70deg); }
+  .mascot.mood-cry .mg-all { animation:mg-sob 1s ease-in-out infinite; }
+  .mascot.mood-cry .pupil { transform:translateY(1.2px) scale(.92); transform-origin:center; transform-box:fill-box; }
+  .mascot.mood-cry .tear { animation:mg-tear 1.1s ease-in infinite; } .mascot.mood-cry .tear.t2 { animation-delay:.55s; }
   @keyframes mg-breathe { 0%,100% { transform:scale(1,1); } 50% { transform:scale(1.03,.97); } }
   @keyframes mg-dance { 0% { transform:translateY(0) rotate(-9deg); } 25% { transform:translateY(-6px) rotate(0); } 50% { transform:translateY(0) rotate(9deg); } 75% { transform:translateY(-6px) rotate(0); } 100% { transform:translateY(0) rotate(-9deg); } }
   @keyframes mg-wave-l { from { transform:rotate(10deg); } to { transform:rotate(120deg); } }
@@ -171,7 +193,7 @@
   @keyframes mg-shake { 0% { transform:translateX(-1.4px); } 50% { transform:translateX(1.4px); } 100% { transform:translateX(-1.4px); } }
   @keyframes mg-sob { 0%,100% { transform:translateY(0); } 40% { transform:translateY(1.5px) scale(1.02,.98); } }
   @keyframes mg-tear { 0% { transform:translateY(0); opacity:0; } 15% { opacity:1; } 100% { transform:translateY(16px); opacity:0; } }
-  @media (prefers-reduced-motion: reduce) { #mascot * { animation:none !important; } }
+  @media (prefers-reduced-motion: reduce) { .mascot * { animation:none !important; } }
   .tb-right { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
   #year-bar { width:90px; height:6px; background:var(--row); border-radius:3px; overflow:hidden; }
   #year-bar i { display:block; height:100%; width:0; background:var(--accent); }
@@ -394,7 +416,71 @@
   <div class="cp-note sub">Мельче сетка – подробнее карты и скважины, но расчёт заметно дольше (≈ N³); крупнее – быстрее и грубее. Для соревнования в классе у всех должны быть одинаковые настройки: любое изменение попадает в код объекта и отмечается в отчёте. Эталон для нестандартной сетки считается заново.</div>
 </div>
 <div id="theme-float"><img class="app-logo" src="data:image/png;base64,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" alt="Логотип" title="Нефтяша" width="30" height="30"><select id="theme-sel2" class="theme-sel" title="Тема оформления"></select></div>
-<div id="screen-settings" class="screen visible">
+<div id="screen-splash" class="screen visible" aria-label="Экран входа">
+  <canvas id="splash-fx" aria-hidden="true"></canvas>
+  <div class="splash-card">
+    <span class="splash-hero">
+      <svg id="splash-mascot" class="mascot mood-dance" viewBox="0 0 64 64" role="img" aria-label="Нефтяша ждёт начала игры" title="Нефтяша: щёлкните – он потанцует">
+        <title>Нефтяша</title>
+        <g class="mg-all">
+          <!-- пушистые ушки -->
+          <path d="M14.5 12.8 Q16.7 12.2 18.1 14.0 Q20.3 14.8 20.4 17.1 Q21.7 19.0 20.4 20.9 Q20.3 23.2 18.1 24.0 Q16.7 25.8 14.5 25.2 Q12.3 25.8 10.9 24.0 Q8.7 23.2 8.6 20.9 Q7.3 19.0 8.6 17.1 Q8.7 14.8 10.9 14.0 Q12.3 12.2 14.5 12.8 Z" fill="#4f8ef7"/><circle cx="14.5" cy="19.5" r="3.1" fill="#f9a8d4"/>
+          <path d="M49.5 12.8 Q51.7 12.2 53.1 14.0 Q55.3 14.8 55.4 17.1 Q56.7 19.0 55.4 20.9 Q55.3 23.2 53.1 24.0 Q51.7 25.8 49.5 25.2 Q47.3 25.8 45.9 24.0 Q43.7 23.2 43.6 20.9 Q42.3 19.0 43.6 17.1 Q43.7 14.8 45.9 14.0 Q47.3 12.2 49.5 12.8 Z" fill="#4f8ef7"/><circle cx="49.5" cy="19.5" r="3.1" fill="#f9a8d4"/>
+          <!-- лапки-ручки -->
+          <g class="arm-l"><path d="M11.5 37.4 Q13.2 37.1 14.3 38.7 Q15.9 39.8 15.8 42.0 Q16.5 44.1 15.3 45.8 Q14.7 47.9 13.0 48.3 Q11.5 49.3 10.0 48.3 Q8.3 47.9 7.7 45.8 Q6.5 44.1 7.2 42.0 Q7.1 39.8 8.7 38.7 Q9.8 37.1 11.5 37.4 Z" fill="#4f8ef7"/></g>
+          <g class="arm-r"><path d="M52.5 37.4 Q54.2 37.1 55.3 38.7 Q56.9 39.8 56.8 42.0 Q57.5 44.1 56.3 45.8 Q55.7 47.9 54.0 48.3 Q52.5 49.3 51.0 48.3 Q49.3 47.9 48.7 45.8 Q47.5 44.1 48.2 42.0 Q48.1 39.8 49.7 38.7 Q50.8 37.1 52.5 37.4 Z" fill="#4f8ef7"/></g>
+          <!-- ножки с подушечками -->
+          <path d="M24.0 53.2 Q26.2 52.8 27.6 53.9 Q29.6 54.5 29.9 55.8 Q30.8 57.0 29.9 58.2 Q29.6 59.5 27.6 60.1 Q26.2 61.2 24.0 60.8 Q21.8 61.2 20.4 60.1 Q18.4 59.5 18.1 58.2 Q17.2 57.0 18.1 55.8 Q18.4 54.5 20.4 53.9 Q21.8 52.8 24.0 53.2 Z" fill="#3b7be0"/><path d="M40.0 53.2 Q42.2 52.8 43.6 53.9 Q45.6 54.5 45.9 55.8 Q46.8 57.0 45.9 58.2 Q45.6 59.5 43.6 60.1 Q42.2 61.2 40.0 60.8 Q37.8 61.2 36.4 60.1 Q34.4 59.5 34.1 58.2 Q33.2 57.0 34.1 55.8 Q34.4 54.5 36.4 53.9 Q37.8 52.8 40.0 53.2 Z" fill="#3b7be0"/>
+          <circle cx="24" cy="57.6" r="1.6" fill="#fbcfe8"/><circle cx="21" cy="56" r=".8" fill="#fbcfe8"/><circle cx="27" cy="56" r=".8" fill="#fbcfe8"/>
+          <circle cx="40" cy="57.6" r="1.6" fill="#fbcfe8"/><circle cx="37" cy="56" r=".8" fill="#fbcfe8"/><circle cx="43" cy="56" r=".8" fill="#fbcfe8"/>
+          <!-- пушистое тело -->
+          <g class="body">
+            <path d="M32.0 16.5 Q34.4 14.7 36.3 16.9 Q38.9 15.7 40.3 18.2 Q43.2 17.5 44.0 20.2 Q47.0 20.1 47.2 23.0 Q50.1 23.5 49.8 26.2 Q52.5 27.3 51.5 30.0 Q53.9 31.6 52.4 34.0 Q54.4 36.0 52.4 38.0 Q53.9 40.4 51.5 42.0 Q52.5 44.7 49.8 45.8 Q50.1 48.5 47.2 49.0 Q47.0 51.9 44.0 51.8 Q43.2 54.5 40.3 53.8 Q38.9 56.3 36.3 55.1 Q34.4 57.3 32.0 55.5 Q29.6 57.3 27.7 55.1 Q25.1 56.3 23.7 53.8 Q20.8 54.5 20.0 51.8 Q17.0 51.9 16.8 49.0 Q13.9 48.5 14.2 45.8 Q11.5 44.7 12.5 42.0 Q10.1 40.4 11.6 38.0 Q9.6 36.0 11.6 34.0 Q10.1 31.6 12.5 30.0 Q11.5 27.3 14.2 26.2 Q13.9 23.5 16.8 23.0 Q17.0 20.1 20.0 20.2 Q20.8 17.5 23.7 18.2 Q25.1 15.7 27.7 16.9 Q29.6 14.7 32.0 16.5 Z" fill="#5b9bff"/>
+            <ellipse cx="24" cy="23" rx="9" ry="5" fill="#fff" opacity=".25" transform="rotate(-18 24 23)"/>
+            <path d="M32.0 37.0 Q34.3 36.2 36.0 37.6 Q38.5 37.6 39.4 39.5 Q41.6 40.3 41.7 42.2 Q43.3 43.7 42.5 45.5 Q43.3 47.3 41.7 48.8 Q41.6 50.7 39.4 51.5 Q38.5 53.4 36.0 53.4 Q34.3 54.8 32.0 54.0 Q29.7 54.8 28.0 53.4 Q25.5 53.4 24.6 51.5 Q22.4 50.7 22.3 48.8 Q20.7 47.3 21.5 45.5 Q20.7 43.7 22.3 42.2 Q22.4 40.3 24.6 39.5 Q25.5 37.6 28.0 37.6 Q29.7 36.2 32.0 37.0 Z" fill="#dbeafe"/>
+            <!-- хохолок -->
+            <path d="M29 17.5 q-1 -5 2.5 -6.5 M32 17 q0.5 -5.5 4 -6 M35 17.5 q2 -4 4.5 -3.5" stroke="#5b9bff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+            <path d="M34 6.459999999999999 C35.02 8.5 35.7 9.52 35.7 10.455 A1.7 1.7 0 0 1 32.3 10.455 C32.3 9.52 32.98 8.5 34 6.459999999999999 Z" fill="#1f2937"/>
+          </g>
+          <!-- глаза: открытые -->
+          <g class="eyes-open">
+            <ellipse cx="24.5" cy="33" rx="5.4" ry="6.2" fill="#fff"/><ellipse cx="39.5" cy="33" rx="5.4" ry="6.2" fill="#fff"/>
+            <ellipse class="pupil" cx="24.8" cy="33.5" rx="4.4" ry="5.2" fill="#1f2937"/><ellipse class="pupil" cx="39.2" cy="33.5" rx="4.4" ry="5.2" fill="#1f2937"/>
+            <circle cx="26.3" cy="31.3" r="1.8" fill="#fff"/><circle cx="23.4" cy="35.8" r=".9" fill="#fff"/>
+            <circle cx="40.7" cy="31.3" r="1.8" fill="#fff"/><circle cx="37.8" cy="35.8" r=".9" fill="#fff"/>
+          </g>
+          <!-- глаза: счастливые дужки (танец) -->
+          <g class="eyes-happy">
+            <path d="M20 34.5 q4.5 -6 9 0" stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <path d="M35 34.5 q4.5 -6 9 0" stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          </g>
+          <!-- щёчки -->
+          <ellipse cx="18.5" cy="40.5" rx="3.4" ry="2" fill="#f472b6" opacity=".55"/><ellipse cx="45.5" cy="40.5" rx="3.4" ry="2" fill="#f472b6" opacity=".55"/>
+          <!-- бровки (думает / боится / плачет) -->
+          <path class="brow" d="M20.5 25 Q24.5 23 28 25.5" stroke="#1e3a8a" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          <path class="brow" d="M36 25.5 Q39.5 23 43.5 25" stroke="#1e3a8a" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          <!-- ротики -->
+          <path class="m-idle" d="M29 40.6 q1.5 1.8 3 0 q1.5 1.8 3 0" stroke="#1f2937" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <g class="m-dance"><path d="M27.5 40 Q32 47.5 36.5 40 Z" fill="#9f1239" stroke="#1f2937" stroke-width="1.2" stroke-linejoin="round"/><ellipse cx="32" cy="43.6" rx="2.4" ry="1.5" fill="#fb7185"/></g>
+          <path class="m-think" d="M30 41.6 q2 -1.2 4 0" stroke="#1f2937" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          <ellipse class="m-scared" cx="32" cy="42" rx="2.4" ry="3.2" fill="#9f1239" stroke="#1f2937" stroke-width="1.1"/>
+          <path class="m-cry" d="M28.5 43.5 q1.75 -2.6 3.5 -1 q1.75 -1.6 3.5 1" stroke="#1f2937" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- слёзки, капелька пота, вопрос -->
+          <path class="tear" d="M21.5 37.48 C22.46 39.4 23.1 40.36 23.1 41.24 A1.6 1.6 0 0 1 19.9 41.24 C19.9 40.36 20.54 39.4 21.5 37.48 Z" fill="#93c5fd" stroke="#2563eb" stroke-width=".4"/>
+          <path class="tear t2" d="M42.5 37.48 C43.46 39.4 44.1 40.36 44.1 41.24 A1.6 1.6 0 0 1 40.9 41.24 C40.9 40.36 41.54 39.4 42.5 37.48 Z" fill="#93c5fd" stroke="#2563eb" stroke-width=".4"/>
+          <path class="sweat" d="M50 18.82 C51.14 21.1 51.9 22.24 51.9 23.285 A1.9 1.9 0 0 1 48.1 23.285 C48.1 22.24 48.86 21.1 50 18.82 Z" fill="#bfdbfe" stroke="#2563eb" stroke-width=".4"/>
+          <text class="q" x="51" y="13" font-size="12" font-weight="700" fill="#636efa" font-family="system-ui, sans-serif">?</text>
+        </g>
+      </svg>
+    </span>
+    <h1 class="splash-title">🛢️ Нефтяша</h1>
+    <p class="splash-sub">учебная игра-симулятор разработки нефтяного месторождения</p>
+    <button id="splash-start" class="primary" title="К выбору объекта разработки и настройкам">▶ Играть</button>
+    <p class="splash-note">Разведка · сейсмика · бурение · ГРП и ГС · закачка воды · экономика · отчёт с оценкой</p>
+    <p class="splash-keys">Enter – начать · растаскивайте капли нефти мышью · щёлкните по Нефтяше</p>
+  </div>
+</div>
+<div id="screen-settings" class="screen">
   <div class="settings-box card">
     <h1>Нефтяша: разработка нефтяного месторождения <button class="guide-btn" data-guide="start" title="Нефтяша подскажет"><svg class="nefty-mini" viewBox="0 0 64 64" aria-hidden="true"><use href="#nefty-sym"/></svg><span>Как играть?</span></button><sup class="hint" tabindex="0" data-tip="Учебный симулятор: двухфазная модель нефть–вода (IMPES, сетка 50×50), скважины по Писману, интегрированная модель с ЭЦН, штуцерами, КНС и системой сбора, экономика с ЧДД и оценкой против эталона.">?</sup></h1>
     <p class="sub"><label class="noscroll-opt" title="Прячет полосы прокрутки (прокрутка колёсиком, трекпадом и жестами работает)"><input type="checkbox" class="chk-noscroll"> без полос прокрутки</label></p>
@@ -452,7 +538,7 @@
     </div>
     <div id="tb-date" class="tb-info">–</div>
     <div class="money-box">
-      <svg id="mascot" class="mood-idle" viewBox="0 0 64 64" role="img" aria-label="Нефтяша: настроение по денежному потоку">
+      <svg id="mascot" class="mascot mood-idle" viewBox="0 0 64 64" role="img" aria-label="Нефтяша: настроение по денежному потоку">
         <title>Нефтяша</title>
         <g class="mg-all">
           <!-- пушистые ушки -->
@@ -4658,7 +4744,7 @@ function setMascotMood(sim, m, dm) {
   // долг в начале игры – норма: плачет, если в минусе и долг растёт; в плюсе при убытке за месяц – в ужасе
   const mood = m < 0 && dm <= 0 && h.length > 30 ? "cry" : h.length > 30 && dm < 0 ? "scared" : prev === null ? "idle" : dm > prev + eps ? "dance" : dm < prev - eps ? "think" : "idle";
   const el = $("mascot"); if (!el || el.dataset.mood === mood) return;
-  el.dataset.mood = mood; el.setAttribute("class", "mood-" + mood);
+  el.dataset.mood = mood; el.setAttribute("class", "mascot mood-" + mood);
   el.querySelector("title").textContent = MASCOT_MOODS[mood]; el.setAttribute("aria-label", MASCOT_MOODS[mood]);
 }
 function renderAll() { updateMapTime(); renderMap(); renderRigPanel(); renderWellTable(); renderYearTable(); renderWellsCharts(); renderEconCharts(); drawSchem(); updateTopbar(); G.dirty = false; G.mapSig = mapSig(); G.heavyLast = performance.now(); }
@@ -5437,8 +5523,9 @@ function closeGuide() { const g = $("guide"); g.classList.remove("open"); g.setA
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest(".guide-btn"); if (b) { e.preventDefault(); openGuide(b.dataset.guide); } });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("guide").classList.contains("open")) closeGuide(); });
 $("guide-close").addEventListener("click", closeGuide);
-// первый заход: гид открывается сам один раз
-try { if (!localStorage.getItem("oilgame-guide-seen")) { localStorage.setItem("oilgame-guide-seen", "1"); setTimeout(() => openGuide("goal"), 600); } } catch (e) {}
+// первый заход: гид открывается сам один раз – после входа с экрана приветствия
+let guideFirstOpen = () => { guideFirstOpen = () => {}; try { localStorage.setItem("oilgame-guide-seen", "1"); } catch (e) {} setTimeout(() => openGuide("goal"), 500); };
+try { if (localStorage.getItem("oilgame-guide-seen")) guideFirstOpen = () => {}; } catch (e) { guideFirstOpen = () => {}; }
 // ---------- настройки расчётного модуля (кнопка ⚙ на стартовом экране) ----------
 try { Object.assign(G.calc, JSON.parse(localStorage.getItem("oilgame-calc") || "{}")); if (!C.GRID_SIZES.includes(G.calc.grid)) G.calc.grid = 50; } catch (e) {}
 const calcIsCustom = (c = G.calc) => c.grid !== 50 || ["dtMax", "courant", "tol", "maxit", "dtP"].some((k) => c[k] !== C.DEFAULT_CALC[k]);
@@ -5523,7 +5610,7 @@ function readParams() {
     stim_cost: num("stim_cost", 2) * 1e6, lift_cost: num("lift_cost", d.lift_cost), inj_cost: num("inj_cost", d.inj_cost), well_opex: num("well_opex", 4) * 1e6,
     horizon_days: G.level === 2 ? Math.round(years) * 365 : Math.round(years * 365.25), init_money: (+($("pf-init_money") || {}).value || 0) * 1e6 };
 }
-function show(id) { for (const s of ["screen-settings", "screen-game", "screen-results"]) $(s).classList.toggle("visible", s === id); }
+function show(id) { for (const s of ["screen-splash", "screen-settings", "screen-game", "screen-results"]) $(s).classList.toggle("visible", s === id); }
 function applyLevelUI() {
   document.querySelectorAll(".lvl2-only").forEach((el) => { if (!el.closest("#params-form")) el.classList.toggle("hidden", !isL2()); });
   const rt = !!(G.rt && !G.rt.done);
@@ -5555,6 +5642,133 @@ function startGame() {
   else toast(G.level === 2 ? `${res.scen.short}: ` + " у вас 5 разведочных скважин (◆) – кликните по ним, чтобы посмотреть каротаж. Сейсмику можно заказать за деньги. Время идёт по кнопке «Следующий год»."
                       : "Нажмите ▶ для запуска времени или «Следующий год». Выберите инструмент и кликните по карте, чтобы бурить.");
 }
+
+// ---------------- экран входа: капли нефти, которые курсор растаскивает ----------------
+const SPLASH = { raf: 0, pts: [], w: 0, h: 0, dpr: 1, mx: -9e3, my: -9e3, pmx: -9e3, pmy: -9e3, vx: 0, vy: 0, tp: 0, sprite: null, mi: 0, mt: 0, rect: null, mascRect: null, pupils: null, needDraw: true, eyeKey: "|" };
+const SPLASH_MOODS = [["dance", 3.6], ["idle", 4.5], ["dance", 3.6], ["think", 2.6]]; // настроение Нефтяши на экране входа
+function splashVisible() { return $("screen-splash").classList.contains("visible"); }
+// спрайт капли (рисуется один раз): полупрозрачная тёмная капля с тёплым ореолом и маслянистым бликом
+function splashSprite() {
+  const S = document.createElement("canvas"); S.width = S.height = 64;
+  const c = S.getContext("2d");
+  const drop = () => { c.beginPath(); c.moveTo(32, 3); c.bezierCurveTo(37, 14, 50, 24, 50, 39); c.arc(32, 39, 18, 0, Math.PI); c.bezierCurveTo(14, 24, 27, 14, 32, 3); c.closePath(); };
+  c.save(); c.shadowColor = "rgba(245,158,11,.32)"; c.shadowBlur = 11; drop(); c.fillStyle = "rgba(120,84,30,.26)"; c.fill(); c.restore();
+  const g = c.createRadialGradient(30, 36, 3, 32, 40, 22);
+  g.addColorStop(0, "rgba(64,46,24,.62)"); g.addColorStop(0.65, "rgba(38,27,14,.52)"); g.addColorStop(1, "rgba(24,17,9,.38)");
+  drop(); c.fillStyle = g; c.fill();
+  drop(); c.lineWidth = 1.4; c.strokeStyle = "rgba(14,10,5,.34)"; c.stroke();
+  c.save(); c.translate(24, 33); c.rotate(-0.5); c.fillStyle = "rgba(251,191,36,.3)"; c.beginPath(); c.ellipse(0, 0, 8, 4, 0, 0, 6.2832); c.fill(); c.restore();
+  c.fillStyle = "rgba(255,240,213,.5)"; c.beginPath(); c.arc(26.5, 30.5, 2, 0, 6.2832); c.fill();
+  return S;
+}
+function splashResize() {
+  const cv = $("splash-fx"), p = cv.parentElement;
+  SPLASH.dpr = Math.min(1.5, devicePixelRatio || 1); SPLASH.w = p.clientWidth; SPLASH.h = p.clientHeight;
+  cv.width = Math.round(SPLASH.w * SPLASH.dpr); cv.height = Math.round(SPLASH.h * SPLASH.dpr);
+}
+// россыпь по всей площади: «домашние» точки на дрожащей сетке – капли равномерно усеивают экран и после растаскивания возвращаются
+function splashSeed() {
+  const target = Math.round(Math.max(90, Math.min(260, (SPLASH.w * SPLASH.h) / 5200)));
+  const cols = Math.max(1, Math.round(Math.sqrt((target * SPLASH.w) / SPLASH.h))), rows = Math.max(1, Math.round(target / cols));
+  const jx = (SPLASH.w / cols) * 0.7, jy = (SPLASH.h / rows) * 0.7;
+  SPLASH.pts = [];
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const hx = ((i + 0.5) / cols) * SPLASH.w + (Math.random() - 0.5) * jx;
+    const hy = ((j + 0.5) / rows) * SPLASH.h + (Math.random() - 0.5) * jy;
+    SPLASH.pts.push({ x: hx, y: hy, hx, hy, ix: 0, iy: 0, r: 0.45 + Math.random() * 0.9, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.5, ph: Math.random() * 6.28 });
+  }
+}
+function splashMood(m) {
+  const el = $("splash-mascot"); if (!el) return;
+  el.setAttribute("class", "mascot mood-" + m);
+  el.setAttribute("aria-label", "Нефтяша " + (m === "dance" ? "танцует" : m === "think" ? "задумался" : "ждёт начала игры"));
+  if (m === "think") el.querySelectorAll(".pupil").forEach((p) => (p.style.transform = "")); // у задумавшегося зрачки задаёт CSS
+}
+function splashRects() { // кэш прямоугольников: движение мыши не дёргает layout
+  SPLASH.rect = $("splash-fx").getBoundingClientRect();
+  SPLASH.mascRect = $("splash-mascot").getBoundingClientRect();
+  SPLASH.pupils = $("splash-mascot").querySelectorAll(".pupil");
+}
+function splashEyes() { // зрачки следят за курсором – раз в кадр и только когда сместились
+  const m = $("splash-mascot"); if (!m || m.classList.contains("mood-think")) return;
+  if (!SPLASH.pupils || !SPLASH.mascRect) splashRects();
+  const rc = SPLASH.mascRect, cx = rc.left + rc.width / 2, cy = rc.top + rc.height * 0.52;
+  const far = SPLASH.mx < -1e3, ax = far ? 0 : Math.max(-1, Math.min(1, (SPLASH.mx - cx) / 260)), ay = far ? 0 : Math.max(-1, Math.min(1, (SPLASH.my - cy) / 260));
+  const key = ax.toFixed(2) + "|" + ay.toFixed(2);
+  if (key === SPLASH.eyeKey) return;
+  SPLASH.eyeKey = key;
+  const tf = `translate(${(ax * 1.7).toFixed(2)}px, ${(ay * 1.5).toFixed(2)}px)`;
+  SPLASH.pupils.forEach((p) => (p.style.transform = tf));
+}
+function splashUpdate(dt, now) {
+  const R = 190, R2 = R * R;
+  let live = SPLASH.mx > -1e3; // курсор на экране – всегда рисуем
+  for (const p of SPLASH.pts) {
+    const dx = p.x - SPLASH.mx, dy = p.y - SPLASH.my, d2 = dx * dx + dy * dy;
+    if (d2 < R2 && d2 > 1) {
+      const d = Math.sqrt(d2), k = 1 - d / R;
+      p.ix += ((dx / d) * 340 + SPLASH.vx * 1.3) * k * dt * 5; // растаскивание: прочь от курсора и по ходу движения
+      p.iy += ((dy / d) * 340 + SPLASH.vy * 1.3) * k * dt * 5;
+    }
+    p.ix += (p.hx - p.x) * 0.3 * dt + Math.cos(p.ph + now / 900) * 4 * dt; // капли медленно сплываются назад на свои места
+    p.iy += (p.hy - p.y) * 0.3 * dt + Math.sin(p.ph * 1.7 + now / 1100) * 4 * dt;
+    p.ix *= 0.9; p.iy *= 0.9;
+    p.x += p.ix * dt; p.y += p.iy * dt; p.rot += p.vr * dt;
+    if (Math.abs(p.ix) > 3 || Math.abs(p.iy) > 3 || Math.abs(p.x - p.hx) > 2 || Math.abs(p.y - p.hy) > 2) live = true; // есть заметное движение
+  }
+  return live;
+}
+function splashDraw() {
+  const cv = $("splash-fx"), ctx = cv.getContext("2d"), P = SPLASH.pts, S = SPLASH.sprite, d = SPLASH.dpr;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+  for (const p of P) {
+    const sz = 30 * p.r, co = Math.cos(p.rot) * d, si = Math.sin(p.rot) * d;
+    ctx.setTransform(co, si, -si, co, p.x * d, p.y * d);
+    ctx.drawImage(S, -sz / 2, -sz / 2, sz, sz);
+  }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+}
+function splashStep(now) {
+  if (!splashVisible()) return splashStop();
+  const dt = Math.min(0.05, (now - SPLASH.tp) / 1000 || 0.016); SPLASH.tp = now;
+  if (SPLASH.pmx > -1e3) { SPLASH.vx = Math.max(-3000, Math.min(3000, (SPLASH.mx - SPLASH.pmx) / dt)); SPLASH.vy = Math.max(-3000, Math.min(3000, (SPLASH.my - SPLASH.pmy) / dt)); } // скорость курсора, px/с
+  SPLASH.pmx = SPLASH.mx; SPLASH.pmy = SPLASH.my;
+  SPLASH.mt += dt;
+  if (SPLASH.mt > SPLASH_MOODS[SPLASH.mi][1]) { SPLASH.mt = 0; SPLASH.mi = (SPLASH.mi + 1) % SPLASH_MOODS.length; splashMood(SPLASH_MOODS[SPLASH.mi][0]); }
+  splashEyes();
+  const live = splashUpdate(dt, now);
+  if (live || SPLASH.needDraw) { splashDraw(); SPLASH.needDraw = false; } // в покое canvas не трогаем
+  SPLASH.raf = requestAnimationFrame(splashStep);
+}
+function splashStop() { if (SPLASH.raf) cancelAnimationFrame(SPLASH.raf); SPLASH.raf = 0; }
+function splashStart() {
+  splashStop(); if (!splashVisible()) return;
+  splashResize(); if (!SPLASH.pts.length) splashSeed();
+  if (!SPLASH.sprite) SPLASH.sprite = splashSprite();
+  SPLASH.needDraw = true; splashRects();
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { splashMood("idle"); splashDraw(); SPLASH.needDraw = false; return; } // без движения: одна статичная картинка
+  SPLASH.tp = performance.now(); SPLASH.raf = requestAnimationFrame(splashStep);
+}
+function splashBurst() { // щелчок по Нефтяше – капли разлетаются волной
+  const rc = $("splash-mascot").getBoundingClientRect(), cr = $("splash-fx").getBoundingClientRect();
+  const cx = rc.left + rc.width / 2 - cr.left, cy = rc.top + rc.height * 0.6 - cr.top;
+  for (const p of SPLASH.pts) {
+    const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1;
+    if (d < 420) { const f = (1 - d / 420) * 900; p.ix += (dx / d) * f; p.iy += (dy / d) * f; }
+  }
+  SPLASH.needDraw = true;
+}
+function enterFromSplash() { splashStop(); show("screen-settings"); guideFirstOpen(); }
+$("screen-splash").addEventListener("pointermove", (e) => {
+  if (!SPLASH.rect) splashRects();
+  SPLASH.mx = e.clientX - SPLASH.rect.left; SPLASH.my = e.clientY - SPLASH.rect.top; SPLASH.needDraw = true; // глаза и физика – в кадре анимации
+});
+$("screen-splash").addEventListener("pointerleave", () => { SPLASH.mx = SPLASH.my = SPLASH.pmx = SPLASH.pmy = -9e3; SPLASH.vx = SPLASH.vy = 0; });
+$("splash-mascot").addEventListener("pointerdown", () => { SPLASH.mi = 0; SPLASH.mt = 0; splashMood("dance"); splashBurst(); });
+$("splash-start").addEventListener("click", enterFromSplash);
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && splashVisible()) enterFromSplash(); });
+addEventListener("resize", () => { if (splashVisible()) { splashResize(); splashSeed(); SPLASH.rect = SPLASH.mascRect = null; SPLASH.needDraw = true; } });
+splashStart();
 
 // ---------------- инициализация ----------------
 initSettings();

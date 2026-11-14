@@ -92,7 +92,7 @@
 ## Разработка
 
 ```bash
-node tests/selftest.js            # самотест ядра (101 проверка) на JS
+node tests/selftest.js            # самотест ядра (105 проверок) на JS
 node tests/selftest.js --wasm     # то же через Rust/WebAssembly и сверка с JS
 ```
 
