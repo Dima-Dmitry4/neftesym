@@ -3866,6 +3866,11 @@ function kRange(r) {
 }
 const field2D = (fn) => Array.from({ length: NX }, (_, j) => Array.from({ length: NX }, (_, i) => fn(j * NX + i)));
 const logk = Math.log10;
+// цветовая шкала проницаемости: значения на карте lg k, но деления и подписи – в мД (0,1…1000)
+function kBar(zmin, zmax) {
+  const ticks = [0.01, 0.1, 1, 10, 100, 1000].filter((v) => logk(v) >= zmin - 0.15 && logk(v) <= zmax + 0.15);
+  return { title: { text: "k, мД", side: "right" }, thickness: 12, tickvals: ticks.map(logk), ticktext: ticks.map((v) => String(v).replace(".", ",")) };
+}
 
 function kindLabel(w) {
   const m = w.mgrp ? ` + МГРП ${w.mgrp.n}×${w.mgrp.xf} м` : "";
@@ -5275,7 +5280,7 @@ function drawReveal(sim) {
   const r = sim.r;
   const mk = (z, cs, title, extra = {}) => ({ type: "heatmap", x: xs, y: xs, z, colorscale: cs, hovertemplate: "%{z:.2f}<extra></extra>", colorbar: { title: { text: title, side: "right" }, thickness: 14, len: 0.85 }, visible: false, ...extra });
   const layers = [["h нефть, м", mk(field2D((c) => r.hOil[c]), "YlOrBr", "h нефть, м", { zmin: 0, zmax: r.h })],
-    ["Проницаемость", mk(field2D((c) => logk((r.kTrue || r.k)[c])), "Viridis", "lg k", { zmin: kRange(r)[0], zmax: kRange(r)[1] })],
+    ["Проницаемость", mk(field2D((c) => logk((r.kTrue || r.k)[c])), "Viridis", "k, мД", { zmin: kRange(r)[0], zmax: kRange(r)[1], customdata: field2D((c) => (r.kTrue || r.k)[c]), hovertemplate: "k = %{customdata:.3g} мД<extra></extra>", colorbar: kBar(kRange(r)[0], kRange(r)[1]) })],
     ["Насыщенность Sw", mk(field2D((c) => Math.min(1, sim.Sw[c])), "Blues", "S<sub>w</sub>", { zmin: r.Swc, zmax: 1, reversescale: true })],
     ["Давление, атм", mk(field2D((c) => sim.P[c]), "RdBu", "P, атм", { reversescale: true })]];
   layers[0][1].visible = true;
@@ -5390,7 +5395,7 @@ function renderSettingsPreview() {
     $("preview-title").textContent = "Карта проницаемости"; $("props-hint").innerHTML = "";
     const r = C.buildReservoir(C.DEFAULT_PARAMS);
     Plotly.react("preview-plot", [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.active[c] ? logk(r.k[c]) : null)), colorscale: "Viridis", zmin: logk(15), zmax: logk(800),
-      hovertemplate: "%{z:.2f}<extra>lg k</extra>", colorbar: { title: { text: "lg k", side: "right" }, thickness: 12 } }],
+      customdata: field2D((c) => (r.active[c] ? r.k[c] : null)), hovertemplate: "k = %{customdata:.3g} мД<extra></extra>", colorbar: kBar(logk(15), logk(800)) }],
       lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
     $("props-read").innerHTML = [["Начальное давление", "250 атм"], ["Сетка", "50×50, ячейка 40×40 м"], ["Толщина пласта", "10 м"], ["Пористость", "0.20"],
       ["Связанная вода / остаточная нефть", "0.20 / 0.25"], ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"], ["Плотность нефти", "0.86 т/м³"],
@@ -5400,7 +5405,7 @@ function renderSettingsPreview() {
     setGridDims(G.calc.grid);
     const r = C.buildReservoir2({ ...C.DEFAULT_PARAMS, ...C.scenarioParams(G.scenario, G.seed), grid: G.calc.grid });
     const kMap = G.edu ? [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.hOil[c] > 0 ? logk(r.kTrue[c]) : null)), colorscale: "Viridis", zmin: logk(Math.max(0.3, sc.k.min)), zmax: logk(sc.k.chan ? sc.k.chan.hi : sc.k.max),
-      hovertemplate: "k = %{customdata:.1f} мД<extra></extra>", customdata: field2D((c) => r.kTrue[c]), colorbar: { title: { text: "lg k", side: "right" }, thickness: 12 } }] : [];
+      hovertemplate: "k = %{customdata:.3g} мД<extra></extra>", customdata: field2D((c) => r.kTrue[c]), colorbar: kBar(logk(Math.max(0.3, sc.k.min)), logk(sc.k.chan ? sc.k.chan.hi : sc.k.max)) }] : [];
     Plotly.react("preview-plot", [...kMap, { type: "scatter", mode: "markers+text", x: r.explore.map((e) => ((e.cell % NX) + 0.5) * DX), y: r.explore.map((e) => (Math.floor(e.cell / NX) + 0.5) * DX),
       text: r.explore.map((e) => e.name), textposition: "top center", marker: { symbol: "diamond", size: 14, color: "#fff", line: { color: TXT, width: 2 } }, hovertemplate: "%{text}<extra></extra>" }],
       lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
