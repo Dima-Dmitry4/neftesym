@@ -62,7 +62,6 @@
                          opacity:0; animation:splash-glow 2.6s ease-in-out infinite; } /* мерцает только opacity – без repaint кнопки */
   #splash-start:hover:not(:disabled) { transform:translateY(-2px) scale(1.03); }
   .splash-note { margin-top:28px; font-size:12.5px; color:var(--muted); }
-  .splash-keys { margin-top:6px; font-size:11.5px; color:var(--muted); opacity:.8; }
   @keyframes splash-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-9px); } }
   @keyframes splash-glow { 0%,100% { opacity:0; } 50% { opacity:1; } }
   @media (prefers-reduced-motion: reduce) { .splash-hero, #splash-start::after { animation:none; } #splash-start:hover:not(:disabled) { transform:none; } }
@@ -477,7 +476,6 @@
     <p class="splash-sub">учебная игра-симулятор разработки нефтяного месторождения</p>
     <button id="splash-start" class="primary" title="К выбору объекта разработки и настройкам">▶ Играть</button>
     <p class="splash-note">Разведка · сейсмика · бурение · ГРП и ГС · закачка воды · экономика · отчёт с оценкой</p>
-    <p class="splash-keys">Enter – начать · растаскивайте капли мышью · щёлкните по Нефтяше</p>
   </div>
 </div>
 <div id="screen-settings" class="screen">
