@@ -278,7 +278,8 @@
   }
 
   /* ---------- итоги (старое) ---------- */
-  #screen-results { overflow:auto; align-items:flex-start; justify-content:center; }
+  #screen-results { overflow:auto; }
+  #screen-results.visible { display:block; } /* блок с прокруткой: флекс-центрирование резало низ отчёта, виден был только экспорт в PDF */
   .results-box { width:min(1040px, 96vw); margin:22px auto; padding:20px 24px; }
   #res-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin:14px 0; }
   .kpi { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
