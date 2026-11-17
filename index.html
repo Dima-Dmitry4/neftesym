@@ -486,7 +486,7 @@
     <div class="settings-cols">
       <div>
         <h2 id="preview-title">Карта проницаемости</h2>
-        <div id="preview-plot" style="width:100%; height:380px"></div>
+        <div id="preview-plot" style="width:100%; height:380px; overflow:hidden"></div>
         <div class="prop-block">
           <h2>Свойства пласта<span id="props-hint"></span></h2>
           <div id="props-read"></div>
@@ -5762,7 +5762,7 @@ function splashBurst() { // щелчок по Нефтяше – капли ра
   }
   SPLASH.needDraw = true;
 }
-function enterFromSplash() { splashStop(); show("screen-settings"); guideFirstOpen(); }
+function enterFromSplash() { splashStop(); show("screen-settings"); renderSettingsPreview(); guideFirstOpen(); } // перерисовка: за сплэшем Plotly отрисовал карту шириной по умолчанию, и она налезала на карточки
 $("screen-splash").addEventListener("pointermove", (e) => {
   if (!SPLASH.rect) splashRects();
   SPLASH.mx = e.clientX - SPLASH.rect.left; SPLASH.my = e.clientY - SPLASH.rect.top; SPLASH.needDraw = true; // глаза и физика – в кадре анимации
