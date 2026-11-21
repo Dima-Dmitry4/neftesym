@@ -831,7 +831,7 @@ function costOf(units, params) {
 }
 // сейсмика 3D стоит как 12 скважин (по умолчанию для объекта: 12 × стоимость его скважины); ГРП – 20 млн руб за трещину 40 м
 const SEIS_WELLS = 12;
-const DEFAULT_COSTS = { esp_cost: 6e6, conv_cost: 5e6, frac_cost: 20e6, stim_cost: 2e6, pta_cost: 1e6, seis_cost: SEIS_WELLS * 80e6, expl_cost: 90e6, rig_cost: 120e6 };
+const DEFAULT_COSTS = { esp_cost: 6e6, conv_cost: 5e6, frac_cost: 20e6, stim_cost: 2e6, pta_cost: 1e6, seis_cost: SEIS_WELLS * 80e6, expl_cost: 320e6, rig_cost: 120e6 };
 const addUnits = (acc, u, m = 1) => { for (const k in u) acc[k] = (acc[k] || 0) + u[k] * m; return acc; };
 
 // ---------- ГПСЧ (детерминированный seed) ----------
@@ -916,30 +916,30 @@ const L2 = {
 // эксплуатационной / разведочной скважины по умолчанию, млн руб (растёт с глубиной).
 const SCENARIOS = {
   base: { name: "Купол (учебный)", short: "Купол", depth: 2400, h: 10, phi: 0.2, shale: 1, Swc: 0.2, Sor: 0.25, mu_o: null, mu_w: 1, rho: 0.86, ct: 1e-4, P0: 250,
-          k: { med: 20, sig: 0.7, min: 15, max: 150, chan: { lo: 300, hi: 800, n: 1 } }, flip: 0, drill: 80, expl: 90 },
+          k: { med: 20, sig: 0.7, min: 15, max: 150, chan: { lo: 300, hi: 800, n: 1 } }, flip: 0, drill: 80, expl: 320 },
   bv8: { owcRel: 22, name: "БВ8 – вартовская свита", short: "БВ8", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, валанжин",
          rock: "песчаники дельтовых и прибрежно-морских фаций, хорошо отсортированные", depth: 2090, h: 12, phi: 0.23, shale: 0.8, Swc: 0.25, Sor: 0.28,
-         mu_o: 1.4, mu_w: 0.45, rho: 0.84, ct: 1e-4, pGrad: 0.101, k: { med: 250, sig: 0.55, min: 60, max: 900, chan: { lo: 600, hi: 1200, n: 1 } }, flip: 0, drill: 70, expl: 85,
+         mu_o: 1.4, mu_w: 0.45, rho: 0.84, ct: 1e-4, pGrad: 0.101, k: { med: 250, sig: 0.55, min: 60, max: 900, chan: { lo: 600, hi: 1200, n: 1 } }, flip: 0, drill: 70, expl: 280,
          note: "Высокопроницаемый «классический» объект: высокие дебиты, быстрый рост обводнённости – главная задача – система ППД и борьба с обводнением." },
   av12: { owcRel: 17, name: "АВ1¹⁻² – «рябчик»", short: "АВ1 «рябчик»", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, апт",
           rock: "тонкое переслаивание песчаников, алевролитов и глин («рябчик»), низкая расчленённая эффективная толщина", depth: 1690, h: 8, phi: 0.21, shale: 2.2, Swc: 0.42, Sor: 0.30,
-          mu_o: 2.2, mu_w: 0.5, rho: 0.86, ct: 1e-4, pGrad: 0.101, k: { med: 14, sig: 0.6, min: 3, max: 80 }, flip: 1, drill: 55, expl: 70,
+          mu_o: 2.2, mu_w: 0.5, rho: 0.86, ct: 1e-4, pGrad: 0.101, k: { med: 14, sig: 0.6, min: 3, max: 80 }, flip: 1, drill: 55, expl: 220,
           note: "Низкопроницаемый расчленённый коллектор с высокой связанной водой: вертикальные скважины дают мало – нужны ГРП, ГС и плотная сетка." },
   yuv1: { owcRel: 19, name: "ЮВ1 – васюганская свита", short: "ЮВ1", region: "Западная Сибирь, Нижневартовский и Сургутский своды", age: "верхняя юра, оксфорд",
           rock: "песчаники баровых тел и прибрежно-морских фаций, неоднородные по площади", depth: 2640, h: 8, phi: 0.16, shale: 1, Swc: 0.35, Sor: 0.30,
-          mu_o: 1.1, mu_w: 0.4, rho: 0.83, ct: 1.1e-4, pGrad: 0.102, k: { med: 18, sig: 0.85, min: 0.5, max: 150 }, flip: 2, drill: 85, expl: 100,
+          mu_o: 1.1, mu_w: 0.4, rho: 0.83, ct: 1.1e-4, pGrad: 0.102, k: { med: 18, sig: 0.85, min: 0.5, max: 150 }, flip: 2, drill: 85, expl: 340,
           note: "Средне- и низкопроницаемый юрский пласт (k в среднем ≈ 20 мД, от долей до ~150 мД): ГРП – стандарт, зоны с хорошими ФЕС стоит искать разведкой и ГДИС." },
   yuk1011: { owcRel: 24, name: "ЮК10–11 – шеркалинская свита (Талинская площадь)", short: "ЮК10–11", region: "Западная Сибирь, Красноленинский свод", age: "нижняя юра",
              rock: "русловые песчаники и гравелиты в низкопроницаемой пойменной толще – резкая неоднородность", depth: 2540, h: 15, phi: 0.17, shale: 1.2, Swc: 0.30, Sor: 0.32,
-             mu_o: 0.7, mu_w: 0.4, rho: 0.81, ct: 1.2e-4, pGrad: 0.102, k: { med: 6, sig: 0.7, min: 1, max: 40, chan: { lo: 300, hi: 1500, n: 2 } }, flip: 3, drill: 85, expl: 100,
+             mu_o: 0.7, mu_w: 0.4, rho: 0.81, ct: 1.2e-4, pGrad: 0.102, k: { med: 6, sig: 0.7, min: 1, max: 40, chan: { lo: 300, hi: 1500, n: 2 } }, flip: 3, drill: 85, expl: 340,
              note: "Высокопроницаемые русла в плотной матрице: вода прорывается по руслам за месяцы, а запасы матрицы без ГРП не вовлекаются." },
   ach: { owcRel: 27, name: "Ач – ачимовская толща", short: "Ачимовка", region: "Западная Сибирь, Среднее Приобье", age: "нижний мел, берриас–валанжин",
          rock: "турбидитные песчаники и алевролиты конусов выноса, глинистые и карбонатизированные", depth: 2790, h: 14, phi: 0.17, shale: 1.4, Swc: 0.42, Sor: 0.30,
-         mu_o: 1.0, mu_w: 0.4, rho: 0.82, ct: 1.3e-4, pGrad: 0.116, k: { med: 0.07, sig: 0.8, min: 0.01, max: 0.5, abs: [0.01, 0.5] }, flip: 1, drill: 95, expl: 120,
+         mu_o: 1.0, mu_w: 0.4, rho: 0.82, ct: 1.3e-4, pGrad: 0.116, k: { med: 0.07, sig: 0.8, min: 0.01, max: 0.5, abs: [0.01, 0.5] }, flip: 1, drill: 95, expl: 380,
          note: "Трудноизвлекаемые запасы: k ≈ 0,01–0,5 мД (медиана ≈ 0,07 мД), повышенное пластовое давление. Вертикальные скважины почти не дают нефти – нужны ГРП и ГС с МГРП." },
   bb: { owcRel: 15, name: "Бб – бобриковский горизонт", short: "Бобриковский", region: "Волго-Уральская провинция (Татарстан, Башкортостан)", age: "нижний карбон, визе",
         rock: "кварцевые песчаники врезанных долин и русел, высокопроницаемые", depth: 1240, h: 7, phi: 0.21, shale: 0.8, Swc: 0.18, Sor: 0.25,
-        mu_o: 22, mu_w: 1.1, rho: 0.89, ct: 1e-4, pGrad: 0.103, k: { med: 420, sig: 0.6, min: 100, max: 1500, chan: { lo: 900, hi: 2000, n: 1 } }, flip: 2, drill: 40, expl: 50,
+        mu_o: 22, mu_w: 1.1, rho: 0.89, ct: 1e-4, pGrad: 0.103, k: { med: 420, sig: 0.6, min: 100, max: 1500, chan: { lo: 900, hi: 2000, n: 1 } }, flip: 2, drill: 40, expl: 160,
         note: "Неглубокий высокопроницаемый пласт с вязкой нефтью (≈ 20 сП): неблагоприятное соотношение подвижностей – вода прорывается рано, КИН ограничен." },
 };
 const SCENARIO_ORDER = ["bv8", "av12", "yuv1", "yuk1011", "ach", "bb"];
@@ -2954,6 +2954,9 @@ function scenarioTests() {
     t.push({ name: "перенос: вязкая нефть (Бб) и мощные ЭЦН – Sw не ниже Swc, баланс воды < 0.1 %, объёма < 0.5 %", pass: mn >= r.Swc - 1e-9 && Math.abs(errW) < 1e-3 && Math.abs(errV) < 0.005,
              details: `Sw min ${mn.toFixed(3)} (Swc ${r.Swc}), вода ${(errW * 100).toFixed(3)} %, объём ${(errV * 100).toFixed(3)} %, скважин ${sm.wells.length}` });
   }
+  const priceRatios = ["base", ...SCENARIO_ORDER].map((id) => scenarioParams(id).expl_cost / scenarioParams(id).drill_cost);
+  t.push({ name: "цены: разведочная скважина с керном, ГИС и испытаниями стоит 4 эксплуатационные во всех объектах",
+           pass: priceRatios.every((x) => x === 4), details: `${Math.min(...priceRatios)}–${Math.max(...priceRatios)}×` });
   // разные объекты – разная карта: структура отражена, разведочные скважины в других ячейках
   const cellsOf = (id) => buildReservoir2({ ...DEFAULT_PARAMS, ...scenarioParams(id) }).explore.map((e) => e.cell).join(",");
   t.push({ name: "объекты: структура отражается – у БВ8, АВ1, ЮВ1 и ЮК разные положения разведочных скважин", pass: new Set(["bv8", "av12", "yuv1", "yuk1011"].map(cellsOf)).size === 4 });
@@ -4261,18 +4264,45 @@ function convertWell(w) {
 const pumpCost = (k) => G.params.esp_cost * C.PUMPS[k].cost, payPump = (k) => G.sim.economy.charge(G.sim.t, { esp_cost: C.PUMPS[k].cost });
 function setWellMode(w, mode) {
   if (guardRun()) return renderWellTable(true);
-  if (mode === "esp" && !w.hasESP) {
-    if (!afford(pumpCost(w.pump), "ЭЦН")) return renderWellTable(true);
-    payPump(w.pump); w.hasESP = true;
-    toast(`${w.name}: установлен ЭЦН ${C.PUMPS[w.pump].name}, −${mln(pumpCost(w.pump))}`);
-  }
+  if (mode === "esp" && !w.hasESP) return renderWellTable(true) || openEspPick(w); // первая установка: сначала выбрать типоразмер
   w.mode = mode; G.sim._fluxValid = false;
   renderWellTable(true); G.dirty = true;
+}
+// первая установка ЭЦН: окно выбора типоразмера (никаких «насосов по умолчанию»)
+function openEspPick(w) {
+  const q0 = w.q > 0 ? w.q : 0;
+  let rec = null, bl = 1e9;
+  if (q0 > 0) for (const k of Object.keys(C.PUMPS)) { const d = Math.abs(C.espLoad(q0, 50, k) - 0.9); if (d < bl) { bl = d; rec = k; } } // загрузка ближе к 90 %
+  const opts = (rec ? [] : `<option value="" selected disabled>– выберите типоразмер –</option>`) +
+    Object.entries(C.PUMPS).map(([k, P]) => `<option value="${k}"${k === rec ? " selected" : ""}>${P.name} – оптимум ${P.QB} м³/сут – ${(pumpCost(k) / 1e6).toFixed(1)} млн</option>`).join("");
+  $("op-body").innerHTML = `<h3 style="margin-bottom:6px">${w.name}: выбор типоразмера ЭЦН</h3>` +
+    `<p class="sub" style="font-size:12.5px">Установка платная, типоразмер не выбирается автоматически. Номинал – оптимальная подача при 50 Гц; рабочая зона 60–120 % от него. Напор при нулевой подаче у всех типоразмеров 2800 м (секции набираются под глубину скважины ${Math.round(w.depth)} м), КПД растёт с типоразмером.</p>` +
+    `<div class="row" style="margin:10px 0 4px"><b>Насос:</b><select id="esp-pick" style="flex:1; min-width:280px">${opts}</select></div><div id="esp-pick-info" class="sub" style="font-size:12px; min-height:18px"></div>` +
+    `<div class="row" style="margin-top:12px"><button id="esp-pick-ok" class="primary"${rec ? "" : " disabled"}>Установить ЭЦН</button><button id="esp-pick-cancel">Отмена</button></div>`;
+  openModal("op-modal");
+  const info = () => {
+    const k = $("esp-pick").value, P = C.PUMPS[k];
+    if (!P) { $("esp-pick-info").textContent = ""; $("esp-pick-ok").disabled = true; return; }
+    $("esp-pick-ok").disabled = false;
+    const lift = P.H0 < w.depth ? ` · <b style="color:var(--bad)">напора при 50 Гц может не хватить: H₀ ${P.H0} м</b>` : "";
+    const load = q0 > 0 ? ` · при текущем дебите ${q0.toFixed(0)} м³/сут загрузка ≈ ${(C.espLoad(q0, 50, k) * 100).toFixed(0)} %` : "";
+    $("esp-pick-info").innerHTML = `Стоимость <b>${mln(pumpCost(k))}</b> · максимальный КПД ${(P.ETA * 100).toFixed(0)} %${load}${lift}`;
+  };
+  info();
+  $("esp-pick").addEventListener("change", info);
+  $("esp-pick-ok").addEventListener("click", () => {
+    const k = $("esp-pick").value;
+    if (!k || !afford(pumpCost(k), "ЭЦН")) return;
+    payPump(k); w.hasESP = true; w.pump = k; w.mode = "esp"; G.sim._fluxValid = false;
+    toast(`${w.name}: установлен ЭЦН ${C.PUMPS[k].name}, −${mln(pumpCost(k))}. Частота – слайдером в строке, характеристика насоса – кнопка 📊`);
+    closeModals(); renderWellTable(true); G.dirty = true; renderAll();
+  });
+  $("esp-pick-cancel").addEventListener("click", closeModals);
 }
 function setPump(w, key) {
   if (guardRun() || key === w.pump) return renderWellTable(true);
   const old = C.PUMPS[w.pump].name;
-  if (!afford(pumpCost(key), "насос")) return renderWellTable(true);
+  if (!afford(pumpCost(key), "насос")) return renderWellTable(true) || drawSchem(); // селектор в характеристике вернётся к установленному
   payPump(key); w.pump = key; w.hasESP = true; G.sim._fluxValid = false;
   toast(`${w.name}: насос заменён ${old} → ${C.PUMPS[key].name}, −${mln(pumpCost(key))}. Забойное давление и дебит пересчитаются`);
   renderWellTable(true); G.dirty = true; renderAll();
@@ -4685,13 +4715,14 @@ function drawPumpChar() {
     adv = best !== pk ? `Рекомендация: ${C.PUMPS[best].name} (загрузка при этом дебите ≈ ${(C.espLoad(e.q, f, best) * 100).toFixed(0)} %).` : `Подберите частоту: загрузка сдвигается с частотой (подача и напор растут как f и f²).`;
   }
   const row = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
-  $("sch-side").innerHTML = `<div><b>${w.name}</b> · ${P.name}, ${f} Гц</div><div style="margin:8px 0; padding:8px 10px; border-radius:6px; background:${zc}22; border:1px solid ${zc}"><b style="color:${zc}">${txt}</b></div>` +
+  $("sch-side").innerHTML = `<div class="row" style="gap:6px"><b style="flex:none">${w.name}</b><select id="sch-pump" style="flex:1; min-width:0" title="Типоразмер насоса (замена платная)">${Object.entries(C.PUMPS).map(([k, PP]) => `<option value="${k}"${k === pk ? " selected" : ""}>${PP.name}${k === pk ? " – стоит" : ` – ${(pumpCost(k) / 1e6).toFixed(1)} млн`}</option>`).join("")}</select></div><div class="sub" style="margin:3px 0 8px">${f} Гц · частота меняется слайдером в строке скважины</div><div style="margin:0 0 8px; padding:8px 10px; border-radius:6px; background:${zc}22; border:1px solid ${zc}"><b style="color:${zc}">${txt}</b></div>` +
     `<table class="t"><tbody>` + row("Подача (режим)", `${e.q.toFixed(0)} м³/сут`) + row("Оптимум при этой частоте", `${qb.toFixed(0)} м³/сут`) + row("Загрузка", `${(load * 100).toFixed(0)} %`) +
     row("Напор насоса", `${Hop.toFixed(0)} м`) + row("КПД", `${etaOp.toFixed(0)} %`) + row("Мощность", `${e.kW.toFixed(0)} кВт`) +
     row("Удельный расход", `${e.q > 0 ? ((e.kW * 24) / e.q).toFixed(1) : "–"} кВт·ч/м³`) + row("P на приёме", `${e.pwf.toFixed(0)} атм`) + `</tbody></table>` +
     (adv ? `<div class="note keep">${adv}</div>` : "") +
     `<div class="note">Режим работы – пересечение напора насоса (синяя линия) и потребного напора скважины (серый пунктир: подъём столба жидкости за вычетом притока из пласта). ` +
     `Звезда на графике напора и на графике КПД показывает режим. Рабочая зона – 60–120 % от оптимальной подачи; штриховые линии – напор на 40 и 60 Гц.</div>`;
+  $("sch-pump").addEventListener("change", (ev) => setPump(w, ev.target.value)); // замена насоса прямо из характеристики
 }
 
 // ---------------- итоги по годам ----------------
@@ -5314,7 +5345,7 @@ const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, м�
   ["esp_cost", "ЭЦН, млн руб", 6, 0.5, 50, 0.5, false, "ЭЦН-290 с монтажом; другие типоразмеры ×0,5…2,4."],
   ["frac_cost", "ГРП, млн руб", 20, 1, 100, 0.5, false, "Полудлина трещины 40 м; 80 м ×1,6; 120 м ×2,4. МГРП из n стадий: ×(0,4 + 0,6·n)."],
   ["elec_cost", "Электроэнергия, руб/кВт·ч", 5.5, 0, 30, 0.5, false, "ЭЦН – по мощности насоса в рабочей точке; КНС – P<sub>КНС</sub>·V/η, η = 0,7."],
-  ["expl_cost", "Разведочная скважина, млн руб", 90, 5, 400, 5, true, "Только каротаж и РИГИС, без добычи."],
+  ["expl_cost", "Разведочная скважина, млн руб", 320, 5, 600, 5, true, "Керн, расширенный комплекс ГИС и испытания; только каротаж и РИГИС в игре, без добычи."],
   ["seis_cost", "Сейсмика 3D, млн руб", 960, 1, 5000, 10, true, "Карты кровли, подошвы, толщины и разломов (с ошибками). По умолчанию стоит как 12 скважин объекта."],
   ["rig_cost", "Буровой станок, млн руб", 120, 10, 1000, 10, false, "Покупка дополнительного станка. Скважины можно расставить сразу, но бурятся они по очереди: один станок – одна скважина за срок ниже. Больше станков – быстрее разбуривание."],
   ["rigs0", "Станков на старте, шт", 1, 1, 20, 1, false, "Сколько станков есть до начала бурения."],
@@ -5611,7 +5642,7 @@ function readParams() {
   const d = C.DEFAULT_PARAMS, years = num("horizon_years", 10);
   const l2 = G.level === 2, sp = l2 ? C.scenarioParams(G.scenario, G.seed) : null;
   return { level: G.level, scenario: l2 ? G.scenario : null, seed: l2 ? G.seed : 0, mu_o: l2 ? sp.mu_o : num("mu_o", d.mu_o), price_oil: num("price_oil", d.price_oil), drill_cost: num("drill_cost", d.drill_cost) * 1e6,
-    conv_cost: num("conv_cost", 5) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, frac_cost: num("frac_cost", 20) * 1e6, disc_rate: num("disc_rate", 10), elec_cost: num("elec_cost", 5.5), expl_cost: num("expl_cost", 90) * 1e6, seis_cost: num("seis_cost", 960) * 1e6, rig_cost: num("rig_cost", 120) * 1e6, rigs0: Math.round(num("rigs0", 1)), drill_days_v: num("drill_days_v", 60), drill_days_h: num("drill_days_h", 90), credit_limit: num("credit_limit", 1500) * 1e6, grid: G.level === 2 ? G.calc.grid : 50, calc: { dtMax: G.calc.dtMax, courant: G.calc.courant, tol: G.calc.tol, maxit: G.calc.maxit, dtP: G.calc.dtP }, pta_cost: num("pta_cost", 1) * 1e6,
+    conv_cost: num("conv_cost", 5) * 1e6, esp_cost: num("esp_cost", 6) * 1e6, frac_cost: num("frac_cost", 20) * 1e6, disc_rate: num("disc_rate", 10), elec_cost: num("elec_cost", 5.5), expl_cost: num("expl_cost", 320) * 1e6, seis_cost: num("seis_cost", 960) * 1e6, rig_cost: num("rig_cost", 120) * 1e6, rigs0: Math.round(num("rigs0", 1)), drill_days_v: num("drill_days_v", 60), drill_days_h: num("drill_days_h", 90), credit_limit: num("credit_limit", 1500) * 1e6, grid: G.level === 2 ? G.calc.grid : 50, calc: { dtMax: G.calc.dtMax, courant: G.calc.courant, tol: G.calc.tol, maxit: G.calc.maxit, dtP: G.calc.dtP }, pta_cost: num("pta_cost", 1) * 1e6,
     stim_cost: num("stim_cost", 2) * 1e6, lift_cost: num("lift_cost", d.lift_cost), inj_cost: num("inj_cost", d.inj_cost), well_opex: num("well_opex", 4) * 1e6,
     horizon_days: G.level === 2 ? Math.round(years) * 365 : Math.round(years * 365.25), init_money: (+($("pf-init_money") || {}).value || 0) * 1e6 };
 }
