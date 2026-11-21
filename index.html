@@ -401,7 +401,7 @@
       <li><b>АВ1 «рябчик»</b> – низкая проницаемость и много связанной воды: ГС, ГРП, плотнее сетка.</li>
       <li><b>ЮВ1</b> – неоднородный: ищите лучшие зоны разведкой и ГДИС, ГРП – стандарт.</li>
       <li><b>ЮК10–11</b> – вода бежит по руслам: не ставьте нагнетательные прямо в русло рядом с добывающими.</li>
-      <li><b>Ачимовка</b> – 0,01–0,5 мД: только ГРП и ГС с МГРП, скважин немного, следите за окупаемостью.</li>
+      <li><b>Ачимовка</b> – ТРИЗ: 0,01–0,5 мД, участок ×5 по площади, льгота по НДПИ (цена netback выше); только ГРП и ГС с МГРП, скважин немного.</li>
       <li><b>Бобриковский</b> – вязкая нефть: ранний прорыв воды, КИН ограничен; насосы с запасом.</li>
     </ul></div></details>
     <details id="g-class"><summary>Соревнование в классе</summary><div class="gc">
@@ -940,7 +940,8 @@ const SCENARIOS = {
   ach: { owcRel: 27, name: "Ач – ачимовская толща", short: "Ачимовка", region: "Западная Сибирь, Среднее Приобье", age: "нижний мел, берриас–валанжин",
          rock: "турбидитные песчаники и алевролиты конусов выноса, глинистые и карбонатизированные", depth: 2790, h: 14, phi: 0.17, shale: 1.4, Swc: 0.42, Sor: 0.30,
          mu_o: 1.0, mu_w: 0.4, rho: 0.82, ct: 1.3e-4, pGrad: 0.116, k: { med: 0.07, sig: 0.8, min: 0.01, max: 0.5, abs: [0.01, 0.5] }, flip: 1, drill: 95, expl: 380, stress: 330,
-         note: "Трудноизвлекаемые запасы: k ≈ 0,01–0,5 мД (медиана ≈ 0,07 мД), повышенное пластовое давление. Вертикальные скважины почти не дают нефти – нужны ГРП и ГС с МГРП." },
+         area: 5, price: 28000, // ТРИЗ: участок ×5 по площади (залежь крупная) и льгота по НДПИ (Кнд = 0 при k ≤ 2 мД) – netback выше
+         note: "Трудноизвлекаемые запасы (ТРИЗ): k ≈ 0,01–0,5 мД (медиана ≈ 0,07 мД), повышенное пластовое давление, крупная залежь (участок ×5). Льгота по НДПИ (Кнд = 0 при k ≤ 2 мД). Вертикальные скважины почти не дают нефти – нужны ГРП и ГС с МГРП." },
   bb: { owcRel: 15, name: "Бб – бобриковский горизонт", short: "Бобриковский", region: "Волго-Уральская провинция (Татарстан, Башкортостан)", age: "нижний карбон, визе",
         rock: "кварцевые песчаники врезанных долин и русел, высокопроницаемые", depth: 1240, h: 7, phi: 0.21, shale: 0.8, Swc: 0.18, Sor: 0.25,
         mu_o: 22, mu_w: 1.1, rho: 0.89, ct: 1e-4, pGrad: 0.103, k: { med: 420, sig: 0.6, min: 100, max: 1500, chan: { lo: 900, hi: 2000, n: 1 } }, flip: 2, drill: 40, expl: 160, stress: 50,
@@ -1000,7 +1001,7 @@ function l2Flip(i, j, sc) { const f = (sc && sc.flip) || 0; return [f & 1 ? BASE
 // разломы сценария в координатах сетки
 function l2Faults(sc) { return sc && sc.geo ? sc.geo.faults : L2.FAULTS.map((F) => ({ ...F, pts: F.pts.map(([x, y]) => l2Flip(x, y, sc)) })); }
 // параметры по умолчанию для объекта: вязкость нефти и стоимости скважин
-function scenarioParams(id, seed = 0) { const sc = seed ? scenarioForSeed(id, seed) : scenOf(id); return { scenario: id, seed: seed || 0, mu_o: sc.mu_o || DEFAULT_PARAMS.mu_o, drill_cost: sc.drill * 1e6, expl_cost: sc.expl * 1e6, seis_cost: SEIS_WELLS * sc.drill * 1e6 }; }
+function scenarioParams(id, seed = 0) { const sc = seed ? scenarioForSeed(id, seed) : scenOf(id); return { scenario: id, seed: seed || 0, mu_o: sc.mu_o || DEFAULT_PARAMS.mu_o, drill_cost: sc.drill * 1e6, expl_cost: sc.expl * 1e6, seis_cost: SEIS_WELLS * sc.drill * 1e6, ...(sc.price ? { price_oil: sc.price } : {}) }; } // price – льгота НДПИ (ТРИЗ ачимовки): netback выше стандартного
 // расстояние от точки до отрезка ab: {d – расстояние, side – знак стороны (+1 слева по ходу)}
 function segDist(px, py, a, b) {
   const vx = b[0] - a[0], vy = b[1] - a[1], L = vx * vx + vy * vy;
@@ -1115,7 +1116,8 @@ function buildSeismic(zTop, gross, nx, ny, faultsSc = L2.FAULTS, salt = L2.SEED)
 }
 function buildReservoir2(params) {
   const sc = scenOfParams(params), base = sc === SCENARIOS.base, g = sc.geo, salt = g ? g.salt : L2.SEED;
-  const nx = GRID_SIZES.includes(+params.grid) ? +params.grid : BASE_N, ny = nx, dx = (GRID.nx * GRID.dx) / nx, rf = nx / BASE_N;
+  const plot = 2000 * Math.sqrt(sc.area || 1); // участок: у ТРИЗ (ачимовка) площадь ×5
+  const nx = GRID_SIZES.includes(+params.grid) ? +params.grid : BASE_N, ny = nx, dx = plot / nx, rf = nx / BASE_N;
   const N = nx * ny, Swc = sc.Swc, h = sc.h, phi = sc.phi;
   const rng = mulberry32(salt);
   const cy = (BASE_N - 1) / 2;
@@ -1169,7 +1171,7 @@ function buildReservoir2(params) {
     }
   const seis = buildSeismic(zTop, gross, nx, ny, faultsBase, salt);
   const P0 = base ? 250 : Math.round(sc.pGrad * sc.depth);
-  return { level: 2, scenario: base ? null : params.scenario, seed: g ? sc.seed : 0, salt, scen: sc, kTrue, thick: tm, nx, ny, dx, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w, stressAz: ((sc.stress ?? 330) % 360 + 360) % 360,
+  return { level: 2, scenario: base ? null : params.scenario, seed: g ? sc.seed : 0, salt, scen: sc, kTrue, thick: tm, nx, ny, dx, plot, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w, stressAz: ((sc.stress ?? 330) % 360 + 360) % 360,
            // предел забойного давления закачки (давление гидроразрыва с запасом): ≈ 0.14 атм/м глубины ВНК
            pMaxInj: base ? 340 : Math.round(0.14 * owc),
            // SwMax > 1: перенос насыщенности (как и на уровне 1) относит упругий запас
@@ -2705,11 +2707,11 @@ const REF = {
     s: [[491206,478823,896856,30388897,4013692,8.5],[143518,782548,913503,29358539,4035911,8.5],[66572,847294,913566,28682585,4035911,8.5],[38247,812757,881499,22977475,4035911,7.75],[64545,612202,777354,16976420,3903997,6.25],[31483,509613,596392,9030438,2937269,5.5],[11043,598112,605557,10537712,2677692,5.5],[0,0,156890,0,852823,4],[0,0,5741,0,25611,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
     c: [{"seis_cost":1,"drill_cost":11,"frac_cost":8,"esp_cost":14.2854},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
-  ach: { desc: "сейсмика + шахматная сетка через 280 м: 3 добывающие (3 ГС + МГРП 8×40 м) на ЭЦН и 4 нагнетательные со штуцером 30 мм; КНС 120 атм, давление сбора 5 атм; все нагнетательные сначала 1 год работают на нефть; ежегодный подбор частоты и типоразмера ЭЦН", fund: "3 / 4", years: 20, npv: 21.7,
+  ach: { desc: "сейсмика + шахматная сетка через 280 м: 7 добывающих и 6 будущих нагнетательных (сначала 1 год работают на нефть) – все ГС 1000 м с МГРП 8×40 м на ЭЦН; штуцер 15 мм, КНС 120 атм, давление сбора 5 атм; ежегодный подбор частоты и типоразмера ЭЦН; политика группы, применённая к участку ×5 (ТРИЗ, льгота по НДПИ), лучший из вариантов расстановки", fund: "7 / 6", years: 20, npv: 6076.0,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
-    s: [[90698,58696,0,7184891,0,7],[30387,18441,150268,2472544,1497275,5],[42110,36974,92026,4015122,444032,5],[38594,48784,94885,4435730,457767,5],[34933,58588,99086,4746931,478038,5],[31568,66907,102912,4997665,496504,5],[28554,74004,106204,5204330,512395,5],[25883,80089,109011,5376966,525945,5],[23525,85334,111406,5522925,537505,5],[21442,89877,113462,5647302,547431,5],[19600,93833,115239,5754122,556008,5],[17966,97296,116785,5846523,563468,5],[16511,100343,118137,5926971,569996,5],[15211,103038,119328,5997419,575740,5],[14046,105430,120380,6059428,580821,5],[12999,107564,121315,6114260,585334,5],[12053,109474,122149,6162944,589360,5],[11198,111188,122896,6206327,592965,5],[10422,112733,123567,6245115,596204,5],[9717,114128,124172,6279897,599122,5]],
+    s: [[232787,208286,0,17313604,0,13],[30346,36640,242870,3630564,2869592,9.5],[24916,18107,93311,2188510,955186,9],[24086,16100,49770,2044033,240395,9],[23658,14868,39187,1959593,189152,9],[23388,14052,35557,1904290,171592,9],[23216,13497,33972,1867324,163929,9],[23106,13125,33200,1842802,160196,9],[23031,12890,32827,1827008,158395,9],[22976,12759,32685,1817516,157704,9],[22922,12721,32688,1812852,157718,9],[22863,12761,32790,1811858,158210,9],[22793,12867,32962,1813708,159039,9],[22713,13027,33184,1817738,160110,9],[22622,13231,33443,1823478,161358,9],[22517,13477,33729,1830671,162737,9],[22398,13761,34035,1839024,164213,9],[22266,14075,34355,1848306,165759,9],[22122,14416,34686,1858313,167356,9],[21967,14780,35024,1868928,168988,9]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
-    c: [{"seis_cost":1,"drill_cost":11.81,"frac_cost":36.4,"esp_cost":16.6663},{"conv_cost":4},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
+    c: [{"seis_cost":1,"drill_cost":21.88,"frac_cost":67.6,"esp_cost":30.9518},{"conv_cost":7},{"conv_cost":1},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
   bb: { desc: "сейсмика + сетка «две добывающие на одну нагнетательную» через 360 м: 4 добывающие (4 ВС) на ЭЦН и 3 нагнетательные со штуцером 24 мм; КНС 130 атм, давление сбора 8 атм; отключение 3 нерентабельных скважин; ежегодный подбор частоты и типоразмера ЭЦН", fund: "4 / 3", years: 20, npv: 1888.1,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
     s: [[116911,308465,425581,3784357,2209472,5.5],[71666,476941,543266,6965865,2836032,5.5],[47854,499423,548276,7427770,2861828,5.5],[36555,508328,548141,6073152,2861828,5.5],[29644,515198,547924,6081462,2861828,5.5],[24780,518855,547580,5847215,2861828,5.5],[21290,525334,547757,7748198,2861828,5.5],[18447,525507,547441,5853990,2861828,5.5],[16288,530638,547669,7754982,2861828,5.5],[14418,529908,547383,5858251,2861828,5.5],[10725,352967,399481,3469258,2116621,4.75],[11484,335107,362247,1972909,1907885,4],[10829,363311,365152,5947116,1907885,4],[9325,354709,365095,2801044,1907885,4],[8346,355754,365079,2804723,1907885,4],[8427,323005,356035,1551173,1885589,3.25],[8762,374081,365102,6073616,1907246,3.25],[7335,357085,365106,2617348,1907885,3.25],[6515,357926,365086,2618321,1907885,3.25],[5844,358621,365072,2619116,1907885,3.25]],
@@ -2973,6 +2975,12 @@ function scenarioTests() {
   // разные объекты – разная карта: структура отражена, разведочные скважины в других ячейках
   const cellsOf = (id) => buildReservoir2({ ...DEFAULT_PARAMS, ...scenarioParams(id) }).explore.map((e) => e.cell).join(",");
   t.push({ name: "объекты: структура отражается – у БВ8, АВ1, ЮВ1 и ЮК разные положения разведочных скважин", pass: new Set(["bv8", "av12", "yuv1", "yuk1011"].map(cellsOf)).size === 4 });
+  // ТРИЗ ачимовки: участок ×5 по площади (ячейка ≈ 89 м при сетке 50) и льгота НДПИ (цена netback 28 000)
+  const ra = buildReservoir2({ ...DEFAULT_PARAMS, ...scenarioParams("ach") });
+  t.push({ name: "ТРИЗ ачимовки: участок ×5 по площади, цена с льготой НДПИ (28 000 руб/т), запасы пропорциональны площади",
+           pass: ra.plot > 4400 && ra.plot < 4550 && ra.dx > 85 && scenarioParams("ach").price_oil === 28000 &&
+                 scenarioParams("bv8").price_oil === undefined && Math.abs(ra.ooipM3 / (2 * 1e6 / 0.86) / 5 - 1) < 0.25,
+           details: `участок ${(ra.plot / 1000).toFixed(2)} км, ячейка ${ra.dx.toFixed(1)} м, OOIP ${(ra.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т` });
   return t;
 }
 
@@ -3763,7 +3771,9 @@ const CFG = { displayModeBar: false, responsive: true };
 const MAPCFG = { ...CFG, scrollZoom: true, doubleClick: false };
 let DX = C.GRID.dx, NX = C.GRID.nx; // меняются при выборе размера сетки
 function fitMap() { G.mapView = null; if (G.sim) renderMap(); }
-function setGridDims(n) { NX = n; if (typeof G !== "undefined" && G) G.mapView = null; DX = (C.GRID.nx * C.GRID.dx) / n; xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX); }
+function setGridDims(n, plot = C.GRID.nx * C.GRID.dx) { NX = n; if (typeof G !== "undefined" && G) G.mapView = null; DX = plot / n; xs = Array.from({ length: NX }, (_, i) => (i + 0.5) * DX); }
+// размер стороны участка выбранного объекта (ачимовка ×5 по площади)
+function plotOf() { const sc = C.scenarioForSeed(G.scenario, G.seed) || C.scenOf(G.scenario); return 2000 * Math.sqrt(sc.area || 1); }
 
 // базовый макет в духе шаблона plotly: серо-голубое поле, белая сетка
 function lay(o = {}) {
@@ -4898,7 +4908,7 @@ function rtTick() {
 setInterval(rtTick, 250);
 // ---------- эталон объекта по сиду: фоновый поток (Web Worker) с тем же ядром; кэш в памяти и в браузере ----------
 // ключ кэша включает отпечаток политики группы: при её изменении эталоны сидов пересчитываются
-const refCacheKey = (g, sd, gr) => `oilgame-ref-v4:${g}:${sd}:${gr}:${C.hashSeed(JSON.stringify(C.POLICIES[g]))}`;
+const refCacheKey = (g, sd, gr) => `oilgame-ref-v5:${g}:${sd}:${gr}:${C.hashSeed(JSON.stringify(C.POLICIES[g]))}`; // v5: участок ТРИЗ ×5
 function startSeedRef(group, seed, grid = 50) {
   const key = `${group}:${seed}:${grid}`;
   if (G.refJobs[key]) return G.refJobs[key];
@@ -5390,7 +5400,7 @@ function drawReveal(sim) {
 // ---------------- настройки ----------------
 const FORM_FIELDS = [ // [ключ, подпись, по умолчанию, мин, макс, шаг, только ур. 2, подсказка]
   ["mu_o", "Вязкость нефти, сП", 5, 1, 50, 0.5, false, "Только на учебном полигоне; у объектов вязкость задаёт пласт."],
-  ["price_oil", "Цена нефти, руб/т", 12000, 1000, 40000, 500, false, "Netback: экспортная цена за вычетом НДПИ, пошлин и транспорта. Налог на прибыль не учитывается."],
+  ["price_oil", "Цена нефти, руб/т", 12000, 1000, 40000, 500, false, "Netback: экспортная цена за вычетом НДПИ, пошлин и транспорта. Налог на прибыль не учитывается. У ачимовки (ТРИЗ, k ≤ 2 мД) льгота по НДПИ – Кнд = 0, цена по умолчанию 28 000."],
   ["drill_cost", "Скважина (ННС), млн руб", 80, 5, 400, 5, false, "Вертикальная (наклонно-направленная) «под ключ». ГС длиной L: ×(1,2 + 0,5·L/1000); боковой ствол (ЗБС): ×(0,35 + 0,5·L/1000). По умолчанию зависит от глубины объекта."],
   ["conv_cost", "Перевод добыча ⇄ ППД, млн руб", 5, 0.5, 30, 0.5, false, "КРС, пакер, подключение водовода."],
   ["esp_cost", "ЭЦН, млн руб", 6, 0.5, 50, 0.5, false, "ЭЦН-290 с монтажом; другие типоразмеры ×0,5…2,4."],
@@ -5437,7 +5447,7 @@ const SCEN_STORY = {
     <b>Свойства:</b> матрица ≈ 6 мД, русла 300–1500 мД (контраст в сотни раз), пористость ≈ 17 %, нефть очень лёгкая (≈ 0,7 сП), толщина до 15 м.<br>
     <b>В игре:</b> скважина в русле даёт высокий дебит, но закачка из того же русла прорывается за месяцы; матрица без ГРП почти не отдаёт.<br>
     <b>Тактика:</b> русла выявлять по сейсмике и ГДИС, нагнетательные размещать вне русел, добывающие в матрице – с ГРП. <b>Сложность: ★★★</b>`,
-  ach: `<b>Ачимовская толща, берриас–валанжин.</b> Турбидитные песчаники и алевролиты конусов выноса, заглинизированные и карбонатизированные. Глубина ≈ 2,8 км, аномально высокое пластовое давление.<br><br>
+  ach: `<b>Ачимовская толща, берриас–валанжин – ТРИЗ.</b> Турбидитные песчаники и алевролиты конусов выноса, заглинизированные и карбонатизированные. Глубина ≈ 2,8 км, аномально высокое пластовое давление. Залежь крупная – участок ×5 по площади; проницаемость ≤ 2 мД даёт льготу по НДПИ (Кнд = 0), поэтому цена netback выше.<br><br>
     <b>Свойства:</b> проницаемость 0,01–0,5 мД, пористость ≈ 17 %, нефть лёгкая (≈ 1 сП), пластовое давление ≈ 320 атм.<br>
     <b>В игре:</b> вертикальная скважина даёт единицы м³/сут, закачка в матрицу без трещин не идёт.<br>
     <b>Тактика:</b> ГС с МГРП, нагнетательные – с трещинами; возможна отработка нагнетательных на нефть с последующим переводом под закачку; фонд небольшой. <b>Сложность: ★★★★</b>`,
@@ -5463,6 +5473,8 @@ function setSeed(v) {
 function setScenario(id) {
   G.scenario = C.SCENARIOS[id] ? id : "bv8"; const sp = C.scenarioParams(G.scenario, G.seed);
   $("pf-drill_cost").value = sp.drill_cost / 1e6; $("pf-expl_cost").value = sp.expl_cost / 1e6; $("pf-seis_cost").value = sp.seis_cost / 1e6;
+  $("pf-price_oil").value = sp.price_oil || 12000; // льгота НДПИ (ТРИЗ ачимовки): цена netback выше
+  buildCalcPop(); // подписи размера ячейки зависят от участка (ТРИЗ ×5)
   setLevel(2);
 }
 function renderSettingsPreview() {
@@ -5478,22 +5490,23 @@ function renderSettingsPreview() {
     const r = C.buildReservoir(C.DEFAULT_PARAMS);
     Plotly.react("preview-plot", [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.active[c] ? logk(r.k[c]) : null)), colorscale: "Viridis", zmin: logk(15), zmax: logk(800),
       customdata: field2D((c) => (r.active[c] ? r.k[c] : null)), hovertemplate: "k = %{customdata:.3g} мД<extra></extra>", colorbar: kBar(logk(15), logk(800)) }],
-      lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
+      lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, NX * DX], title: { text: "Восток, м" } }, yaxis: { range: [NX * DX, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
     $("props-read").innerHTML = [["Начальное давление", "250 атм"], ["Сетка", "50×50, ячейка 40×40 м"], ["Толщина пласта", "10 м"], ["Пористость", "0.20"],
       ["Связанная вода / остаточная нефть", "0.20 / 0.25"], ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"], ["Плотность нефти", "0.86 т/м³"],
       ["Напряжение (SHmax)", "≈ 330° – трещины ГРП раскрываются вдоль него"],
       ["Запасы OOIP", `${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т`]].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
   } else {
     $("preview-title").textContent = `${objCode()}: ${G.edu ? "карта проницаемости (учебный режим)" : "участок и разведочные скважины"}`;
-    setGridDims(G.calc.grid);
+    setGridDims(G.calc.grid, plotOf());
     const r = C.buildReservoir2({ ...C.DEFAULT_PARAMS, ...C.scenarioParams(G.scenario, G.seed), grid: G.calc.grid });
     const kMap = G.edu ? [{ type: "heatmap", x: xs, y: xs, z: field2D((c) => (r.hOil[c] > 0 ? logk(r.kTrue[c]) : null)), colorscale: "Viridis", zmin: logk(Math.max(0.3, sc.k.min)), zmax: logk(sc.k.chan ? sc.k.chan.hi : sc.k.max),
       hovertemplate: "k = %{customdata:.3g} мД<extra></extra>", customdata: field2D((c) => r.kTrue[c]), colorbar: kBar(logk(Math.max(0.3, sc.k.min)), logk(sc.k.chan ? sc.k.chan.hi : sc.k.max)) }] : [];
     Plotly.react("preview-plot", [...kMap, { type: "scatter", mode: "markers+text", x: r.explore.map((e) => ((e.cell % NX) + 0.5) * DX), y: r.explore.map((e) => (Math.floor(e.cell / NX) + 0.5) * DX),
       text: r.explore.map((e) => e.name), textposition: "top center", marker: { symbol: "diamond", size: 14, color: "#fff", line: { color: TXT, width: 2 } }, hovertemplate: "%{text}<extra></extra>" }],
-      lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
+      lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, NX * DX], title: { text: "Восток, м" } }, yaxis: { range: [NX * DX, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
     const K = sc.k, kr = `медиана ≈ ${fmtK(K.med)} мД, обычно ${fmtK(Math.max(K.min, K.med * Math.exp(-1.3 * K.sig)))}–${fmtK(Math.min(K.max, K.med * Math.exp(1.3 * K.sig)))} мД` + (K.chan ? `; в руслах ${fmtK(K.chan.lo)}–${fmtK(K.chan.hi)} мД` : "");
     $("props-read").innerHTML = [["Глубина", `≈ ${(Math.round(sc.depth / 50) * 50).toLocaleString("ru-RU")} м`], ["Толщина", `≈ ${sc.h} м`], ["Пористость", fmtN(sc.phi)],
+      ["Участок", `≈ ${fmtN((NX * DX) / 1000, 1)}×${fmtN((NX * DX) / 1000, 1)} км${sc.area > 1 ? " (ТРИЗ, ×5 по площади)" : ""}`],
       ["Проницаемость", `≈ ${fmtK(K.med)} мД${K.chan ? `, русла до ${fmtK(K.chan.hi)}` : ""}`], ["Вязкость нефти / воды", `${fmtN(sc.mu_o, sc.mu_o >= 10 ? 0 : 1)} / ${fmtN(sc.mu_w, 2)} сП`],
       ["S<sub>wc</sub> / S<sub>or</sub>", `${fmtN(sc.Swc)} / ${fmtN(sc.Sor)}`], ["Пластовое давление", `≈ ${r.P0} атм${sc.pGrad > 0.11 ? " (АВПД)" : ""}`],
       ["Напряжение (SHmax)", `≈ ${((sc.stress ?? 330) % 360 + 360) % 360}° – трещины ГРП раскрываются вдоль него`],
@@ -5621,7 +5634,7 @@ const calcIsCustom = (c = G.calc) => c.grid !== 50 || ["dtMax", "courant", "tol"
 const calcText = (c = G.calc) => [c.grid !== 50 ? `сетка ${c.grid}×${c.grid}` : "", ...[["dtMax", "макс. шаг"], ["courant", "Курант"], ["tol", "точность"], ["maxit", "итераций"], ["dtP", "шаг давления"]].filter(([k]) => c[k] !== C.DEFAULT_CALC[k]).map(([k, n]) => `${n} ${c[k]}`)].filter(Boolean).join(", ");
 function applyAccel() { C.setAccel(G.calc.wasm && globalThis.__oilAccel ? globalThis.__oilAccel : null); }
 function buildCalcPop() {
-  const dxOf = (n) => 2000 / n, rel = (n) => Math.pow(n / 50, 3);
+  const dxOf = (n) => plotOf() / n, rel = (n) => Math.pow(n / 50, 3);
   $("calc-body").innerHTML = `
     <label>Сетка<select id="cp-grid">${C.GRID_SIZES.map((n) => `<option value="${n}">${n}×${n}: ячейка ${dxOf(n)} м${n === 50 ? " (стандарт)" : ""}, время расчёта ≈ ×${rel(n).toFixed(rel(n) < 1 ? 2 : 1)}</option>`).join("")}</select></label>
     <label>Макс. шаг переноса насыщенности, сут<input id="cp-dtMax" type="number" min="0.25" max="5" step="0.25"></label>
@@ -5717,7 +5730,7 @@ function startGame() {
   G.layer = G.level === 2 ? "blank" : "k";
   $("owc-input").value = ""; G.log.sel = null; setTimeout(updateOwcHint, 0);
   if (G.level === 2) { $("owc-input").min = Math.round(res.owc - 150); $("owc-input").max = Math.round(res.owc + 150); }
-  setGridDims(res.nx); applyAccel();
+  setGridDims(res.nx, res.plot || C.GRID.nx * C.GRID.dx); applyAccel();
   $("tb-obj").textContent = G.level === 2 ? `${objCode(G.scenario, res.seed, res.nx)}${G.edu ? " · учебный режим" : ""}` : "Учебный полигон";
   G.seedRef = null; if (G.level === 2 && (res.seed || res.nx !== 50)) startSeedRef(G.scenario, res.seed, res.nx);
   if (G.level === 2 && G.edu) { G.seis = res.seis; G.layer = "k"; } G.log.mode = "one"; setTool(null); setSpeed(0);
