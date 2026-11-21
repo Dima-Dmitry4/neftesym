@@ -365,6 +365,7 @@
       <li>Нажмите <kbd>⛏ Скважина</kbd> и <b>кликните по карте</b> в нефтяной зоне (выше ВНК). При наведении виден ствол ГС.</li>
       <li>Каждая новая скважина – добывающая. Часть скважин понадобится <b>под закачку</b> (ППД) – перевод кнопкой 💧→ в строке скважины.</li>
       <li>Низкая проницаемость (ачимовка, АВ1, ЮВ1) – без ГРП/ГС скважины дают мало. Высокая (БВ8, Бб) – ГРП почти бесполезен.</li>
+      <li><b>Напряжение пласта</b> (SHmax, заметка в углу карты и свойствах объекта): трещины ГРП/МГРП всегда распространяются вдоль него. ГС вдоль напряжения – продольные трещины (каждая стадия слабее), поперёк – поперечные (сильнее каждая, но узкая зона дренирования); выбирайте азимут ствола осознанно.</li>
     </ol></div></details>
     <details id="g-wells"><summary>Управление скважинами (панель справа)</summary><div class="gc"><ul>
       <li><b>Режим</b>: фонтан со штуцером или <b>ЭЦН</b> (насос; платная установка) – выбирается в строке. У ЭЦН – типоразмер и частота: насос должен работать в «зелёной» зоне (кнопка схемы насоса).</li>
@@ -619,7 +620,8 @@
             <label id="dk-L" class="hidden" title="Длина горизонтального участка, м – любая от 100 м; ствол упрётся в соседние скважины, неактивные ячейки и край участка" style="display:flex; align-items:center; gap:3px">L<input id="drill-L" type="number" min="100" max="3000" step="50" value="1000" style="width:70px">м</label>
             <label id="dk-n" class="hidden" title="Число стадий МГРП (интервал между трещинами не меньше 80 м)" style="display:flex; align-items:center; gap:3px">стадий<input id="drill-n" type="number" min="2" max="25" step="1" value="6" style="width:48px"></label>
             <label id="dk-xf" class="hidden" title="Полудлина трещины ГРП" style="display:flex; align-items:center; gap:3px">x<sub>f</sub><select id="drill-xf"><option>40</option><option selected>80</option><option>120</option></select>м</label>
-            <label id="dk-az" class="hidden" title="Азимут ствола (0° – север, 90° – восток) или трещины" style="display:flex; align-items:center; gap:3px">аз.<input id="drill-az" type="number" min="0" max="359" step="5" value="90" style="width:58px">°</label>
+            <span id="dk-stress" class="sub hidden" style="font-size:11.5px"></span>
+            <label id="dk-az" class="hidden" title="Азимут ствола ГС (0° – север, 90° – восток)" style="display:flex; align-items:center; gap:3px">аз.<input id="drill-az" type="number" min="0" max="359" step="5" value="90" style="width:58px">°</label>
           </span>
           <button id="tool-well" data-tip="@drill">⛏ Скважина</button>
         </span>
@@ -652,7 +654,7 @@
       
       <div id="rig-panel" class="card" style="padding:6px 10px; margin-top:6px"></div>
       <div id="wellpanel" class="card"><table id="welltable" class="t">
-        <thead><tr><th></th><th>Скв.</th><th>Режим</th><th>Параметр</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>Обзв., %</th><th>Действия</th></tr></thead>
+        <thead><tr><th></th><th>Скв.</th><th>Режим</th><th>Параметр</th><th>Нефть, т/сут</th><th>Вода, м³/сут</th><th>ОБВ, %</th><th>Действия</th></tr></thead>
         <tbody></tbody>
       </table></div>
       <div class="row" id="rt-tabs" style="margin-top:10px; gap:4px"><button id="tab-charts" class="active">📈 Графики</button><button id="tab-table">📋 Итоги по годам</button></div>
@@ -878,7 +880,7 @@ function buildReservoir(params) {
   for (let c = 0; c < nx * ny; c++)
     if (active[c]) { poreVol[c] = dx * dx * h * phi; cells.push(c); }
   const ooipM3 = cells.reduce((s, c) => s + poreVol[c] * (1 - 0.2), 0);
-  return { level: 1, nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1,
+  return { level: 1, nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1, stressAz: 330,
            Swc: 0.2, Sor: 0.25, SwMax: 1 - 0.25, rho_oil: 0.86, active, k, poreVol, ooipM3, cells };
 }
 
@@ -913,33 +915,35 @@ const L2 = {
 // давление – типичные для пласта-аналога (ориентиры, см. README). depth – абс. отметка свода, м; h – эффективная толщина
 // (три пачки 35/35/30 %); shale – множитель толщины глинистых прослоев; k – медиана и разброс (σ ln k) фона, границы,
 // русла (chan: k в руслах, число русел); pGrad – пластовое давление на глубине свода, атм/м; drill/expl – стоимость
-// эксплуатационной / разведочной скважины по умолчанию, млн руб (растёт с глубиной).
+// эксплуатационной / разведочной скважины по умолчанию, млн руб (растёт с глубиной); stress – азимут максимального
+// горизонтального напряжения SHmax (°): трещины ГРП раскрываются вдоль него. Замеры по Западной Сибири дают 310–350°
+// (медиана ≈ 330°), по скважинам Волго-Урала – 50°±10°.
 const SCENARIOS = {
-  base: { name: "Купол (учебный)", short: "Купол", depth: 2400, h: 10, phi: 0.2, shale: 1, Swc: 0.2, Sor: 0.25, mu_o: null, mu_w: 1, rho: 0.86, ct: 1e-4, P0: 250,
+  base: { name: "Купол (учебный)", short: "Купол", depth: 2400, h: 10, phi: 0.2, shale: 1, Swc: 0.2, Sor: 0.25, mu_o: null, mu_w: 1, rho: 0.86, ct: 1e-4, P0: 250, stress: 330,
           k: { med: 20, sig: 0.7, min: 15, max: 150, chan: { lo: 300, hi: 800, n: 1 } }, flip: 0, drill: 80, expl: 320 },
   bv8: { owcRel: 22, name: "БВ8 – вартовская свита", short: "БВ8", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, валанжин",
-         rock: "песчаники дельтовых и прибрежно-морских фаций, хорошо отсортированные", depth: 2090, h: 12, phi: 0.23, shale: 0.8, Swc: 0.25, Sor: 0.28,
+         rock: "песчаники дельтовых и прибрежно-морских фаций, хорошо отсортированные", depth: 2090, h: 12, phi: 0.23, shale: 0.8, Swc: 0.25, Sor: 0.28, stress: 330,
          mu_o: 1.4, mu_w: 0.45, rho: 0.84, ct: 1e-4, pGrad: 0.101, k: { med: 250, sig: 0.55, min: 60, max: 900, chan: { lo: 600, hi: 1200, n: 1 } }, flip: 0, drill: 70, expl: 280,
          note: "Высокопроницаемый «классический» объект: высокие дебиты, быстрый рост обводнённости – главная задача – система ППД и борьба с обводнением." },
   av12: { owcRel: 17, name: "АВ1¹⁻² – «рябчик»", short: "АВ1 «рябчик»", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, апт",
           rock: "тонкое переслаивание песчаников, алевролитов и глин («рябчик»), низкая расчленённая эффективная толщина", depth: 1690, h: 8, phi: 0.21, shale: 2.2, Swc: 0.42, Sor: 0.30,
-          mu_o: 2.2, mu_w: 0.5, rho: 0.86, ct: 1e-4, pGrad: 0.101, k: { med: 14, sig: 0.6, min: 3, max: 80 }, flip: 1, drill: 55, expl: 220,
+          mu_o: 2.2, mu_w: 0.5, rho: 0.86, ct: 1e-4, pGrad: 0.101, k: { med: 14, sig: 0.6, min: 3, max: 80 }, flip: 1, drill: 55, expl: 220, stress: 330,
           note: "Низкопроницаемый расчленённый коллектор с высокой связанной водой: вертикальные скважины дают мало – нужны ГРП, ГС и плотная сетка." },
   yuv1: { owcRel: 19, name: "ЮВ1 – васюганская свита", short: "ЮВ1", region: "Западная Сибирь, Нижневартовский и Сургутский своды", age: "верхняя юра, оксфорд",
           rock: "песчаники баровых тел и прибрежно-морских фаций, неоднородные по площади", depth: 2640, h: 8, phi: 0.16, shale: 1, Swc: 0.35, Sor: 0.30,
-          mu_o: 1.1, mu_w: 0.4, rho: 0.83, ct: 1.1e-4, pGrad: 0.102, k: { med: 18, sig: 0.85, min: 0.5, max: 150 }, flip: 2, drill: 85, expl: 340,
+          mu_o: 1.1, mu_w: 0.4, rho: 0.83, ct: 1.1e-4, pGrad: 0.102, k: { med: 18, sig: 0.85, min: 0.5, max: 150 }, flip: 2, drill: 85, expl: 340, stress: 330,
           note: "Средне- и низкопроницаемый юрский пласт (k в среднем ≈ 20 мД, от долей до ~150 мД): ГРП – стандарт, зоны с хорошими ФЕС стоит искать разведкой и ГДИС." },
   yuk1011: { owcRel: 24, name: "ЮК10–11 – шеркалинская свита (Талинская площадь)", short: "ЮК10–11", region: "Западная Сибирь, Красноленинский свод", age: "нижняя юра",
              rock: "русловые песчаники и гравелиты в низкопроницаемой пойменной толще – резкая неоднородность", depth: 2540, h: 15, phi: 0.17, shale: 1.2, Swc: 0.30, Sor: 0.32,
-             mu_o: 0.7, mu_w: 0.4, rho: 0.81, ct: 1.2e-4, pGrad: 0.102, k: { med: 6, sig: 0.7, min: 1, max: 40, chan: { lo: 300, hi: 1500, n: 2 } }, flip: 3, drill: 85, expl: 340,
+             mu_o: 0.7, mu_w: 0.4, rho: 0.81, ct: 1.2e-4, pGrad: 0.102, k: { med: 6, sig: 0.7, min: 1, max: 40, chan: { lo: 300, hi: 1500, n: 2 } }, flip: 3, drill: 85, expl: 340, stress: 330,
              note: "Высокопроницаемые русла в плотной матрице: вода прорывается по руслам за месяцы, а запасы матрицы без ГРП не вовлекаются." },
   ach: { owcRel: 27, name: "Ач – ачимовская толща", short: "Ачимовка", region: "Западная Сибирь, Среднее Приобье", age: "нижний мел, берриас–валанжин",
          rock: "турбидитные песчаники и алевролиты конусов выноса, глинистые и карбонатизированные", depth: 2790, h: 14, phi: 0.17, shale: 1.4, Swc: 0.42, Sor: 0.30,
-         mu_o: 1.0, mu_w: 0.4, rho: 0.82, ct: 1.3e-4, pGrad: 0.116, k: { med: 0.07, sig: 0.8, min: 0.01, max: 0.5, abs: [0.01, 0.5] }, flip: 1, drill: 95, expl: 380,
+         mu_o: 1.0, mu_w: 0.4, rho: 0.82, ct: 1.3e-4, pGrad: 0.116, k: { med: 0.07, sig: 0.8, min: 0.01, max: 0.5, abs: [0.01, 0.5] }, flip: 1, drill: 95, expl: 380, stress: 330,
          note: "Трудноизвлекаемые запасы: k ≈ 0,01–0,5 мД (медиана ≈ 0,07 мД), повышенное пластовое давление. Вертикальные скважины почти не дают нефти – нужны ГРП и ГС с МГРП." },
   bb: { owcRel: 15, name: "Бб – бобриковский горизонт", short: "Бобриковский", region: "Волго-Уральская провинция (Татарстан, Башкортостан)", age: "нижний карбон, визе",
         rock: "кварцевые песчаники врезанных долин и русел, высокопроницаемые", depth: 1240, h: 7, phi: 0.21, shale: 0.8, Swc: 0.18, Sor: 0.25,
-        mu_o: 22, mu_w: 1.1, rho: 0.89, ct: 1e-4, pGrad: 0.103, k: { med: 420, sig: 0.6, min: 100, max: 1500, chan: { lo: 900, hi: 2000, n: 1 } }, flip: 2, drill: 40, expl: 160,
+        mu_o: 22, mu_w: 1.1, rho: 0.89, ct: 1e-4, pGrad: 0.103, k: { med: 420, sig: 0.6, min: 100, max: 1500, chan: { lo: 900, hi: 2000, n: 1 } }, flip: 2, drill: 40, expl: 160, stress: 50,
         note: "Неглубокий высокопроницаемый пласт с вязкой нефтью (≈ 20 сП): неблагоприятное соотношение подвижностей – вода прорывается рано, КИН ограничен." },
 };
 const SCENARIO_ORDER = ["bv8", "av12", "yuv1", "yuk1011", "ach", "bb"];
@@ -982,7 +986,9 @@ function scenarioForSeed(id, seed) {
   return { ...b, id, seed, name: `${b.name}, сид ${seed}`, short: b.short, depth, h: +(b.h * U(0.8, 1.25)).toFixed(1), phi: +(b.phi + U(-0.02, 0.02)).toFixed(3),
            shale: +(b.shale * U(0.8, 1.25)).toFixed(2), Swc: +(b.Swc + U(-0.03, 0.03)).toFixed(3), Sor: +(b.Sor + U(-0.03, 0.03)).toFixed(3),
            mu_o: +mu_o.toFixed(mu_o >= 10 ? 1 : 2), owcRel: Math.round(Math.max(10, (b.owcRel || 20) + U(-6, 6))), pGrad: +(b.pGrad + U(-0.003, 0.003)).toFixed(4),
-           k, flip: 0, drill: Math.round((b.drill * depth) / b.depth), expl: Math.round((b.expl * depth) / b.depth), geo };
+           k, flip: 0, drill: Math.round((b.drill * depth) / b.depth), expl: Math.round((b.expl * depth) / b.depth),
+           // азимут SHmax (±15° от группы) – последний розыгрыш, чтобы не сдвигать ГПСЧ-последовательность геологии
+           stress: ((Math.round((b.stress ?? 330) + U(-15, 15)) % 360) + 360) % 360, geo };
 }
 // объект по параметрам игры: группа params.scenario и сид params.seed
 const scenOfParams = (params) => (params.seed ? scenarioForSeed(params.scenario, params.seed) : scenOf(params.scenario));
@@ -1163,7 +1169,7 @@ function buildReservoir2(params) {
     }
   const seis = buildSeismic(zTop, gross, nx, ny, faultsBase, salt);
   const P0 = base ? 250 : Math.round(sc.pGrad * sc.depth);
-  return { level: 2, scenario: base ? null : params.scenario, seed: g ? sc.seed : 0, salt, scen: sc, kTrue, thick: tm, nx, ny, dx, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w,
+  return { level: 2, scenario: base ? null : params.scenario, seed: g ? sc.seed : 0, salt, scen: sc, kTrue, thick: tm, nx, ny, dx, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w, stressAz: ((sc.stress ?? 330) % 360 + 360) % 360,
            // предел забойного давления закачки (давление гидроразрыва с запасом): ≈ 0.14 атм/м глубины ВНК
            pMaxInj: base ? 340 : Math.round(0.14 * owc),
            // SwMax > 1: перенос насыщенности (как и на уровне 1) относит упругий запас
@@ -1404,7 +1410,10 @@ function createSim(reservoir, params) {
       }
       return { cells, lens, reached, ux, uy };
     };
-    const az = ((opt.az ?? AZ_OF_DIR[opt.dir || "E"]) % 360 + 360) % 360;
+    // азимут: явный az/dir имеет приоритет; трещина ГРП без него строится по максимальному горизонтальному
+    // напряжению пласта (r.stressAz), ствол ГС/ЗБС без него – на восток (для тестов)
+    const saz = ((r.stressAz ?? 330) % 360 + 360) % 360;
+    const az = ((opt.az ?? (opt.dir ? AZ_OF_DIR[opt.dir] : kind === "frac" ? saz : AZ_OF_DIR.E)) % 360 + 360) % 360;
     if (kind === "hs" || kind === "zbs") {
       // ствол длиной L от центра ячейки; луч на L + Δ/2, чтобы вдоль оси сетки ячейки вскрывались целиком (как при калибровке)
       const R1 = ray(az, opt.L + r.dx / 2, false);
@@ -1427,30 +1436,33 @@ function createSim(reservoir, params) {
       w.traj = [[x0 - (A.ux * lb) / r.dx, y0 - (A.uy * lb) / r.dx], [x0 + (A.ux * la) / r.dx, y0 + (A.uy * la) / r.dx]];
       w.skin = Math.min(w.skin || 0, 0);
     } else if (kind === "mgrp") {
-      // многостадийный ГРП на горизонтальном стволе: n поперечных трещин (азимут ствола ± 90°), равномерно по стволу.
+      // многостадийный ГРП на горизонтальном стволе: n трещин равномерно по стволу, каждая распространяется по
+      // максимальному горизонтальному напряжению (r.stressAz; явный opt.az – для эталонов и тестов). Ствол вдоль
+      // напряжения даёт продольные трещины, поперёк напряжения – поперечные, промежуточный азимут – косые.
       // Каждая трещина – как ГРП конечной проводимости (fracCellFactor) плюс скин стягивания к стволу; трещины не
       // пересекают разломы и чужие ячейки, через ячейки своего ствола проходят. Интерференция трещин – расчётом в сетке.
       if (!(w.kind === "hs" || w.kind === "zbs") || w.mgrp) return { ok: false, msg: "МГРП возможен на горизонтальном (боковом) стволе без ГРП" };
       const nMax = Math.max(1, Math.floor(w.L / 80)), n = Math.max(1, Math.min(nMax, Math.round(opt.n || 4)));
+      const fa = ((opt.az ?? saz) % 360 + 360) % 360; // трещины по стрессу; явный az – эталоны и тесты
+      const thf = (fa * Math.PI) / 180, vfx = Math.sin(thf), vfy = -Math.cos(thf);
       const th = (w.az * Math.PI) / 180, ux = Math.sin(th), uy = -Math.cos(th), own = new Set(w.perf.map((pf) => pf.cell));
       const nside = Math.max(1, Math.round(opt.xf / REF_DX)), ext = opt.xf + r.dx / 2, wn = wiNorm(r), add = new Map(), stages = [];
       let fcd = 0, sf = 0, sc = 0;
       for (let q = 0; q < n; q++) {
         const sAl = (w.L * (q + 0.5)) / n / r.dx, x = x0 + ux * sAl, y = y0 + uy * sAl, cell = Math.floor(y) * nx + Math.floor(x);
-        const org = { x, y, cell }, A = ray(w.az + 90, ext, true, org, own), B = ray(w.az - 90, ext, true, org, own);
+        const org = { x, y, cell }, A = ray(fa, ext, true, org, own), B = ray(fa + 180, ext, true, org, own);
         const cells = [cell, ...A.cells, ...B.cells], kMean = cells.reduce((s2, c) => s2 + r.k[c], 0) / cells.length;
         const chk = fracChokeSkin(kMean, r.h), fc = fracCellFactor(kMean, opt.xf, nside, chk);
         add.set(cell, (add.get(cell) || 0) + fc.f * wn * Math.min(2, r.dx / REF_DX));
         A.cells.forEach((c, k) => add.set(c, (add.get(c) || 0) + (fc.f * wn * A.lens[k]) / REF_DX));
         B.cells.forEach((c, k) => add.set(c, (add.get(c) || 0) + (fc.f * wn * B.lens[k]) / REF_DX));
         const la = Math.max(0, Math.min(opt.xf, A.reached - r.dx / 2)), lb = Math.max(0, Math.min(opt.xf, B.reached - r.dx / 2));
-        const vx = Math.cos(th), vy = Math.sin(th); // направление азимут + 90°
-        stages.push([x - (vx * lb) / r.dx, y - (vy * lb) / r.dx, x + (vx * la) / r.dx, y + (vy * la) / r.dx]);
+        stages.push([x - (vfx * lb) / r.dx, y - (vfy * lb) / r.dx, x + (vfx * la) / r.dx, y + (vfy * la) / r.dx]);
         fcd += fc.fcd / n; sf += fc.sf / n; sc += chk / n;
       }
       for (const pf of w.perf) if (add.has(pf.cell)) { pf.f += add.get(pf.cell); add.delete(pf.cell); }
       for (const [c, f] of add) w.perf.push({ cell: c, f });
-      w.mgrp = { n, xf: opt.xf, fcd, sf, sc, stages };
+      w.mgrp = { n, xf: opt.xf, az: fa % 180, fcd, sf, sc, stages };
       w.skin = Math.min(w.skin || 0, 0);
     }
     sim._fluxValid = false;
@@ -2795,7 +2807,8 @@ function* policyRun(r, P, th, years = 20) {
     if (asProd || th.injCompl) {
       if (th.compl === "hs" || th.compl === "hsf") {
         const rr = sim.setCompletion(w, "hs", { L: th.hsL, az: th.hsAz });
-        if (rr.ok) { units = CAPEX.hs(w.L); if (th.compl === "hsf" && r.k[x.c] < th.fracK) { const rf = sim.setCompletion(w, "mgrp", { n: th.mgN, xf: th.xf }); if (rf.ok) Object.assign(units, CAPEX.mgrp(w.mgrp.n, th.xf)); } }
+        if (rr.ok) { units = CAPEX.hs(w.L); if (th.compl === "hsf" && r.k[x.c] < th.fracK) { const rf = sim.setCompletion(w, "mgrp", { n: th.mgN, xf: th.xf, az: (th.hsAz + 90) % 180 }); if (rf.ok) Object.assign(units, CAPEX.mgrp(w.mgrp.n, th.xf)); } }
+        // az (ствол + 90°) – эталонные ряды REF найдены оптимизатором при поперечных трещинах; повторяем ту же геометрию
       } else if (th.compl === "vf" && r.k[x.c] < th.fracK) { const rr = sim.setCompletion(w, "frac", { xf: th.xf, az: th.hsAz }); if (rr.ok) Object.assign(units, CAPEX.frac(th.xf)); }
       eco.charge(0, units, true);
       if (asProd) { w.mode = "flow"; w.choke = th.chokeP; if (th.prodMode === "esp") installEsp(w); } else { w.mode = "choke"; w.choke = th.dInj; }
@@ -3144,12 +3157,35 @@ function completionTests() {
   t.push({ name: "ГРП: трещина не пересекает разлом (обрезается на нём)", pass: fz.wells[0].perf.every((pf) => pf.cell % fr.nx <= fc % fr.nx), details: `ячеек ${fz.wells[0].perf.length}` });
   const cl = cloneSim(m);
   t.push({ name: "клон сохраняет заканчивание скважин", pass: cl.wells[0].perf.length === m.wells[0].perf.length && cl.wells[1].kind === "frac" && cl.wells[1].perf !== m.wells[1].perf });
+  // стресс: трещины по максимальному горизонтальному напряжению
+  const s1 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS), saz1 = s1.r.stressAz;
+  s1.addWell(cellAt(s1, 22, 22), "prod", 150);
+  const rs1 = s1.setCompletion(s1.wells[0], "frac", { xf: 80 });
+  const s1b = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  s1b.addWell(cellAt(s1b, 22, 22), "prod", 150); s1b.setCompletion(s1b.wells[0], "frac", { xf: 80, az: 45 });
+  t.push({ name: "стресс: ГРП без явного азимута строится по SHmax, явный азимут сохраняется",
+           pass: rs1.ok && s1.wells[0].frac.az === saz1 % 180 && s1b.wells[0].frac.az === 45, details: `SHmax ${saz1}°, трещина ${s1.wells[0].frac.az}°; с az=45 → 45°` });
+  const s2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS), saz2 = s2.r.stressAz;
+  s2.addWell(cellAt(s2, 22, 22), "prod", 150);
+  const rl = s2.setCompletion(s2.wells[0], "hs", { L: 800, az: saz2 % 180 }), nStem = s2.wells[0].perf.length;
+  const rmL = s2.setCompletion(s2.wells[0], "mgrp", { n: 3, xf: 80 });
+  const s3 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  s3.addWell(cellAt(s3, 22, 22), "prod", 150);
+  const rp = s3.setCompletion(s3.wells[0], "hs", { L: 800, az: (saz2 + 90) % 180 }), nStemP = s3.wells[0].perf.length;
+  const rmP = s3.setCompletion(s3.wells[0], "mgrp", { n: 3, xf: 80 });
+  t.push({ name: "стресс: ГС вдоль SHmax – продольные трещины (ячейки только ствола), поперёк SHmax – поперечные (вне ствола)",
+           pass: rl.ok && rmL.ok && s2.wells[0].perf.length === nStem && rp.ok && rmP.ok && s3.wells[0].perf.length > nStemP,
+           details: `SHmax ${saz2}°: вдоль ${nStem} → ${s2.wells[0].perf.length} ячеек, поперёк ${nStemP} → ${s3.wells[0].perf.length}` });
+  const st = (g, s) => scenarioForSeed(g, s).stress;
+  t.push({ name: "стресс: у сида свой азимут в ±15° от группы (БВ8 330°, Бб 50°), детерминирован",
+           pass: Math.abs(st("bv8", 42) - 330) <= 15 && Math.abs(st("bb", 42) - 50) <= 15 && st("bv8", 42) === scenarioForSeed("bv8", 42).stress,
+           details: `БВ8 сид 42: ${st("bv8", 42)}°, Бб сид 42: ${st("bb", 42)}°` });
   return t;
 }
 
 registerCore({
   setAccel, accelOn: () => !!ACCEL,
-  VERSION: "0.12.1",
+  VERSION: "0.13.0",
   DEFAULT_PARAMS, GRID, CONV_K,
   mulberry32, gauss, buildReservoir, isConnected,
   POLICIES, policyRun, seedRefRun, runGen, segCross, GRID_SIZES, DEFAULT_CALC, BASE_N, L2, SCENARIOS, SCENARIO_ORDER, scenOf, scenarioParams, scenarioForSeed, scenOfParams, SEED_MAX, hashSeed, l2Flip, buildReservoir2, wellLog, l2Top, l2Column, l2OilNet, l2Altitude,
@@ -3980,12 +4016,16 @@ function renderMap() {
     ? [{ xref: "paper", yref: "paper", x: 0.99, y: 0.01, xanchor: "right", yanchor: "bottom", showarrow: false, align: "left", bgcolor: "rgba(255,255,255,.85)", bordercolor: "#dfe6f1", borderwidth: 1, font: { size: 11 },
          text: "ВНК: <b>–·–·–</b> внешний контур (по кровле)<br><b>–··–··–</b> внутренний контур (по подошве)<br>Между ними водонефтяная зона" }] : [];
   const snapNote = G.snapIdx !== null && G.snaps[G.snapIdx] ? [{ xref: "paper", yref: "paper", x: 0.01, y: 0.99, xanchor: "left", yanchor: "top", showarrow: false, bgcolor: "rgba(255,255,255,.85)", text: G.snaps[G.snapIdx].t === 0 ? "<b>Начало разработки</b>" : `<b>Конец года ${Math.round(G.snaps[G.snapIdx].t / 365)}</b>` }] : [];
+  // максимальное горизонтальное напряжение: заметка в левом нижнем углу (стрелка по октанту азимута)
+  const saz = stressOf(), sArrow = "↑↗→↘↓↙←↖"[Math.round(((saz % 360) + 360) % 360 / 45) % 8];
+  const stressNote = [{ xref: "paper", yref: "paper", x: 0.01, y: 0.01, xanchor: "left", yanchor: "bottom", showarrow: false, align: "left", bgcolor: "rgba(255,255,255,.85)", bordercolor: "#dfe6f1", borderwidth: 1, font: { size: 11 },
+    text: `<span style="font-size:15px"> ${sArrow}</span> <b>SHmax ≈ ${saz}°</b> – трещины ГРП вдоль него` }];
   // вид карты (зум и сдвиг) запоминается и не сбрасывается перерисовкой; размер – по контейнеру
   const view = G.mapView || { x: [0, NX * DX], y: [NX * DX, 0] };
-  const layout = lay({ autosize: true, margin: { l: 56, r: 10, t: 10, b: 44 }, dragmode: "pan", hovermode: "closest", annotations: [...snapNote, ...owcKey, ...(bub ? [bub.note] : []), ...rulerLayout().annotations], shapes: [...(bub ? bub.shapes : []), ...rulerLayout().shapes],
+  const layout = lay({ autosize: true, margin: { l: 56, r: 10, t: 10, b: 44 }, dragmode: "pan", hovermode: "closest", annotations: [...snapNote, ...stressNote, ...owcKey, ...(bub ? [bub.note] : []), ...rulerLayout().annotations], shapes: [...(bub ? bub.shapes : []), ...rulerLayout().shapes],
     xaxis: { range: view.x, title: { text: "Восток, м" }, constrain: "range" },
     yaxis: { range: view.y, title: { text: "Север, м" }, scaleanchor: "x", constrain: "range" } });
-  G.mapAnn = [...snapNote, ...owcKey, ...(bub ? [bub.note] : [])]; G.mapShapes = bub ? bub.shapes : [];
+  G.mapAnn = [...snapNote, ...stressNote, ...owcKey, ...(bub ? [bub.note] : [])]; G.mapShapes = bub ? bub.shapes : [];
   Plotly.react("map", data, layout, MAPCFG);
   if (!renderMap.bound) {
     renderMap.bound = true;
@@ -4001,10 +4041,12 @@ function renderMap() {
       if (!p || G.tool !== "well" || kv === "v") { if (G.preview) { G.preview = null; Plotly.restyle("map", { x: [[]], y: [[]] }, [G.previewIdx]); } return; }
       const i = Math.floor(p.x / DX), j = Math.floor(p.y / DX), th = ((+$("drill-az").value || 0) * Math.PI) / 180;
       const x0 = (i + 0.5) * DX, y0 = (j + 0.5) * DX, ux = Math.sin(th), uy = -Math.cos(th);
-      if (kv === "hs") { const L = drillLen(); G.preview = { x: [x0, x0 + ux * L], y: [y0, y0 + uy * L] }; }
+      const sth = (stressOf() * Math.PI) / 180, fx = Math.sin(sth), fy = -Math.cos(sth); // трещины – по максимальному напряжению
+      if (kv === "vf") { const xf = +$("drill-xf").value; G.preview = { x: [x0 - fx * xf, x0 + fx * xf], y: [y0 - fy * xf, y0 + fy * xf] }; }
+      else if (kv === "hs") { const L = drillLen(); G.preview = { x: [x0, x0 + ux * L], y: [y0, y0 + uy * L] }; }
       else if (kv === "hsf") {
         const L = drillLen(), n = Math.max(1, Math.min(Math.floor(L / 80), +$("drill-n").value || 6)), xf = +$("drill-xf").value, X = [x0, x0 + ux * L, null], Y = [y0, y0 + uy * L, null];
-        for (let q = 0; q < n; q++) { const sx = x0 + (ux * L * (q + 0.5)) / n, sy = y0 + (uy * L * (q + 0.5)) / n; X.push(sx + uy * xf, sx - uy * xf, null); Y.push(sy - ux * xf, sy + ux * xf, null); }
+        for (let q = 0; q < n; q++) { const sx = x0 + (ux * L * (q + 0.5)) / n, sy = y0 + (uy * L * (q + 0.5)) / n; X.push(sx + fx * xf, sx - fx * xf, null); Y.push(sy + fy * xf, sy - fy * xf, null); }
         G.preview = { x: X, y: Y };
       }
       else { const xf = +$("drill-xf").value; G.preview = { x: [x0 - ux * xf, x0 + ux * xf], y: [y0 - uy * xf, y0 + uy * xf] }; }
@@ -4110,7 +4152,7 @@ function drillWell(cell) {
       Object.assign(units, C.CAPEX.mgrp(w.mgrp.n, xf));
     }
   } else if (kv === "vf") {
-    const xf = +$("drill-xf").value, res = sim.setCompletion(w, "frac", { xf, az }, blocked);
+    const xf = +$("drill-xf").value, res = sim.setCompletion(w, "frac", { xf }, blocked); // трещина – по максимальному напряжению
     if (!res.ok) { sim.wells.pop(); return toast(`ГРП не заказан: ${res.msg}`, true); }
     Object.assign(units, C.CAPEX.frac(xf));
   }
@@ -4186,9 +4228,17 @@ function afford(cost, what) {
 // длина ГС – любая от 100 м (верхний предел 3000 м – больше диагонали участка; фактически ствол обрежется по соседям и краю)
 function drillLen() { return Math.max(100, Math.min(3000, +$("drill-L").value || 1000)); }
 function syncDrillOpts() {
-  const kv = $("drill-kind").value;
+  const kv = $("drill-kind").value, saz = stressOf();
   $("dk-L").classList.toggle("hidden", kv !== "hs" && kv !== "hsf"); $("dk-xf").classList.toggle("hidden", kv !== "vf" && kv !== "hsf");
-  $("dk-n").classList.toggle("hidden", kv !== "hsf"); $("dk-az").classList.toggle("hidden", kv === "v");
+  $("dk-n").classList.toggle("hidden", kv !== "hsf"); $("dk-az").classList.toggle("hidden", kv === "v" || kv === "vf"); // азимут только у ствола; трещина – по стрессу
+  $("dk-stress").classList.toggle("hidden", kv !== "vf");
+  if (kv === "vf") $("dk-stress").innerHTML = `трещина по напряжению ≈ ${saz}°`;
+}
+// азимут максимального горизонтального напряжения выбранного объекта (сид учитывается)
+function stressOf() {
+  if (G.sim && G.sim.r.stressAz != null) return Math.round(G.sim.r.stressAz);
+  const sc = C.scenarioForSeed(G.scenario, G.seed) || C.scenOf(G.scenario);
+  return ((sc.stress ?? 330) % 360 + 360) % 360;
 }
 function openOps(name, focus) {
   const w = G.sim.wells.find((x) => x.name === name); if (!w) return;
@@ -4206,12 +4256,12 @@ function renderOps() {
   $("op-body").innerHTML = `<div style="margin-bottom:10px">Текущее заканчивание: <b>${kindLabel(w)}</b> · ${w.type === "prod" ? "добывающая" : "нагнетательная"}${w.on === false ? " (остановлена)" : ""}</div>` +
     (can ? `<div class="card" style="padding:12px 14px; margin-bottom:12px"><b>ГРП – гидроразрыв пласта</b><div class="sub" style="margin:4px 0 8px">Трещина конечной проводимости (k<sub>f</sub>·w = ${C.FRAC_COND} мД·м) вскрывает ряд ячеек; положительный скин снимается. Эффект тем больше, чем ниже проницаемость пласта: ожидаемый рост продуктивности при k = ${G.sim.r.k[w.cell].toFixed(0)} мД – ${[40, 80, 120].map((x) => `xf ${x} м: ×${C.fracCellFactor(G.sim.r.k[w.cell], x, x / 40).ratio.toFixed(1)}`).join(", ")} (оценка по k у скважины, одна скважина, ПУР; фактически берётся средняя k по ячейкам трещины). При низкой FCD удлинение трещины почти не помогает – нужна проводимость. Трещина останавливается на разломах. В водяной зоне увеличит обводнённость.</div>` +
       `<div class="row">Полудлина: <select id="op-xf">${[40, 80, 120].map((x) => `<option value="${x}">${x} м – ${(fc(x) / 1e6).toFixed(1)} млн руб</option>`).join("")}</select>` +
-      ` Азимут трещины: <input id="op-faz" type="number" min="0" max="179" step="5" value="90" style="width:62px">° <span class="sub">(0° – север–юг, 90° – восток–запад)</span> <button id="op-frac" class="primary">Выполнить ГРП</button></div></div>` +
+      ` <span class="sub">Азимут трещины – по максимальному напряжению пласта <b>${stressOf()}°</b> (трещина раскрывается вдоль SHmax; 0° – север)</span> <button id="op-frac" class="primary">Выполнить ГРП</button></div></div>` +
       `<div class="card" style="padding:12px 14px"><b>Зарезка бокового ствола</b><div class="sub" style="margin:4px 0 8px">Из вертикальной скважины бурится боковой ствол вдоль пласта: растёт контакт с пластом. Старый интервал можно изолировать (на обводнённой скважине это отсекает воду). Ствол упирается в соседние скважины и край поля.</div>` +
       `<div class="row">Длина: <input id="op-L" type="number" min="100" max="1000" step="50" value="400" style="width:70px"> м <span class="sub" id="op-Lcost">(${(zc(400) / 1e6).toFixed(1)} млн руб)</span>` +
       ` Азимут: <input id="op-zaz" type="number" min="0" max="359" step="5" value="90" style="width:62px">° <span class="sub">(0° – север, 90° – восток)</span>` +
       ` <label><input type="checkbox" id="op-iso"> изолировать старый интервал</label> <button id="op-zbs" class="primary">Зарезать ствол</button></div></div>`
-      : canM ? `<div class="card" style="padding:12px 14px"><b>МГРП – многостадийный гидроразрыв на горизонтальном стволе</b><div class="sub" style="margin:4px 0 8px">Вдоль ствола ${w.L} м равномерно создаются поперечные трещины (азимут ствола ± 90°) конечной проводимости (k<sub>f</sub>·w = ${C.FRAC_COND} мД·м). У поперечной трещины есть дополнительный скин стягивания потока к стволу: s<sub>c</sub> = (kh / k<sub>f</sub>w)·(ln(h/2r<sub>w</sub>) − π/2) ≈ ${C.fracChokeSkin(kh, G.sim.r.h).toFixed(1)} при k = ${kh.toFixed(0)} мД. Соседние трещины мешают друг другу (интерференция) – отдача от каждой следующей стадии падает. МГРП окупается в низкопроницаемом пласте; в высокопроницаемом ГС и без того дренирует пласт. Трещины не пересекают разломы.</div>` +
+      : canM ? `<div class="card" style="padding:12px 14px"><b>МГРП – многостадийный гидроразрыв на горизонтальном стволе</b><div class="sub" style="margin:4px 0 8px">Вдоль ствола ${w.L} м равномерно создаются трещины конечной проводимости (k<sub>f</sub>·w = ${C.FRAC_COND} мД·м), распространяющиеся по максимальному горизонтальному напряжению пласта (<b>${stressOf()}°</b>): ствол вдоль напряжения – трещины продольные, ствол поперёк – поперечные, промежуточный азимут – косые. У поперечной и косой трещины есть скин стягивания потока к стволу: s<sub>c</sub> = (kh / k<sub>f</sub>w)·(ln(h/2r<sub>w</sub>) − π/2) ≈ ${C.fracChokeSkin(kh, G.sim.r.h).toFixed(1)} при k = ${kh.toFixed(0)} мД. Соседние трещины мешают друг другу (интерференция) – отдача от каждой следующей стадии падает. МГРП окупается в низкопроницаемом пласте; в высокопроницаемом ГС и без того дренирует пласт. Трещины не пересекают разломы.</div>` +
       `<div class="row">Стадий: <input id="op-mn" type="number" min="2" max="${nMax}" step="1" value="${Math.min(6, nMax)}" style="width:56px"> <span class="sub">(до ${nMax}: интервал ≥ 80 м)</span> Полудлина: <select id="op-mxf">${[40, 80, 120].map((x) => `<option value="${x}"${x === 80 ? " selected" : ""}>${x} м</option>`).join("")}</select>` +
       ` <span class="sub" id="op-mcost">(${(mc(Math.min(6, nMax), 80) / 1e6).toFixed(1)} млн руб)</span> <button id="op-mgrp" class="primary">Выполнить МГРП</button></div></div>`
       : `<div class="note keep">ГРП и боковой ствол – на вертикальных скважинах без ГРП; МГРП – на горизонтальных стволах (ГС, ЗБС) без МГРП. При бурении заканчивание выбирается рядом с кнопкой «Скважина»: «ВС + ГРП», «ГС», «ГС + МГРП».</div>`);
@@ -4228,7 +4278,7 @@ function doFrac(w) {
   if (guardRun()) return;
   const xf = +$("op-xf").value;
   if (!afford(capCost(C.CAPEX.frac(xf)), "ГРП")) return;
-  const res = G.sim.setCompletion(w, "frac", { xf, az: +$("op-faz").value || 0 }, blockedByExpl);
+  const res = G.sim.setCompletion(w, "frac", { xf }, blockedByExpl); // азимут трещины – максимальное напряжение пласта
   if (!res.ok) return toast(`ГРП не выполнен: ${res.msg}`, true);
   const cost = G.sim.economy.charge(G.sim.t, C.CAPEX.frac(xf));
   toast(`${w.name}: ГРП выполнен (полудлина ${w.frac.xf} м, FCD ${w.frac.fcd.toFixed(2)}, скин трещины ${w.frac.sf.toFixed(1)}), −${mln(cost)}`);
@@ -4249,7 +4299,7 @@ function doMgrp(w) {
   const xf = +$("op-mxf").value, res = G.sim.setCompletion(w, "mgrp", { n: +$("op-mn").value || 4, xf }, blockedByExpl);
   if (!res.ok) return toast(`МГРП не выполнен: ${res.msg}`, true);
   const cost = G.sim.economy.charge(G.sim.t, C.CAPEX.mgrp(w.mgrp.n, xf));
-  toast(`${w.name}: МГРП ${w.mgrp.n} стадий, полудлина ${xf} м (FCD ${w.mgrp.fcd.toFixed(2)}, скин стягивания ${w.mgrp.sc.toFixed(1)}), −${mln(cost)}`);
+  toast(`${w.name}: МГРП ${w.mgrp.n} стадий, полудлина ${xf} м, азимут по напряжению ${w.mgrp.az}° (FCD ${w.mgrp.fcd.toFixed(2)}, скин стягивания ${w.mgrp.sc.toFixed(1)}), −${mln(cost)}`);
   renderOps(); renderWellTable(true); G.dirty = true; renderAll();
 }
 function convertWell(w) {
@@ -5332,6 +5382,7 @@ function drawReveal(sim) {
   const faults = r.faults.map((F) => `${F.name} – ${F.trans === 0 ? "запечатан" : `проницаем на ${Math.round(F.trans * 100)} %`}, сброс ${Math.abs(F.shift)} м`).join("; ");
   $("reveal-text").innerHTML = `Переключайте слой кнопками над картой. Чёрные линии – фактический ВНК (внешний и внутренний контур), красный пунктир – разломы по сейсмике, чёрные – фактические.<br>` +
     `Фактический ВНК: <b>${fmtAbs(r.owc)} м</b>${err === null ? " – вы его не оценивали." : `, ваша оценка ${fmtAbs(G.owcGuess)} м (ошибка ${err >= 0 ? "+" : "−"}${Math.abs(err).toFixed(1)} м).`}<br>` +
+    `Азимут максимального горизонтального напряжения: <b>≈ ${Math.round(r.stressAz || 330)}°</b> – все трещины ГРП/МГРП раскрывались вдоль него (ГС вдоль напряжения – продольные трещины).<br>` +
     `Запасы OOIP: ${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т. Нефтеносная площадь ${(oil / r.cells.length * 100).toFixed(0)} %, без подошвенной воды – ${(full / Math.max(1, oil) * 100).toFixed(0)} % от неё.<br>` +
     `Разломы: ${faults}.<br>Добывающие (включая переведённые): в нефтяной зоне ${cnt((h) => h >= r.h - 1e-6)}, в водонефтяной ${cnt((h) => h > 0 && h < r.h - 1e-6)}, в водяной ${cnt((h) => h <= 0)}.`;
 }
@@ -5430,6 +5481,7 @@ function renderSettingsPreview() {
       lay({ height: 380, margin: { l: 50, r: 10, t: 10, b: 40 }, dragmode: false, xaxis: { range: [0, 2000], title: { text: "Восток, м" } }, yaxis: { range: [2000, 0], scaleanchor: "x", title: { text: "Север, м" } } }), CFG);
     $("props-read").innerHTML = [["Начальное давление", "250 атм"], ["Сетка", "50×50, ячейка 40×40 м"], ["Толщина пласта", "10 м"], ["Пористость", "0.20"],
       ["Связанная вода / остаточная нефть", "0.20 / 0.25"], ["Проницаемость", "фон 15–150 мД, русло 300–800 мД"], ["Плотность нефти", "0.86 т/м³"],
+      ["Напряжение (SHmax)", "≈ 330° – трещины ГРП раскрываются вдоль него"],
       ["Запасы OOIP", `${(r.ooipM3 / 1e6).toFixed(2)} млн м³ ≈ ${(r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т`]].map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
   } else {
     $("preview-title").textContent = `${objCode()}: ${G.edu ? "карта проницаемости (учебный режим)" : "участок и разведочные скважины"}`;
@@ -5444,6 +5496,7 @@ function renderSettingsPreview() {
     $("props-read").innerHTML = [["Глубина", `≈ ${(Math.round(sc.depth / 50) * 50).toLocaleString("ru-RU")} м`], ["Толщина", `≈ ${sc.h} м`], ["Пористость", fmtN(sc.phi)],
       ["Проницаемость", `≈ ${fmtK(K.med)} мД${K.chan ? `, русла до ${fmtK(K.chan.hi)}` : ""}`], ["Вязкость нефти / воды", `${fmtN(sc.mu_o, sc.mu_o >= 10 ? 0 : 1)} / ${fmtN(sc.mu_w, 2)} сП`],
       ["S<sub>wc</sub> / S<sub>or</sub>", `${fmtN(sc.Swc)} / ${fmtN(sc.Sor)}`], ["Пластовое давление", `≈ ${r.P0} атм${sc.pGrad > 0.11 ? " (АВПД)" : ""}`],
+      ["Напряжение (SHmax)", `≈ ${((sc.stress ?? 330) % 360 + 360) % 360}° – трещины ГРП раскрываются вдоль него`],
       ...(calcIsCustom() ? [["Расчёт", `<b style="color:#c2410c">${calcText()}</b>`]] : []),
       ...(G.edu ? [["Запасы OOIP", `${fmtN((r.ooipM3 * C.RHO_OIL) / 1e6)} млн т`], ["ВНК", `абс. −${r.owc} м`]] : [])]
       .map(([k, v]) => `<div><span class="sub">${k}:</span> ${v}</div>`).join("");
@@ -5484,7 +5537,7 @@ function drillTipHtml() {
   if (kv === "vf") { u = { ...u, ...C.CAPEX.frac(xf) }; what = `ВС + ГРП ${xf} м`; }
   if (kv === "hs" || kv === "hsf") { u = C.CAPEX.hs(L); what = `ГС ${L} м`; }
   if (kv === "hsf") { u = { ...u, ...C.CAPEX.mgrp(n, xf) }; what += ` + МГРП ${n}×${xf} м`; }
-  return `<b>Пробурить скважину</b>: ${what} – <b>${mlnS(C.costOf(u, P))} млн руб</b>.<br>Клик по карте – бурение; потом можно выбрать режим, перевести под закачку (ППД), остановить. Если ствол упрётся в соседей, длина и цена будут меньше.`;
+  return `<b>Пробурить скважину</b>: ${what} – <b>${mlnS(C.costOf(u, P))} млн руб</b>.<br>${kv === "vf" || kv === "hsf" ? `Трещины ГРП/МГРП распространяются по максимальному напряжению пласта (≈ ${stressOf()}°): ГС вдоль напряжения даёт продольные трещины, поперёк – поперечные.<br>` : ""}Клик по карте – бурение; потом можно выбрать режим, перевести под закачку (ППД), остановить. Если ствол упрётся в соседей, длина и цена будут меньше.`;
 }
 const TIP_FN = { money: () => { const e = G.sim && G.sim.economy; return e ? `<b>Баланс</b> ${mln(e.balance)}.<br>Лимит долга ${mln(e.credit)}: сейчас можно потратить ещё <b>${mln(Math.max(0, e.balance + e.credit))}</b>.<br>Игра начинается с нуля; покупка, превышающая лимит, недоступна.` : ""; }, prices: pricesHtml, drill: drillTipHtml, expl: () => `<b>Разведочная скважина</b> – ${mlnS((G.params || readParams()).expl_cost)} млн руб.<br>Только каротаж и РИГИС, без добычи.` };
 const tipBox = document.createElement("div"); tipBox.id = "tip"; document.body.appendChild(tipBox);
