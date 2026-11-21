@@ -5384,6 +5384,7 @@ function setScenario(id) {
   setLevel(2);
 }
 function renderSettingsPreview() {
+  if (!$("screen-settings").classList.contains("visible")) return;
   const l2 = G.level === 2, sc = C.scenarioForSeed(G.scenario, G.seed) || C.scenOf(G.scenario);
   renderScenPick(); $("seed-code").textContent = `код: ${objCode()}`;
   $("level-desc").innerHTML = "";
