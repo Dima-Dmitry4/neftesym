@@ -35,6 +35,9 @@ const DEFAULT_PARAMS = {
   init_money: 0,      // стартовый капитал, руб (игра начинается с нуля и идёт в кредит до credit_limit)
   credit_limit: 1500e6, // максимальный долг, руб: покупки, уводящие баланс ниже -лимита, недоступны
   elec_cost: 5.5,     // руб/кВт·ч – ЭЦН и насосы КНС
+  rigs0: 1,           // буровых станков на старте
+  drill_days_v: 60,   // суток на скважину одним станком: вертикальная (в т.ч. с ГРП)
+  drill_days_h: 90,   // то же для горизонтальной (в т.ч. с МГРП)
 };
 // постоянные затраты: нагнетательная – доля от добывающей, остановленная (консервация) – доля
 const WELL_OPEX_INJ = 0.5, WELL_OPEX_IDLE = 0.25;
@@ -56,7 +59,7 @@ function costOf(units, params) {
 }
 // сейсмика 3D стоит как 12 скважин (по умолчанию для объекта: 12 × стоимость его скважины); ГРП – 20 млн руб за трещину 40 м
 const SEIS_WELLS = 12;
-const DEFAULT_COSTS = { esp_cost: 6e6, conv_cost: 5e6, frac_cost: 20e6, stim_cost: 2e6, pta_cost: 1e6, seis_cost: SEIS_WELLS * 80e6, expl_cost: 90e6 };
+const DEFAULT_COSTS = { esp_cost: 6e6, conv_cost: 5e6, frac_cost: 20e6, stim_cost: 2e6, pta_cost: 1e6, seis_cost: SEIS_WELLS * 80e6, expl_cost: 320e6, rig_cost: 120e6 };
 const addUnits = (acc, u, m = 1) => { for (const k in u) acc[k] = (acc[k] || 0) + u[k] * m; return acc; };
 
 // ---------- ГПСЧ (детерминированный seed) ----------
@@ -103,7 +106,7 @@ function buildReservoir(params) {
   for (let c = 0; c < nx * ny; c++)
     if (active[c]) { poreVol[c] = dx * dx * h * phi; cells.push(c); }
   const ooipM3 = cells.reduce((s, c) => s + poreVol[c] * (1 - 0.2), 0);
-  return { level: 1, nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1,
+  return { level: 1, nx, ny, dx, h, phi, ct: 1e-4, P0: 250, mu_o: params.mu_o, mu_w: 1, stressAz: 330,
            Swc: 0.2, Sor: 0.25, SwMax: 1 - 0.25, rho_oil: 0.86, active, k, poreVol, ooipM3, cells };
 }
 
@@ -138,33 +141,36 @@ const L2 = {
 // давление – типичные для пласта-аналога (ориентиры, см. README). depth – абс. отметка свода, м; h – эффективная толщина
 // (три пачки 35/35/30 %); shale – множитель толщины глинистых прослоев; k – медиана и разброс (σ ln k) фона, границы,
 // русла (chan: k в руслах, число русел); pGrad – пластовое давление на глубине свода, атм/м; drill/expl – стоимость
-// эксплуатационной / разведочной скважины по умолчанию, млн руб (растёт с глубиной).
+// эксплуатационной / разведочной скважины по умолчанию, млн руб (растёт с глубиной); stress – азимут максимального
+// горизонтального напряжения SHmax (°): трещины ГРП раскрываются вдоль него. Замеры по Западной Сибири дают 310–350°
+// (медиана ≈ 330°), по скважинам Волго-Урала – 50°±10°.
 const SCENARIOS = {
-  base: { name: "Купол (учебный)", short: "Купол", depth: 2400, h: 10, phi: 0.2, shale: 1, Swc: 0.2, Sor: 0.25, mu_o: null, mu_w: 1, rho: 0.86, ct: 1e-4, P0: 250,
-          k: { med: 20, sig: 0.7, min: 15, max: 150, chan: { lo: 300, hi: 800, n: 1 } }, flip: 0, drill: 80, expl: 90 },
-  bv8: { owcRel: 22, name: "БВ8 – вартовская свита (Самотлор)", short: "БВ8", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, валанжин",
-         rock: "песчаники дельтовых и прибрежно-морских фаций, хорошо отсортированные", depth: 2090, h: 12, phi: 0.23, shale: 0.8, Swc: 0.25, Sor: 0.28,
-         mu_o: 1.4, mu_w: 0.45, rho: 0.84, ct: 1e-4, pGrad: 0.101, k: { med: 250, sig: 0.55, min: 60, max: 900, chan: { lo: 600, hi: 1200, n: 1 } }, flip: 0, drill: 70, expl: 85,
+  base: { name: "Купол (учебный)", short: "Купол", depth: 2400, h: 10, phi: 0.2, shale: 1, Swc: 0.2, Sor: 0.25, mu_o: null, mu_w: 1, rho: 0.86, ct: 1e-4, P0: 250, stress: 330,
+          k: { med: 20, sig: 0.7, min: 15, max: 150, chan: { lo: 300, hi: 800, n: 1 } }, flip: 0, drill: 80, expl: 320 },
+  bv8: { owcRel: 22, name: "БВ8 – вартовская свита", short: "БВ8", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, валанжин",
+         rock: "песчаники дельтовых и прибрежно-морских фаций, хорошо отсортированные", depth: 2090, h: 12, phi: 0.23, shale: 0.8, Swc: 0.25, Sor: 0.28, stress: 330,
+         mu_o: 1.4, mu_w: 0.45, rho: 0.84, ct: 1e-4, pGrad: 0.101, k: { med: 250, sig: 0.55, min: 60, max: 900, chan: { lo: 600, hi: 1200, n: 1 } }, flip: 0, drill: 70, expl: 280,
          note: "Высокопроницаемый «классический» объект: высокие дебиты, быстрый рост обводнённости – главная задача – система ППД и борьба с обводнением." },
-  av12: { owcRel: 17, name: "АВ1¹⁻² – «рябчик» (Самотлор)", short: "АВ1 «рябчик»", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, апт",
+  av12: { owcRel: 17, name: "АВ1¹⁻² – «рябчик»", short: "АВ1 «рябчик»", region: "Западная Сибирь, Нижневартовский свод", age: "нижний мел, апт",
           rock: "тонкое переслаивание песчаников, алевролитов и глин («рябчик»), низкая расчленённая эффективная толщина", depth: 1690, h: 8, phi: 0.21, shale: 2.2, Swc: 0.42, Sor: 0.30,
-          mu_o: 2.2, mu_w: 0.5, rho: 0.86, ct: 1e-4, pGrad: 0.101, k: { med: 14, sig: 0.6, min: 3, max: 80 }, flip: 1, drill: 55, expl: 70,
+          mu_o: 2.2, mu_w: 0.5, rho: 0.86, ct: 1e-4, pGrad: 0.101, k: { med: 14, sig: 0.6, min: 3, max: 80 }, flip: 1, drill: 55, expl: 220, stress: 330,
           note: "Низкопроницаемый расчленённый коллектор с высокой связанной водой: вертикальные скважины дают мало – нужны ГРП, ГС и плотная сетка." },
   yuv1: { owcRel: 19, name: "ЮВ1 – васюганская свита", short: "ЮВ1", region: "Западная Сибирь, Нижневартовский и Сургутский своды", age: "верхняя юра, оксфорд",
           rock: "песчаники баровых тел и прибрежно-морских фаций, неоднородные по площади", depth: 2640, h: 8, phi: 0.16, shale: 1, Swc: 0.35, Sor: 0.30,
-          mu_o: 1.1, mu_w: 0.4, rho: 0.83, ct: 1.1e-4, pGrad: 0.102, k: { med: 18, sig: 0.85, min: 0.5, max: 150 }, flip: 2, drill: 85, expl: 100,
+          mu_o: 1.1, mu_w: 0.4, rho: 0.83, ct: 1.1e-4, pGrad: 0.102, k: { med: 18, sig: 0.85, min: 0.5, max: 150 }, flip: 2, drill: 85, expl: 340, stress: 330,
           note: "Средне- и низкопроницаемый юрский пласт (k в среднем ≈ 20 мД, от долей до ~150 мД): ГРП – стандарт, зоны с хорошими ФЕС стоит искать разведкой и ГДИС." },
   yuk1011: { owcRel: 24, name: "ЮК10–11 – шеркалинская свита (Талинская площадь)", short: "ЮК10–11", region: "Западная Сибирь, Красноленинский свод", age: "нижняя юра",
              rock: "русловые песчаники и гравелиты в низкопроницаемой пойменной толще – резкая неоднородность", depth: 2540, h: 15, phi: 0.17, shale: 1.2, Swc: 0.30, Sor: 0.32,
-             mu_o: 0.7, mu_w: 0.4, rho: 0.81, ct: 1.2e-4, pGrad: 0.102, k: { med: 6, sig: 0.7, min: 1, max: 40, chan: { lo: 300, hi: 1500, n: 2 } }, flip: 3, drill: 85, expl: 100,
+             mu_o: 0.7, mu_w: 0.4, rho: 0.81, ct: 1.2e-4, pGrad: 0.102, k: { med: 6, sig: 0.7, min: 1, max: 40, chan: { lo: 300, hi: 1500, n: 2 } }, flip: 3, drill: 85, expl: 340, stress: 330,
              note: "Высокопроницаемые русла в плотной матрице: вода прорывается по руслам за месяцы, а запасы матрицы без ГРП не вовлекаются." },
   ach: { owcRel: 27, name: "Ач – ачимовская толща", short: "Ачимовка", region: "Западная Сибирь, Среднее Приобье", age: "нижний мел, берриас–валанжин",
          rock: "турбидитные песчаники и алевролиты конусов выноса, глинистые и карбонатизированные", depth: 2790, h: 14, phi: 0.17, shale: 1.4, Swc: 0.42, Sor: 0.30,
-         mu_o: 1.0, mu_w: 0.4, rho: 0.82, ct: 1.3e-4, pGrad: 0.116, k: { med: 0.07, sig: 0.8, min: 0.01, max: 0.5, abs: [0.01, 0.5] }, flip: 1, drill: 95, expl: 120,
-         note: "Трудноизвлекаемые запасы: k ≈ 0,01–0,5 мД (медиана ≈ 0,07 мД), повышенное пластовое давление. Вертикальные скважины почти не дают нефти – нужны ГРП и ГС с МГРП." },
+         mu_o: 1.0, mu_w: 0.4, rho: 0.82, ct: 1.3e-4, pGrad: 0.116, k: { med: 0.07, sig: 0.8, min: 0.01, max: 0.5, abs: [0.01, 0.5] }, flip: 1, drill: 95, expl: 380, stress: 330,
+         area: 5, price: 28000, // ТРИЗ: участок ×5 по площади (залежь крупная) и льгота по НДПИ (Кнд = 0 при k ≤ 2 мД) – netback выше
+         note: "Трудноизвлекаемые запасы (ТРИЗ): k ≈ 0,01–0,5 мД (медиана ≈ 0,07 мД), повышенное пластовое давление, крупная залежь (участок ×5). Льгота по НДПИ (Кнд = 0 при k ≤ 2 мД). Вертикальные скважины почти не дают нефти – нужны ГРП и ГС с МГРП." },
   bb: { owcRel: 15, name: "Бб – бобриковский горизонт", short: "Бобриковский", region: "Волго-Уральская провинция (Татарстан, Башкортостан)", age: "нижний карбон, визе",
         rock: "кварцевые песчаники врезанных долин и русел, высокопроницаемые", depth: 1240, h: 7, phi: 0.21, shale: 0.8, Swc: 0.18, Sor: 0.25,
-        mu_o: 22, mu_w: 1.1, rho: 0.89, ct: 1e-4, pGrad: 0.103, k: { med: 420, sig: 0.6, min: 100, max: 1500, chan: { lo: 900, hi: 2000, n: 1 } }, flip: 2, drill: 40, expl: 50,
+        mu_o: 22, mu_w: 1.1, rho: 0.89, ct: 1e-4, pGrad: 0.103, k: { med: 420, sig: 0.6, min: 100, max: 1500, chan: { lo: 900, hi: 2000, n: 1 } }, flip: 2, drill: 40, expl: 160, stress: 50,
         note: "Неглубокий высокопроницаемый пласт с вязкой нефтью (≈ 20 сП): неблагоприятное соотношение подвижностей – вода прорывается рано, КИН ограничен." },
 };
 const SCENARIO_ORDER = ["bv8", "av12", "yuv1", "yuk1011", "ach", "bb"];
@@ -207,7 +213,9 @@ function scenarioForSeed(id, seed) {
   return { ...b, id, seed, name: `${b.name}, сид ${seed}`, short: b.short, depth, h: +(b.h * U(0.8, 1.25)).toFixed(1), phi: +(b.phi + U(-0.02, 0.02)).toFixed(3),
            shale: +(b.shale * U(0.8, 1.25)).toFixed(2), Swc: +(b.Swc + U(-0.03, 0.03)).toFixed(3), Sor: +(b.Sor + U(-0.03, 0.03)).toFixed(3),
            mu_o: +mu_o.toFixed(mu_o >= 10 ? 1 : 2), owcRel: Math.round(Math.max(10, (b.owcRel || 20) + U(-6, 6))), pGrad: +(b.pGrad + U(-0.003, 0.003)).toFixed(4),
-           k, flip: 0, drill: Math.round((b.drill * depth) / b.depth), expl: Math.round((b.expl * depth) / b.depth), geo };
+           k, flip: 0, drill: Math.round((b.drill * depth) / b.depth), expl: Math.round((b.expl * depth) / b.depth),
+           // азимут SHmax (±15° от группы) – последний розыгрыш, чтобы не сдвигать ГПСЧ-последовательность геологии
+           stress: ((Math.round((b.stress ?? 330) + U(-15, 15)) % 360) + 360) % 360, geo };
 }
 // объект по параметрам игры: группа params.scenario и сид params.seed
 const scenOfParams = (params) => (params.seed ? scenarioForSeed(params.scenario, params.seed) : scenOf(params.scenario));
@@ -219,7 +227,7 @@ function l2Flip(i, j, sc) { const f = (sc && sc.flip) || 0; return [f & 1 ? BASE
 // разломы сценария в координатах сетки
 function l2Faults(sc) { return sc && sc.geo ? sc.geo.faults : L2.FAULTS.map((F) => ({ ...F, pts: F.pts.map(([x, y]) => l2Flip(x, y, sc)) })); }
 // параметры по умолчанию для объекта: вязкость нефти и стоимости скважин
-function scenarioParams(id, seed = 0) { const sc = seed ? scenarioForSeed(id, seed) : scenOf(id); return { scenario: id, seed: seed || 0, mu_o: sc.mu_o || DEFAULT_PARAMS.mu_o, drill_cost: sc.drill * 1e6, expl_cost: sc.expl * 1e6, seis_cost: SEIS_WELLS * sc.drill * 1e6 }; }
+function scenarioParams(id, seed = 0) { const sc = seed ? scenarioForSeed(id, seed) : scenOf(id); return { scenario: id, seed: seed || 0, mu_o: sc.mu_o || DEFAULT_PARAMS.mu_o, drill_cost: sc.drill * 1e6, expl_cost: sc.expl * 1e6, seis_cost: SEIS_WELLS * sc.drill * 1e6, ...(sc.price ? { price_oil: sc.price } : {}) }; } // price – льгота НДПИ (ТРИЗ ачимовки): netback выше стандартного
 // расстояние от точки до отрезка ab: {d – расстояние, side – знак стороны (+1 слева по ходу)}
 function segDist(px, py, a, b) {
   const vx = b[0] - a[0], vy = b[1] - a[1], L = vx * vx + vy * vy;
@@ -334,7 +342,8 @@ function buildSeismic(zTop, gross, nx, ny, faultsSc = L2.FAULTS, salt = L2.SEED)
 }
 function buildReservoir2(params) {
   const sc = scenOfParams(params), base = sc === SCENARIOS.base, g = sc.geo, salt = g ? g.salt : L2.SEED;
-  const nx = GRID_SIZES.includes(+params.grid) ? +params.grid : BASE_N, ny = nx, dx = (GRID.nx * GRID.dx) / nx, rf = nx / BASE_N;
+  const plot = 2000 * Math.sqrt(sc.area || 1); // участок: у ТРИЗ (ачимовка) площадь ×5
+  const nx = GRID_SIZES.includes(+params.grid) ? +params.grid : BASE_N, ny = nx, dx = plot / nx, rf = nx / BASE_N;
   const N = nx * ny, Swc = sc.Swc, h = sc.h, phi = sc.phi;
   const rng = mulberry32(salt);
   const cy = (BASE_N - 1) / 2;
@@ -388,7 +397,7 @@ function buildReservoir2(params) {
     }
   const seis = buildSeismic(zTop, gross, nx, ny, faultsBase, salt);
   const P0 = base ? 250 : Math.round(sc.pGrad * sc.depth);
-  return { level: 2, scenario: base ? null : params.scenario, seed: g ? sc.seed : 0, salt, scen: sc, kTrue, thick: tm, nx, ny, dx, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w,
+  return { level: 2, scenario: base ? null : params.scenario, seed: g ? sc.seed : 0, salt, scen: sc, kTrue, thick: tm, nx, ny, dx, plot, h, phi, ct: sc.ct, P0, mu_o: sc.mu_o || params.mu_o, mu_w: sc.mu_w, stressAz: ((sc.stress ?? 330) % 360 + 360) % 360,
            // предел забойного давления закачки (давление гидроразрыва с запасом): ≈ 0.14 атм/м глубины ВНК
            pMaxInj: base ? 340 : Math.round(0.14 * owc),
            // SwMax > 1: перенос насыщенности (как и на уровне 1) относит упругий запас
@@ -567,6 +576,7 @@ function createSim(reservoir, params) {
     _diag: new Float64Array(N), _b: new Float64Array(N),
   };
   r.cells.forEach((c, idx) => (sim._rowOf[c] = idx));
+  sim.drill = { rigs: (params && params.rigs0) ?? DEFAULT_PARAMS.rigs0, queue: [], active: [], on: null }; // станки и очередь бурения (см. orderWell)
   sim.addWell = (c, type, pwf) => {
     if (!r.active[c]) throw new Error("ячейка вне контура");
     if (sim.wells.some((w) => w.perf.some((p) => p.cell === c))) throw new Error("ячейка занята");
@@ -576,7 +586,7 @@ function createSim(reservoir, params) {
                      on: true,             // работает / остановлена
                      mode: "bhp",          // bhp | flow (фонтан, штуцер) | esp (ЭЦН) | choke (КНС, штуцер)
                      choke: type === "prod" ? 12 : 8, // диаметр штуцера, мм
-                     freq: 50, hasESP: false, pump: PUMP_DEFAULT, kW: 0, eq: null,
+                     freq: 50, hasESP: false, pump: PUMP_DEFAULT, duty: 1, kW: 0, eq: null,
                      depth: r.level === 2 ? r.zTop[c] + 5 + l2Altitude(toBase(c % r.nx, r.nx / BASE_N), toBase(Math.floor(c / r.nx), r.nx / BASE_N)) : 2450,
                      cum: { oil: 0, water: 0, inj: 0 } });
   };
@@ -628,7 +638,10 @@ function createSim(reservoir, params) {
       }
       return { cells, lens, reached, ux, uy };
     };
-    const az = ((opt.az ?? AZ_OF_DIR[opt.dir || "E"]) % 360 + 360) % 360;
+    // азимут: явный az/dir имеет приоритет; трещина ГРП без него строится по максимальному горизонтальному
+    // напряжению пласта (r.stressAz), ствол ГС/ЗБС без него – на восток (для тестов)
+    const saz = ((r.stressAz ?? 330) % 360 + 360) % 360;
+    const az = ((opt.az ?? (opt.dir ? AZ_OF_DIR[opt.dir] : kind === "frac" ? saz : AZ_OF_DIR.E)) % 360 + 360) % 360;
     if (kind === "hs" || kind === "zbs") {
       // ствол длиной L от центра ячейки; луч на L + Δ/2, чтобы вдоль оси сетки ячейки вскрывались целиком (как при калибровке)
       const R1 = ray(az, opt.L + r.dx / 2, false);
@@ -651,30 +664,33 @@ function createSim(reservoir, params) {
       w.traj = [[x0 - (A.ux * lb) / r.dx, y0 - (A.uy * lb) / r.dx], [x0 + (A.ux * la) / r.dx, y0 + (A.uy * la) / r.dx]];
       w.skin = Math.min(w.skin || 0, 0);
     } else if (kind === "mgrp") {
-      // многостадийный ГРП на горизонтальном стволе: n поперечных трещин (азимут ствола ± 90°), равномерно по стволу.
+      // многостадийный ГРП на горизонтальном стволе: n трещин равномерно по стволу, каждая распространяется по
+      // максимальному горизонтальному напряжению (r.stressAz; явный opt.az – для эталонов и тестов). Ствол вдоль
+      // напряжения даёт продольные трещины, поперёк напряжения – поперечные, промежуточный азимут – косые.
       // Каждая трещина – как ГРП конечной проводимости (fracCellFactor) плюс скин стягивания к стволу; трещины не
       // пересекают разломы и чужие ячейки, через ячейки своего ствола проходят. Интерференция трещин – расчётом в сетке.
       if (!(w.kind === "hs" || w.kind === "zbs") || w.mgrp) return { ok: false, msg: "МГРП возможен на горизонтальном (боковом) стволе без ГРП" };
       const nMax = Math.max(1, Math.floor(w.L / 80)), n = Math.max(1, Math.min(nMax, Math.round(opt.n || 4)));
+      const fa = ((opt.az ?? saz) % 360 + 360) % 360; // трещины по стрессу; явный az – эталоны и тесты
+      const thf = (fa * Math.PI) / 180, vfx = Math.sin(thf), vfy = -Math.cos(thf);
       const th = (w.az * Math.PI) / 180, ux = Math.sin(th), uy = -Math.cos(th), own = new Set(w.perf.map((pf) => pf.cell));
       const nside = Math.max(1, Math.round(opt.xf / REF_DX)), ext = opt.xf + r.dx / 2, wn = wiNorm(r), add = new Map(), stages = [];
       let fcd = 0, sf = 0, sc = 0;
       for (let q = 0; q < n; q++) {
         const sAl = (w.L * (q + 0.5)) / n / r.dx, x = x0 + ux * sAl, y = y0 + uy * sAl, cell = Math.floor(y) * nx + Math.floor(x);
-        const org = { x, y, cell }, A = ray(w.az + 90, ext, true, org, own), B = ray(w.az - 90, ext, true, org, own);
+        const org = { x, y, cell }, A = ray(fa, ext, true, org, own), B = ray(fa + 180, ext, true, org, own);
         const cells = [cell, ...A.cells, ...B.cells], kMean = cells.reduce((s2, c) => s2 + r.k[c], 0) / cells.length;
         const chk = fracChokeSkin(kMean, r.h), fc = fracCellFactor(kMean, opt.xf, nside, chk);
         add.set(cell, (add.get(cell) || 0) + fc.f * wn * Math.min(2, r.dx / REF_DX));
         A.cells.forEach((c, k) => add.set(c, (add.get(c) || 0) + (fc.f * wn * A.lens[k]) / REF_DX));
         B.cells.forEach((c, k) => add.set(c, (add.get(c) || 0) + (fc.f * wn * B.lens[k]) / REF_DX));
         const la = Math.max(0, Math.min(opt.xf, A.reached - r.dx / 2)), lb = Math.max(0, Math.min(opt.xf, B.reached - r.dx / 2));
-        const vx = Math.cos(th), vy = Math.sin(th); // направление азимут + 90°
-        stages.push([x - (vx * lb) / r.dx, y - (vy * lb) / r.dx, x + (vx * la) / r.dx, y + (vy * la) / r.dx]);
+        stages.push([x - (vfx * lb) / r.dx, y - (vfy * lb) / r.dx, x + (vfx * la) / r.dx, y + (vfy * la) / r.dx]);
         fcd += fc.fcd / n; sf += fc.sf / n; sc += chk / n;
       }
       for (const pf of w.perf) if (add.has(pf.cell)) { pf.f += add.get(pf.cell); add.delete(pf.cell); }
       for (const [c, f] of add) w.perf.push({ cell: c, f });
-      w.mgrp = { n, xf: opt.xf, fcd, sf, sc, stages };
+      w.mgrp = { n, xf: opt.xf, az: fa % 180, fcd, sf, sc, stages };
       w.skin = Math.min(w.skin || 0, 0);
     }
     sim._fluxValid = false;
@@ -787,7 +803,7 @@ function solvePressureOnce(sim, dt) {
     for (let k = 0; k < w.perf.length; k++) {
       const pf = w.perf[k];
       if (!(pf.f > 0) || (w._xm && w._xm[k])) continue;
-      const idx = sim._rowOf[pf.cell], G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r);
+      const idx = sim._rowOf[pf.cell], G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r) * dutyOf(w);
       diag[idx] += G;
       b[idx] += G * w.pwf;
     }
@@ -888,7 +904,11 @@ const PUMPS = Object.fromEntries(PUMP_NOMINALS.map((Qn) => [String(Qn), {
 }]));
 const PUMP_DEFAULT = "250";
 const P_MIN_INTAKE = 20, P_MAX_INJ = 340; // атм: минимальное давление на приёме; предел по давлению закачки
+const Q_INJ_MAX = 500; // м³/сут: предел приёмистости одной нагнетательной скважины (оборудование и водоводы)
 // суммарная продуктивность скважины G (м³/сут/атм) и среднее по перфорации пластовое давление
+// ПКВ (периодическая кратковременная эксплуатация): ЭЦН включён долю времени duty < 1. Пока насос работает, скважина идёт на
+// рабочей точке (дебит и забойное давление по оборудованию); пласт и деньги видят среднее: дебит и мощность умножаются на duty
+const dutyOf = (w) => (w.type === "prod" && w.mode === "esp" && w.duty > 0 && w.duty < 1 ? w.duty : 1);
 function wellG(sim, w) {
   const r = sim.r; let G = 0, GP = 0;
   for (const pf of w.perf) { const g = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r); G += g; GP += g * sim.P[pf.cell]; }
@@ -917,7 +937,7 @@ function bisectQ(f, qMax) {
   return 0.5 * (a + b);
 }
 // режим скважины по оборудованию без изменения состояния: {q, pwf, pwh, kW, dead, capped}
-function solveEquipment(sim, w) {
+function solveEquipment(sim, w, noCap = false) {
   const r = sim.r, { G, Pc } = wellG(sim, w);
   const L = w.depth, out = { q: 0, pwf: Pc, pwh: 0, kW: 0, dead: false, capped: false };
   if (w.on === false) return out;
@@ -932,7 +952,7 @@ function solveEquipment(sim, w) {
   } else {
     const hydW = (1000 * 9.81 * L) / ATM_PA, head = sim.field.pKNS;
     const f = (q) => head - chokeDpAtm(q, w.choke, 1000) + hydW - Pc - q / G;
-    const qMax = Math.max(0, G * ((r.pMaxInj || P_MAX_INJ) - Pc));
+    const qMax = Math.min(noCap ? Infinity : Q_INJ_MAX, Math.max(0, G * ((r.pMaxInj || P_MAX_INJ) - Pc)));
     out.q = bisectQ(f, qMax); out.dead = out.q === 0; out.capped = out.q >= qMax && qMax > 0;
     out.kW = (out.q / 86400) * head * ATM_PA / KNS_EFF / 1000; // доля мощности КНС на эту скважину
     out.pwf = Pc + out.q / G; out.pwh = head - chokeDpAtm(out.q, w.choke, 1000);
@@ -945,7 +965,17 @@ function applyEquipment(sim) {
     if (w.on === false) { w.kW = 0; continue; }
     if (!w.mode || w.mode === "bhp") { w.kW = 0; continue; }
     const e = solveEquipment(sim, w);
-    w.eq = e; w.kW = e.kW;
+    w.eq = e; w.kW = e.kW * dutyOf(w);
+    // предел приёмистости: пока оборудование дало бы больше Q_INJ_MAX, скважина переходит на контроль по забойному давлению –
+    // давление подстраивается по фактическому дебиту прошлого шага так, чтобы держать Q_INJ_MAX (не выше давления, которое даёт оборудование);
+    // когда возможная приёмистость падает ниже предела, скважина возвращается на режим оборудования
+    if (w.type === "inj" && !e.dead && e.q >= Q_INJ_MAX - 1e-6) {
+      const g = wellG(sim, w), e0 = solveEquipment(sim, w, true);
+      const base = w._rc ? w.pwf : Math.min(e0.pwf, g.Pc + Q_INJ_MAX / g.G);
+      w.pwf = Math.min(e0.pwf, Math.max(g.Pc, base + (w._rc ? (0.7 * (Q_INJ_MAX - w.q)) / g.G : 0))); w._rc = true;
+      continue;
+    }
+    w._rc = false;
     w.pwf = e.dead ? wellG(sim, w).Pc : 0.5 * w.pwf + 0.5 * e.pwf; // демпфирование от колебаний между сутками
   }
 }
@@ -961,7 +991,7 @@ function updateWellRates(sim) {
     const prod = w.type === "prod";
     let q = 0, qo = 0, qw = 0;
     w.perf.forEach((pf, k) => {
-      const c = pf.cell, G = w._xm && w._xm[k] ? 0 : wellIndex(r.k[c], r, w.skin) * pf.f * lambdaT(sim.Sw[c], r);
+      const c = pf.cell, G = w._xm && w._xm[k] ? 0 : wellIndex(r.k[c], r, w.skin) * pf.f * lambdaT(sim.Sw[c], r) * dutyOf(w);
       const dp = prod ? sim.P[c] - w.pwf : w.pwf - sim.P[c], qk = Math.max(0, G * dp);
       q += qk; w.pq[k] = qk;
       if (prod) {
@@ -987,7 +1017,7 @@ function solvePressureAccel(sim, dt, wg) {
     for (let k = 0; k < w.perf.length; k++) {
       const pf = w.perf[k];
       if (!(pf.f > 0) || (w._xm && w._xm[k])) continue;
-      const G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r);
+      const G = wellIndex(r.k[pf.cell], r, w.skin) * pf.f * lambdaT(sim.Sw[pf.cell], r) * dutyOf(w);
       wd[pf.cell] += G; wr[pf.cell] += G * w.pwf;
     }
   }
@@ -1079,11 +1109,11 @@ function recordHistory(sim) {
       t: h.length + 1, avgP: sim.avgPressure(),
       cumOilM3: sim.wells.reduce((s, w) => s + w.cum.oil, 0),
       money: sim.economy ? sim.economy.balance : null, eco: sim.economy ? sim.economy.snap() : null,
-      wells: sim.wells.map((w) => ({ qo: w.qo, qw: w.qw, q: w.q, fw: w.fw, pwf: w.pwf, prod: w.type === "prod" })),
+      wells: sim.wells.map((w, i) => ({ qo: w.qo, qw: w.qw, q: w.q, fw: w.fw, pwf: w.pwf, prod: w.type === "prod", net: sim.economy ? sim.economy.wellNet(w, i) : 0 })),
     });
   }
 }
-function advance(sim, days) {
+function advanceRaw(sim, days) {
   let remaining = days;
   while (remaining > 1e-9) {
     // давление – неявно на интервал вперёд (≤ 1 сут): P в конце интервала, потоки и дебиты по нему применяются
@@ -1092,7 +1122,21 @@ function advance(sim, days) {
     if (!sim._fluxValid || sim.t >= sim._solveEnd - 1e-9) {
       const dtP = Math.min(sim.cfg.dtP, remaining);
       applyEquipment(sim);
+      const rcOn = sim.wells.some((w) => w._rc && w.on !== false), P0rc = rcOn ? Float64Array.from(sim.P) : null;
       solvePressure(sim, Math.max(1e-9, dtP));
+      // скважины в режиме контроля по забойному давлению (предел приёмистости): если после решения дебит выше предела, снижаем Pwf
+      // на избыток/G и решаем давление заново (давление в ячейке при этом меняется, поэтому одной поправки по Pc недостаточно)
+      for (let it = 0; rcOn && it < 16; it++) {
+        updateWellRates(sim);
+        let over = false;
+        for (const w of sim.wells) if (w._rc && w.on !== false && w.q > Q_INJ_MAX * 1.002) {
+          const g = wellG(sim, w), pr = w._sec; let sl = g.G; // наклон q(Pwf): по двум последним итерациям (секущая), иначе – G
+          if (pr && Math.abs(w.pwf - pr.p) > 1e-9) { const k = (w.q - pr.q) / (w.pwf - pr.p); if (k > 0.05 * g.G && k <= 1.01 * g.G) sl = k; }
+          w._sec = { p: w.pwf, q: w.q }; w.pwf = Math.max(g.Pc, w.pwf - (w.q - Q_INJ_MAX) / sl); over = true;
+        }
+        if (!over) { for (const w of sim.wells) w._sec = null; break; }
+        sim.P.set(P0rc); solvePressure(sim, Math.max(1e-9, dtP));
+      }
       sim._lastSolveT = sim.t; sim._solveEnd = sim.t + dtP;
       sim._fluxValid = true;
       computeFaceFluxes(sim);
@@ -1113,6 +1157,52 @@ function advance(sim, days) {
     sim.t += dtSub;
     remaining -= dtSub;
     recordHistory(sim);
+  }
+}
+// ---------- Бурение: станки и очередь ----------
+// Скважины можно расставить сразу (заказать), а бурятся они по очереди: один станок – одна скважина за drill_days_v суток
+// (вертикальная, с ГРП) или drill_days_h (горизонтальная, с МГРП). Деньги списываются, когда станок берёт скважину в работу
+// (не хватает средств – станок ждёт); готовая скважина попадает в sim.wells и сразу работает. Больше станков – очередь короче.
+// Заказ – объект {well, units, kind, name}: well уже собрана (addWell + setCompletion) и убрана из sim.wells, units – капзатраты.
+const drillDays = (kind, params) => (kind === "hs" || kind === "hsf" ? params.drill_days_h ?? DEFAULT_PARAMS.drill_days_h : params.drill_days_v ?? DEFAULT_PARAMS.drill_days_v);
+function drillStart(sim) {
+  const D = sim.drill, e = sim.economy;
+  while (D.active.length < D.rigs && D.queue.length) {
+    const j = D.queue[0], cost = costOf(j.units, sim.params);
+    if (e && !e.canSpend(cost)) { if (!j.blocked) { j.blocked = true; if (D.on && D.on.blocked) D.on.blocked(j, cost); } return; }
+    if (e) e.charge(sim.t, j.units, true);
+    D.queue.shift(); j.blocked = false; j.started = sim.t; D.active.push(j);
+    if (D.on && D.on.started) D.on.started(j, cost);
+  }
+}
+function drillFinish(sim) {
+  const D = sim.drill, done = D.active.filter((j) => j.remain <= 1e-9);
+  for (const j of done) {
+    D.active.splice(D.active.indexOf(j), 1); j.well.on = true; sim.wells.push(j.well); sim._fluxValid = false;
+    if (D.on && D.on.finished) D.on.finished(j);
+  }
+}
+function orderWell(sim, job) { job.days = drillDays(job.kind, sim.params); job.remain = job.days; sim.drill.queue.push(job); drillStart(sim); return job; }
+function cancelOrder(sim, job) { const i = sim.drill.queue.indexOf(job); if (i < 0) return false; sim.drill.queue.splice(i, 1); return true; }
+function buyRig(sim) {
+  const e = sim.economy, cost = costOf({ rig_cost: 1 }, sim.params);
+  if (e && !e.canSpend(cost)) return false;
+  if (e) e.charge(sim.t, { rig_cost: 1 }, true);
+  sim.drill.rigs++; drillStart(sim); return true;
+}
+// время идёт до ближайшего события бурения: окончания работ на станке (дальше станок берёт следующую скважину); пока очередь ждёт денег – проверка раз в 10 сут
+function advance(sim, days) {
+  const D = sim.drill;
+  if (!D || (!D.queue.length && !D.active.length)) return advanceRaw(sim, days);
+  let left = days;
+  while (left > 1e-9) {
+    drillStart(sim);
+    if (!D.queue.length && !D.active.length) return advanceRaw(sim, left);
+    const ev = D.active.length ? Math.min(...D.active.map((j) => j.remain)) : Infinity;
+    const step = Math.max(1e-6, Math.min(left, ev, D.queue.length ? 10 : Infinity));
+    advanceRaw(sim, step); left -= step;
+    for (const j of D.active) j.remain -= step;
+    drillFinish(sim);
   }
 }
 function simStats(sim) {
@@ -1294,13 +1384,13 @@ function createEconomy(params) {
   const eco = {
     balance: params.init_money,
     revenue: 0, opex: 0, kwh: 0, drillSpent: 0, otherSpent: 0, drills: [], // drills – сутки решений (для графика)
-    u: zeroUnits(), cu: {}, cuDrill: {}, parts: null,
+    u: zeroUnits(), byWell: {}, cu: {}, cuDrill: {}, parts: null,
     credit: params.credit_limit ?? Infinity,
     // накопленные статьи на сейчас, руб: [выручка, подготовка жидкости, водоподготовка, энергия ЭЦН, энергия КНС, обслуживание,
     // бурение, ГРП, ЭЦН, перевод в ППД, ОПЗ, ГДИС, недобор нефти при ГДИС, сейсмика, разведка] – для графиков экономики
     snap() {
       const f = flowOf(eco.u, {}, params), c = (k) => costOf({ [k]: eco.cu[k] || 0 }, params);
-      return [f.revenue, f.lift, f.inj, f.elecESP, f.elecKNS, f.wells, c("drill_cost"), c("frac_cost"), c("esp_cost"), c("conv_cost"), c("stim_cost"), c("pta_cost"), c("lost_t"), c("seis_cost"), c("expl_cost")];
+      return [f.revenue, f.lift, f.inj, f.elecESP, f.elecKNS, f.wells, c("drill_cost"), c("frac_cost"), c("esp_cost"), c("conv_cost"), c("stim_cost"), c("pta_cost"), c("lost_t"), c("seis_cost"), c("expl_cost"), c("rig_cost")];
     },
     // можно ли потратить cost: баланс после траты не ниже -кредитного лимита
     canSpend(cost) { return eco.balance - cost >= -eco.credit - 1e-6; },
@@ -1310,22 +1400,27 @@ function createEconomy(params) {
       eco.drillSpent = costOf(eco.cuDrill, params); eco.otherSpent = costOf(eco.cu, params) - eco.drillSpent;
       eco.balance = params.init_money + eco.revenue - eco.opex - eco.drillSpent - eco.otherSpent;
     },
+    // учёт идёт и по месторождению (u), и по каждой скважине (byWell[имя]) – для графика экономики скважин
     update(dt, wells) {
       const u = eco.u;
-      for (const w of wells) {
-        if (w.on === false) { u.wy += (WELL_OPEX_IDLE * dt) / 365; continue; }
+      wells.forEach((w, i) => {
+        const p = eco.byWell[w.name ?? i] || (eco.byWell[w.name ?? i] = zeroUnits());
+        const add = (k, v) => { u[k] += v; p[k] += v; };
+        if (w.on === false) { add("wy", (WELL_OPEX_IDLE * dt) / 365); return; }
         if (w.type === "prod") {
-          u.wy += dt / 365;
-          u.oil_t += w.qo * RHO_OIL * dt; u.liq += w.q * dt;     // нефть м³→т; подъём и подготовка всей жидкости
-          if (w.kW) u.kwhE += w.kW * 24 * dt;                     // электроэнергия ЭЦН
+          add("wy", dt / 365);
+          add("oil_t", w.qo * RHO_OIL * dt); add("liq", w.q * dt);     // нефть м³→т; подъём и подготовка всей жидкости
+          if (w.kW) add("kwhE", w.kW * 24 * dt);                      // электроэнергия ЭЦН
         } else {
-          u.wy += (WELL_OPEX_INJ * dt) / 365;
-          u.inj += w.q * dt;
-          if (w.kW) u.kwhK += w.kW * 24 * dt;                     // электроэнергия КНС на эту скважину
+          add("wy", (WELL_OPEX_INJ * dt) / 365);
+          add("inj", w.q * dt);
+          if (w.kW) add("kwhK", w.kW * 24 * dt);                      // электроэнергия КНС на эту скважину
         }
-      }
+      });
       eco.refresh();
     },
+    // накопленный операционный результат скважины (выручка − подготовка − энергия − обслуживание), руб; может быть отрицательным
+    wellNet(w, i) { const p = eco.byWell[w.name ?? i]; return p ? flowOf(p, {}, params).cf : 0; },
     // капитальные затраты и исследования: units – {параметр: количество}; drill – относить к бурению
     charge(day, units, drill = false) {
       addUnits(eco.cu, units); if (drill) addUnits(eco.cuDrill, units);
@@ -1718,9 +1813,9 @@ function equipmentTests() {
   sm.addWell(sm.r.explore[0].cell, "inj", 325);
   const wi = sm.wells[1]; wi.mode = "choke";
   wi.choke = 4; const i4 = solveEquipment(sm, wi); wi.choke = 12; const i12 = solveEquipment(sm, wi);
-  sm.field.pKNS = 170; const i170 = solveEquipment(sm, wi); sm.field.pKNS = 130;
-  t.push({ name: "оборудование: нагнетательная – закачка растёт с диаметром штуцера и давлением КНС", pass: i4.q < i12.q && i12.q < i170.q && i12.q > 0,
-           details: `4 мм ${i4.q.toFixed(0)}, 12 мм ${i12.q.toFixed(0)}, КНС 170: ${i170.q.toFixed(0)} м³/сут` });
+  wi.choke = 6; const i6 = solveEquipment(sm, wi); sm.field.pKNS = 170; const i170 = solveEquipment(sm, wi); sm.field.pKNS = 130; wi.choke = 12;
+  t.push({ name: "оборудование: нагнетательная – закачка растёт с диаметром штуцера и давлением КНС, но не выше предела 500 м³/сут", pass: i4.q < i6.q && i6.q < i170.q && i170.q > 0 && i12.q <= Q_INJ_MAX + 1e-6 && i170.q <= Q_INJ_MAX + 1e-6,
+           details: `4 мм ${i4.q.toFixed(0)}, 6 мм ${i6.q.toFixed(0)}, 12 мм ${i12.q.toFixed(0)}, КНС 170: ${i170.q.toFixed(0)} м³/сут (предел ${Q_INJ_MAX})` });
   // год работы в смешанных режимах: балансы и остановка
   const s2 = mk(), r2 = s2.r;
   s2.addWell(r2.explore[2].cell, "prod", 150); s2.addWell(r2.explore[1].cell, "prod", 150); s2.addWell(r2.explore[0].cell, "prod", 150); s2.addWell(r2.explore[3].cell, "prod", 150);
@@ -1746,6 +1841,34 @@ function equipmentTests() {
   const s5 = createSim(buildReservoir2({ ...DEFAULT_PARAMS, elec_cost: 0 }), { ...DEFAULT_PARAMS, elec_cost: 0 });
   s5.addWell(s5.r.explore[2].cell, "prod", 150); s5.wells[0].mode = "esp"; advance(s5, 60);
   t.push({ name: "экономика: электроэнергия ЭЦН входит в затраты", pass: p0 > s5.economy.opex, details: `${((p0 - s5.economy.opex) / 1e3).toFixed(0)} тыс. руб за 60 сут` });
+  // ПКВ: насос включён долю времени – средние дебит и мощность в долю duty, на пласт идёт среднее
+  const mkD = (d) => { const sm = mk(); sm.addWell(sm.r.explore[2].cell, "prod", 150); const w = sm.wells[0]; w.mode = "esp"; w.hasESP = true; w.pump = "500"; w.freq = 50; w.duty = d; advance(sm, 90); return sm; };
+  const dC = mkD(1), dP = mkD(0.5), eC = dC.wells[0], eP = dP.wells[0];
+  const kwhC = dC.economy.u.kwhE / Math.max(1e-9, dC.economy.u.liq), kwhP = dP.economy.u.kwhE / Math.max(1e-9, dP.economy.u.liq);
+  t.push({ name: "ПКВ: duty = 0,5 даёт средний дебит меньше непрерывного, но больше половины (давление у скважины выше), ≈ половину мощности и меньший удельный расход энергии",
+           pass: eP.q > 0.5 * eC.q && eP.q < eC.q && eP.kW < 0.65 * eC.kW && eP.kW > 0.35 * eC.kW && kwhP < kwhC,
+           details: `q ${eP.q.toFixed(0)} / ${eC.q.toFixed(0)} м³/сут, ${eP.kW.toFixed(0)} / ${eC.kW.toFixed(0)} кВт, ${kwhP.toFixed(2)} / ${kwhC.toFixed(2)} кВт·ч/м³` });
+  // предел приёмистости: сильный сток (4 добывающие по 20 атм рядом) и широкие настройки (штуцер 30 мм, КНС 200 атм) дали бы тысячи м³/сут;
+  // скважина переходит на контроль по забойному давлению и держит 500 м³/сут (после переходного периода первых суток – не выше 502)
+  const sq = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS), nxq = sq.r.nx, atq = (i, j) => j * nxq + i;
+  sq.addWell(atq(25, 25), "inj", 300); for (const [i, j] of [[22, 25], [28, 25], [25, 22], [25, 28]]) sq.addWell(atq(i, j), "prod", 20);
+  const iq = sq.wells[0]; iq.mode = "choke"; iq.choke = 30; sq.field.pKNS = 200;
+  const qUnc = solveEquipment(sq, iq, true).q; let qTail = 0, qEnd = 0;
+  for (let d = 0; d < 40; d++) { advance(sq, 3); if (d >= 15) qTail = Math.max(qTail, iq.q); qEnd = iq.q; }
+  t.push({ name: "закачка: при 500 м³/сут скважина переходит на контроль по забойному давлению и держит предел", pass: qUnc > 1.3 * Q_INJ_MAX && iq._rc === true && qTail <= Q_INJ_MAX * 1.004 && qEnd > Q_INJ_MAX * 0.99,
+           details: `без предела ${qUnc.toFixed(0)}, держит ${qEnd.toFixed(1)} м³/сут (максимум после 45 сут ${qTail.toFixed(1)})` });
+  // бурение: один станок – одна скважина за 60 сут (ВС), больше станков – быстрее; деньги списываются, когда станок берёт скважину
+  const mkRig = (rigs) => { const sm = mk(); if (rigs > 1) for (let q = 1; q < rigs; q++) buyRig(sm); const ex = sm.r.explore;
+    for (let q = 0; q < 4; q++) { sm.addWell(ex[q].cell, "prod", 150); orderWell(sm, { well: sm.wells.pop(), units: CAPEX.vert(), kind: "v", name: "T" + q }); } return sm; };
+  const rg1 = mkRig(1), rg2 = mkRig(2), sp0 = rg1.economy.cuDrill.drill_cost || 0;
+  const ng1 = [rg1.wells.length]; advance(rg1, 61); ng1.push(rg1.wells.length); advance(rg1, 60); ng1.push(rg1.wells.length); advance(rg1, 120); ng1.push(rg1.wells.length);
+  const ng2 = [rg2.wells.length]; advance(rg2, 61); ng2.push(rg2.wells.length); advance(rg2, 60); ng2.push(rg2.wells.length);
+  t.push({ name: "бурение: 1 станок – 1 скважина за 60 сут, 2 станка вдвое быстрее; очередь и списание денег по порядку",
+           pass: JSON.stringify(ng1) === "[0,1,2,4]" && JSON.stringify(ng2) === "[0,2,4]" && sp0 === 1 && rg1.economy.cuDrill.drill_cost === 4 && rg1.drill.queue.length === 0,
+           details: `1 станок: ${ng1.join("→")} скв., 2 станка: ${ng2.join("→")} скв.; при заказе списана 1 скв. из 4 (затем по мере бурения)` });
+  // учёт по скважинам: сумма операционных результатов скважин = операционный результат месторождения
+  const ecP = dP.economy, sumW = dP.wells.reduce((s, w, i) => s + ecP.wellNet(w, i), 0), fieldCf = flowOf(ecP.u, {}, dP.params).cf;
+  t.push({ name: "экономика скважин: сумма по скважинам = результат месторождения", pass: Math.abs(sumW - fieldCf) < 1e-6 * Math.max(1, Math.abs(fieldCf)), details: `${(sumW / 1e6).toFixed(3)} / ${(fieldCf / 1e6).toFixed(3)} млн руб` });
   // согласованность IMPES: отбор жидкости − закачка = упругий запас (сетка скважин, ЭЦН-1250 на пределе по давлению на приёме;
   // до исправления шага давления невязка здесь была 15 % и вся уходила в «лишнюю» нефть); год одним вызовом = 365 суточным
   const mkV = () => { const sm = createSim(buildReservoir(DEFAULT_PARAMS), DEFAULT_PARAMS), R0 = sm.r;
@@ -1790,36 +1913,36 @@ const REF = {
     s: [[295815,375073,674679,24474939,3519610,10],[187575,728082,931422,32982332,4837267,10],[119523,882878,1019039,33622049,5317467,10],[81223,958980,1052347,33898008,5496351,10],[58255,1003547,1070339,34089059,5592394,10],[47473,956176,1011054,29244179,5303512,9.25],[36552,898115,946658,25570820,4964148,8.5],[27276,796558,838376,19269670,4402418,7.75],[17748,587550,620162,12754831,3257899,7],[17855,540364,579754,10434995,3031011,6.25],[10104,93083,134983,2579190,712294,4.75],[8195,96509,105002,2589953,548820,4.75],[6683,100072,107019,2601175,559369,4.75],[5447,102942,108614,2610072,567716,4.75],[4438,105248,109878,2617134,574326,4.75],[3617,107100,110880,2622751,579565,4.75],[2950,108587,111669,2627230,583692,4.75],[2410,109794,112282,2630837,586898,4.75],[0,0,53674,0,281920,4],[0,0,7542,0,39634,4]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
     c: [{"seis_cost":1,"drill_cost":12,"frac_cost":9,"esp_cost":16.1775},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
-  bv8: { desc: "сейсмика + шахматная сетка через 400 м: 4 добывающие (4 ВС) на ЭЦН и 4 нагнетательные со штуцером 8 мм; КНС 100 атм, давление сбора 5 атм; отключение 4 нерентабельных скважин; ежегодный подбор частоты и типоразмера ЭЦН", fund: "4 / 4", years: 20, npv: 8587.3,
+  bv8: { desc: "сейсмика + шахматная сетка через 400 м: 4 добывающие (4 ВС) на ЭЦН и 4 нагнетательные со штуцером 14 мм; КНС 100 атм, давление сбора 5 атм; отключение 4 нерентабельных скважин; ежегодный подбор частоты и типоразмера ЭЦН", fund: "4 / 4", years: 20, npv: 8227.6,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
-    s: [[600351,499560,1095041,21899566,3422016,6],[241710,833588,1081997,22830012,4155550,6],[132856,942047,1087117,23138496,4315962,6],[81176,999630,1090543,23309293,4364808,6],[52478,1033355,1092734,23410423,4384422,6],[35296,1053993,1094117,23472432,4394226,6],[24502,1067082,1095007,23511746,4399841,6],[14378,840365,900170,12061229,4051755,4.5],[4297,277597,372238,3500167,2022975,3.75],[0,0,112709,0,720523,3],[0,0,4077,0,20571,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3],[0,0,1635,0,6573,3]],
+    s: [[506680,311527,726661,20937201,2935208,6],[221661,480294,730601,16605693,2935208,6],[138742,573381,730925,16908993,2935208,6],[93883,624059,731015,17077151,2935208,6],[66516,655015,730936,17181281,2935208,6],[48631,675144,730734,17249689,2935208,6],[36412,688951,730623,17296955,2935208,6],[27789,698648,730478,17330380,2935208,6],[21558,705635,730347,17354597,2935208,6],[16960,710804,730257,17372588,2935208,6],[12919,702493,722351,13454898,2935208,6],[6693,556237,658663,6906020,2935208,6],[4893,553964,622429,3788470,2935208,4.5],[2114,202830,245920,1204770,1296497,3.75],[1543,181193,182547,1190312,733802,3.75],[0,0,81787,0,467117,3],[0,0,1672,0,6724,3],[0,0,1672,0,6724,3],[0,0,1672,0,6724,3],[0,0,1672,0,6724,3]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
     c: [{"seis_cost":1,"drill_cost":8,"esp_cost":9.5236},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
-  av12: { desc: "сейсмика + рядная система через 600 м: 1 добывающая (1 ГС + МГРП 5×40 м) на ЭЦН и 1 нагнетательная со штуцером 12 мм; КНС 100 атм, давление сбора 5 атм; нагнетательные – с тем же заканчиванием, что и добывающие; отключение 1 нерентабельной скважины; ежегодный подбор частоты и типоразмера ЭЦН", fund: "1 / 1", years: 20, npv: 1179.2,
+  av12: { desc: "сейсмика + рядная система через 600 м: 1 добывающая (1 ГС + МГРП 5×40 м) на ЭЦН и 1 нагнетательная со штуцером 12 мм; КНС 100 атм, давление сбора 5 атм; нагнетательные – с тем же заканчиванием, что и добывающие; отключение 1 нерентабельной скважины; ежегодный подбор частоты и типоразмера ЭЦН", fund: "1 / 1", years: 20, npv: 1120.6,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
-    s: [[75283,107925,167529,2308937,666617,1.5],[55925,145036,208513,2386930,837986,1.5],[42555,192584,240291,2469047,964438,1.5],[31359,224694,258593,2515639,1035901,1.5],[22858,245781,270445,2543014,1084672,1.5],[16566,260475,278373,2560834,1117405,1.5],[11951,270671,283613,2572678,1139091,1.5],[8600,277706,287049,2580644,1153337,1.5],[6220,282487,289277,2585983,1162587,1.5],[4561,285702,290711,2589548,1168546,1.5],[3418,287856,291635,2591930,1172386,1.5],[0,0,81529,0,343746,0.75],[0,0,3165,0,12831,0.75],[0,0,195,0,789,0.75],[0,0,65,0,263,0.75],[0,0,65,0,263,0.75],[0,0,65,0,263,0.75],[0,0,65,0,263,0.75],[0,0,65,0,263,0.75],[0,0,65,0,263,0.75]],
+    s: [[74495,106462,164682,2305413,684604,1.5],[52498,132596,182518,2360714,733802,1.5],[36143,148328,182569,2388201,733802,1.5],[26565,156385,182696,2402350,733802,1.5],[20361,162145,182819,2412828,733802,1.5],[15932,166407,182797,2420695,733802,1.5],[12617,169690,182819,2426804,733802,1.5],[10074,172265,182843,2431618,733802,1.5],[8083,174283,182807,2435406,733802,1.5],[6507,175830,182731,2438322,733802,1.5],[5261,177060,182673,2440644,733802,1.5],[4276,178040,182630,2442498,733802,1.5],[3499,178820,182598,2443975,733802,1.5],[2886,179440,182574,2445150,733802,1.5],[2246,174625,181607,1735179,733802,1.5],[1286,151198,177307,1128448,733802,1.5],[0,0,75321,0,333813,0.75],[0,0,3396,0,13764,0.75],[0,0,209,0,847,0.75],[0,0,67,0,269,0.75]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
     c: [{"seis_cost":1,"drill_cost":3.4,"frac_cost":6.8,"esp_cost":2.3809},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
-  yuv1: { desc: "сейсмика + шахматная сетка через 400 м: 4 добывающие (1 ВС, 3 ВС + ГРП 40 м) на ЭЦН и 3 нагнетательные со штуцером 16 мм; КНС 100 атм, давление сбора 5 атм; 4 перевода обводнённых добывающих в ППД; ежегодный подбор частоты и типоразмера ЭЦН", fund: "4 / 3", years: 20, npv: 1332.3,
+  yuv1: { desc: "сейсмика + шахматная сетка через 400 м: 4 добывающие (4 ВС + ГРП 40 м) на ЭЦН и 3 нагнетательные со штуцером 16 мм; КНС 100 атм, давление сбора 5 атм; 4 перевода обводнённых добывающих в ППД; ежегодный подбор частоты и типоразмера ЭЦН", fund: "4 / 3", years: 20, npv: 1316.0,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
-    s: [[165177,160306,262026,9869510,1053116,5.5],[63799,268119,335851,11680973,1350070,5.5],[38461,305770,348484,12563085,1401106,5.5],[55463,331834,437769,9307448,1792651,5],[27195,299162,377736,8513443,1543355,4.5],[14667,290262,330036,4623804,1338820,4],[7701,313423,321833,4672136,1293957,4],[0,0,42506,0,213089,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5],[0,0,72,0,275,3.5]],
+    s: [[166468,162862,264513,10168160,1063089,5.5],[64809,268694,337810,12015949,1357950,5.5],[39059,306698,350254,12825361,1408226,5.5],[53162,327055,421061,9300830,1728131,5],[25008,283860,358405,8460041,1470765,4.5],[14417,266387,326324,3469533,1357014,4],[9644,337376,343642,6057148,1380833,4],[0,0,38307,0,198020,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5],[0,0,75,0,276,3.5]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
-    c: [{"seis_cost":1,"drill_cost":7,"frac_cost":3,"esp_cost":9.5236},{},{},{"conv_cost":1},{"conv_cost":1},{"conv_cost":1},{},{"conv_cost":1},{},{},{},{},{},{},{},{},{},{},{},{}] },
-  yuk1011: { desc: "сейсмика + шахматная сетка через 320 м: 6 добывающих (2 ВС, 4 ВС + ГРП 40 м) на ЭЦН и 5 нагнетательных со штуцером 6 мм; КНС 150 атм, давление сбора 6 атм; нагнетательные – с тем же заканчиванием, что и добывающие; отключение 6 нерентабельных скважин; ежегодный подбор частоты и типоразмера ЭЦН", fund: "6 / 5", years: 20, npv: 4869.2,
+    c: [{"seis_cost":1,"drill_cost":7,"frac_cost":4,"esp_cost":9.5236},{},{},{"conv_cost":1},{"conv_cost":1},{"conv_cost":1},{},{"conv_cost":1},{},{},{},{},{},{},{},{},{},{},{},{}] },
+  yuk1011: { desc: "сейсмика + шахматная сетка через 320 м: 6 добывающих (2 ВС, 4 ВС + ГРП 40 м) на ЭЦН и 5 нагнетательных со штуцером 28 мм; КНС 110 атм, давление сбора 5 атм; нагнетательные – с тем же заканчиванием, что и добывающие; отключение 6 нерентабельных скважин; ежегодный подбор частоты и типоразмера ЭЦН", fund: "6 / 5", years: 20, npv: 4975.6,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
-    s: [[464391,537245,900811,30969345,3986616,8.5],[150389,700999,837397,27436591,4831861,8.5],[68479,744911,819958,26181561,4935770,8.5],[42902,719093,780982,21635158,4857108,7.75],[53580,554347,657913,19257378,4472764,7],[41490,552664,636812,14350677,4063790,6.25],[23117,425469,499877,8842905,3552263,5.5],[10066,500944,519770,10340956,3219231,5.5],[0,0,174515,0,1451404,4],[0,0,22607,0,140146,4],[0,0,1972,0,11904,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4],[0,0,1950,0,11758,4]],
+    s: [[491206,478823,896856,30388897,4013692,8.5],[143518,782548,913503,29358539,4035911,8.5],[66572,847294,913566,28682585,4035911,8.5],[38247,812757,881499,22977475,4035911,7.75],[64545,612202,777354,16976420,3903997,6.25],[31483,509613,596392,9030438,2937269,5.5],[11043,598112,605557,10537712,2677692,5.5],[0,0,156890,0,852823,4],[0,0,5741,0,25611,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4],[0,0,1947,0,8612,4]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
     c: [{"seis_cost":1,"drill_cost":11,"frac_cost":8,"esp_cost":14.2854},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
-  ach: { desc: "сейсмика + шахматная сетка через 280 м: 3 добывающие (3 ГС + МГРП 8×40 м) на ЭЦН и 4 нагнетательные со штуцером 30 мм; КНС 120 атм, давление сбора 5 атм; все нагнетательные сначала 1 год работают на нефть; ежегодный подбор частоты и типоразмера ЭЦН", fund: "3 / 4", years: 20, npv: 46.3,
+  ach: { desc: "сейсмика + шахматная сетка через 280 м: 7 добывающих и 6 будущих нагнетательных (сначала 1 год работают на нефть) – все ГС 1000 м с МГРП 8×40 м на ЭЦН; штуцер 15 мм, КНС 120 атм, давление сбора 5 атм; ежегодный подбор частоты и типоразмера ЭЦН; политика группы, применённая к участку ×5 (ТРИЗ, льгота по НДПИ), лучший из вариантов расстановки", fund: "7 / 6", years: 20, npv: 6076.0,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
-    s: [[90698,58696,0,7184891,0,7],[35925,23160,166987,2993033,1427981,5],[41729,38961,91586,4096682,441881,5],[38075,50342,95191,4488407,459240,5],[34453,59871,99448,4787561,479782,5],[31141,67981,103241,5030429,498092,5],[28178,74914,106490,5231298,513775,5],[25553,80865,109256,5399563,527127,5],[23236,86001,111617,5542044,538521,5],[21188,90454,113644,5663621,548307,5],[19377,94334,115397,5768159,556769,5],[17768,97734,116923,5858679,564132,5],[16336,100728,118258,5937563,570579,5],[15055,103378,119434,6006697,576255,5],[13907,105732,120474,6067595,581276,5],[12874,107832,121399,6121481,585740,5],[11941,109713,122224,6169354,589723,5],[11097,111403,122964,6212039,593290,5],[10331,112926,123628,6250221,596496,5],[9633,114301,124227,6284476,599386,5]],
+    s: [[232787,208286,0,17313604,0,13],[30346,36640,242870,3630564,2869592,9.5],[24916,18107,93311,2188510,955186,9],[24086,16100,49770,2044033,240395,9],[23658,14868,39187,1959593,189152,9],[23388,14052,35557,1904290,171592,9],[23216,13497,33972,1867324,163929,9],[23106,13125,33200,1842802,160196,9],[23031,12890,32827,1827008,158395,9],[22976,12759,32685,1817516,157704,9],[22922,12721,32688,1812852,157718,9],[22863,12761,32790,1811858,158210,9],[22793,12867,32962,1813708,159039,9],[22713,13027,33184,1817738,160110,9],[22622,13231,33443,1823478,161358,9],[22517,13477,33729,1830671,162737,9],[22398,13761,34035,1839024,164213,9],[22266,14075,34355,1848306,165759,9],[22122,14416,34686,1858313,167356,9],[21967,14780,35024,1868928,168988,9]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
-    c: [{"seis_cost":1,"drill_cost":11.81,"frac_cost":36.4,"esp_cost":16.6663},{"conv_cost":4},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
-  bb: { desc: "сейсмика + сетка «две добывающие на одну нагнетательную» через 360 м: 5 добывающих (5 ВС) на ЭЦН и 3 нагнетательные со штуцером 24 мм; КНС 130 атм, давление сбора 8 атм; ОПЗ после ГДИС на 1 скважине; отключение 5 нерентабельных скважин; ежегодный подбор частоты и типоразмера ЭЦН", fund: "5 / 3", years: 20, npv: 1690.1,
+    c: [{"seis_cost":1,"drill_cost":21.88,"frac_cost":67.6,"esp_cost":30.9518},{"conv_cost":7},{"conv_cost":1},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] },
+  bb: { desc: "сейсмика + сетка «две добывающие на одну нагнетательную» через 360 м: 4 добывающие (4 ВС) на ЭЦН и 3 нагнетательные со штуцером 24 мм; КНС 130 атм, давление сбора 8 атм; отключение 3 нерентабельных скважин; ежегодный подбор частоты и типоразмера ЭЦН", fund: "4 / 3", years: 20, npv: 1888.1,
     // по годам: нефть, т; вода, м³; закачка, м³; кВт·ч ЭЦН; кВт·ч КНС; скважино-годы (в долях обслуживания добывающей)
-    s: [[91955,311295,415699,2970150,2158049,6.5],[82045,561736,650123,6340085,3395042,6.5],[65964,668174,745552,8005753,3895779,5.75],[51828,781113,837183,9465113,4374972,5.75],[42726,863263,910904,12153461,4760287,5.75],[35533,933096,971087,13046886,5075066,5.75],[29187,975056,1008183,13098561,5269535,5.75],[23780,992090,1019568,13114317,5329265,5.75],[18456,837012,863089,9146347,4513752,5.75],[15216,899728,917556,9890650,4795302,5.75],[13254,857916,872414,9148127,4560836,4.25],[10158,752330,774351,6532026,4049122,4.25],[7975,688298,697305,4655830,3645901,4.25],[5768,562350,574200,2594428,3003216,4.25],[4796,515300,522135,2021446,2729931,4.25],[3437,382336,398620,1127868,2085537,3.5],[3206,383573,387282,1128242,2024348,3.5],[0,0,13358,0,75370,2.75],[0,0,50,0,263,2.75],[0,0,50,0,263,2.75]],
+    s: [[116911,308465,425581,3784357,2209472,5.5],[71666,476941,543266,6965865,2836032,5.5],[47854,499423,548276,7427770,2861828,5.5],[36555,508328,548141,6073152,2861828,5.5],[29644,515198,547924,6081462,2861828,5.5],[24780,518855,547580,5847215,2861828,5.5],[21290,525334,547757,7748198,2861828,5.5],[18447,525507,547441,5853990,2861828,5.5],[16288,530638,547669,7754982,2861828,5.5],[14418,529908,547383,5858251,2861828,5.5],[10725,352967,399481,3469258,2116621,4.75],[11484,335107,362247,1972909,1907885,4],[10829,363311,365152,5947116,1907885,4],[9325,354709,365095,2801044,1907885,4],[8346,355754,365079,2804723,1907885,4],[8427,323005,356035,1551173,1885589,3.25],[8762,374081,365102,6073616,1907246,3.25],[7335,357085,365106,2617348,1907885,3.25],[6515,357926,365086,2618321,1907885,3.25],[5844,358621,365072,2619116,1907885,3.25]],
     // капитальные затраты по годам — в единицах параметров (см. CAPEX; lost_t — недобор нефти при ГДИС, т)
-    c: [{"seis_cost":1,"drill_cost":8,"esp_cost":4.8397},{"esp_cost":3.1917},{"esp_cost":2.3809,"pta_cost":1,"lost_t":399.2751,"stim_cost":1},{"esp_cost":1.8012},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}] }
+    c: [{"seis_cost":1,"drill_cost":7,"esp_cost":4.2441},{"esp_cost":4.7015},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{"esp_cost":2.3809},{},{},{}] }
 };
 
 // ---------- Оценка разработки: клон, годовые ряды, ЧДД, баллы ----------
@@ -1827,11 +1950,13 @@ const REF = {
 function cloneSim(sim) {
   const c = createSim(sim.r, sim.params);
   c.P.set(sim.P); c.Sw.set(sim.Sw);
-  c.wells = sim.wells.map((w) => ({ ...w, cum: { ...w.cum }, eq: null, perf: w.perf.map((pf) => ({ ...pf })), pq: w.pq && w.pq.slice(), pqw: w.pqw && w.pqw.slice(), frac: w.frac && { ...w.frac }, mgrp: w.mgrp && { ...w.mgrp, stages: w.mgrp.stages.map((q) => q.slice()) }, traj: w.traj && w.traj.map((q) => q.slice()) }));
+  const cw = (w) => ({ ...w, cum: { ...w.cum }, eq: null, perf: w.perf.map((pf) => ({ ...pf })), pq: w.pq && w.pq.slice(), pqw: w.pqw && w.pqw.slice(), frac: w.frac && { ...w.frac }, mgrp: w.mgrp && { ...w.mgrp, stages: w.mgrp.stages.map((q) => q.slice()) }, traj: w.traj && w.traj.map((q) => q.slice()) });
+  c.wells = sim.wells.map(cw);
+  c.drill = { rigs: sim.drill.rigs, on: null, queue: sim.drill.queue.map((j) => ({ ...j, well: cw(j.well) })), active: sim.drill.active.map((j) => ({ ...j, well: cw(j.well) })) };
   c.field = { ...sim.field }; c.t = sim.t; c.cumProdM3 = sim.cumProdM3;
   c.history = { days: sim.history.days.slice() };
   const e = sim.economy, d = c.economy;
-  d.u = { ...e.u }; d.cu = { ...e.cu }; d.cuDrill = { ...e.cuDrill }; d.drills = e.drills.slice(); d.refresh();
+  d.u = { ...e.u }; d.byWell = Object.fromEntries(Object.entries(e.byWell).map(([k, v]) => [k, { ...v }])); d.cu = { ...e.cu }; d.cuDrill = { ...e.cuDrill }; d.drills = e.drills.slice(); d.refresh();
   c._uE.set(sim._uE); c._uN.set(sim._uN); c._Te.set(sim._Te); c._Tn.set(sim._Tn);
   c._fluxValid = sim._fluxValid; c._lastSolveT = sim._lastSolveT; c._solveEnd = sim._solveEnd; // продолжение идентично оригиналу
   return c;
@@ -1871,12 +1996,12 @@ function refYearly(level, params) {
 // pre – годы отработки будущих нагнетательных на нефть (0 – сразу под закачку): они бурятся добывающими и в начале года
 // pre переводятся под закачку; injCompl – нагнетательные с тем же заканчиванием, что и добывающие (ГС/МГРП, ГРП).
 const POLICIES = {
-  bv8: {"s":10,"ox":3,"oy":5,"pat":0,"phase":1,"thrC":1.01,"convN":3,"prodMode":"esp","f0":60,"chokeP":12,"dInj":8,"kns":100,"pg":5,"qMin":10,"compl":"v","xf":120,"fracK":1000,"hsL":1000,"hsAz":90,"mgN":12,"shut":1,"hMin":0.5,"thrS":99,"stimYear":3,"pre":0,"injCompl":1},
-  av12: {"s":15,"ox":2,"oy":5,"pat":2,"phase":1,"thrC":0.9,"convN":0,"prodMode":"esp","f0":45,"chokeP":11,"dInj":12,"kns":100,"pg":5,"qMin":40,"compl":"hsf","xf":40,"fracK":30,"hsL":1000,"hsAz":90,"mgN":5,"shut":1,"hMin":0.4,"thrS":4,"stimYear":2,"pre":0,"injCompl":1},
-  yuv1: {"s":10,"ox":8,"oy":4,"pat":0,"phase":0,"thrC":0.96,"convN":1,"prodMode":"esp","f0":50,"chokeP":17,"dInj":16,"kns":100,"pg":5,"qMin":20,"compl":"vf","xf":40,"fracK":30,"hsL":1500,"hsAz":135,"mgN":8,"shut":0,"hMin":0.7,"thrS":2,"stimYear":3,"pre":0,"injCompl":0},
-  yuk1011: {"s":8,"ox":7,"oy":3,"pat":0,"phase":1,"thrC":0.8,"convN":0,"prodMode":"esp","f0":60,"chokeP":17,"dInj":6,"kns":150,"pg":6,"qMin":40,"compl":"vf","xf":40,"fracK":30,"hsL":1500,"hsAz":135,"mgN":8,"shut":1,"hMin":0.7,"thrS":4,"stimYear":3,"pre":0,"injCompl":1},
+  bv8: {"s":10,"ox":3,"oy":5,"pat":0,"phase":1,"thrC":1.01,"convN":3,"prodMode":"esp","f0":60,"chokeP":10,"dInj":14,"kns":100,"pg":5,"qMin":10,"compl":"v","xf":120,"fracK":1000,"hsL":1000,"hsAz":90,"mgN":8,"shut":0,"hMin":0.5,"thrS":99,"stimYear":3,"pre":0,"injCompl":0},
+  av12: {"s":15,"ox":2,"oy":5,"pat":2,"phase":1,"thrC":0.8,"convN":0,"prodMode":"esp","f0":45,"chokeP":11,"dInj":12,"kns":100,"pg":5,"qMin":40,"compl":"hsf","xf":40,"fracK":30,"hsL":1000,"hsAz":90,"mgN":5,"shut":0,"hMin":0.4,"thrS":4,"stimYear":2,"pre":0,"injCompl":1},
+  yuv1: {"s":10,"ox":8,"oy":4,"pat":0,"phase":0,"thrC":0.96,"convN":1,"prodMode":"esp","f0":50,"chokeP":17,"dInj":16,"kns":100,"pg":5,"qMin":40,"compl":"vf","xf":40,"fracK":1000,"hsL":1500,"hsAz":135,"mgN":8,"shut":0,"hMin":0.7,"thrS":2,"stimYear":3,"pre":0,"injCompl":0},
+  yuk1011: {"s":8,"ox":7,"oy":3,"pat":0,"phase":1,"thrC":0.8,"convN":0,"prodMode":"esp","f0":60,"chokeP":17,"dInj":28,"kns":110,"pg":5,"qMin":40,"compl":"vf","xf":40,"fracK":30,"hsL":1500,"hsAz":135,"mgN":8,"shut":1,"hMin":0.7,"thrS":4,"stimYear":3,"pre":0,"injCompl":1},
   ach: {"s":7,"ox":5,"oy":5,"pat":0,"phase":2,"thrC":0.93,"convN":1,"prodMode":"esp","f0":50,"chokeP":15,"dInj":30,"kns":120,"pg":5,"qMin":20,"compl":"hsf","xf":40,"fracK":30,"hsL":1000,"hsAz":135,"mgN":8,"shut":0,"hMin":0.6,"thrS":2,"stimYear":3,"pre":1,"injCompl":0},
-  bb: {"s":9,"ox":4,"oy":3,"pat":1,"phase":0,"thrC":1.01,"convN":3,"prodMode":"esp","f0":45,"chokeP":10,"dInj":24,"kns":130,"pg":8,"qMin":20,"compl":"v","xf":80,"fracK":60,"hsL":2000,"hsAz":45,"mgN":12,"shut":0,"hMin":0.4,"thrS":2,"stimYear":3,"pre":0,"injCompl":0},
+  bb: {"s":9,"ox":3,"oy":2,"pat":1,"phase":0,"thrC":1.01,"convN":3,"prodMode":"esp","f0":50,"chokeP":10,"dInj":24,"kns":130,"pg":8,"qMin":10,"compl":"v","xf":80,"fracK":60,"hsL":1000,"hsAz":135,"mgN":12,"shut":1,"hMin":0.6,"thrS":4,"stimYear":3,"pre":0,"injCompl":0},
 };
 // Исполнение политики: генератор (кусками по ≈ 73 сут – для фонового расчёта без зависания интерфейса).
 // Возвращает годовые ряды в натуральных единицах (как REF): s – [нефть т, вода м³, закачка м³, кВт·ч ЭЦН, кВт·ч КНС, скв.-лет], c – капзатраты.
@@ -1910,7 +2035,8 @@ function* policyRun(r, P, th, years = 20) {
     if (asProd || th.injCompl) {
       if (th.compl === "hs" || th.compl === "hsf") {
         const rr = sim.setCompletion(w, "hs", { L: th.hsL, az: th.hsAz });
-        if (rr.ok) { units = CAPEX.hs(w.L); if (th.compl === "hsf" && r.k[x.c] < th.fracK) { const rf = sim.setCompletion(w, "mgrp", { n: th.mgN, xf: th.xf }); if (rf.ok) Object.assign(units, CAPEX.mgrp(w.mgrp.n, th.xf)); } }
+        if (rr.ok) { units = CAPEX.hs(w.L); if (th.compl === "hsf" && r.k[x.c] < th.fracK) { const rf = sim.setCompletion(w, "mgrp", { n: th.mgN, xf: th.xf, az: (th.hsAz + 90) % 180 }); if (rf.ok) Object.assign(units, CAPEX.mgrp(w.mgrp.n, th.xf)); } }
+        // az (ствол + 90°) – эталонные ряды REF найдены оптимизатором при поперечных трещинах; повторяем ту же геометрию
       } else if (th.compl === "vf" && r.k[x.c] < th.fracK) { const rr = sim.setCompletion(w, "frac", { xf: th.xf, az: th.hsAz }); if (rr.ok) Object.assign(units, CAPEX.frac(th.xf)); }
       eco.charge(0, units, true);
       if (asProd) { w.mode = "flow"; w.choke = th.chokeP; if (th.prodMode === "esp") installEsp(w); } else { w.mode = "choke"; w.choke = th.dInj; }
@@ -2001,6 +2127,25 @@ function scoreDevelopment(kin, kinRef, npv, npvRef) {
 }
 
 // ---------- Тесты оценки ----------
+// ---------- Зоны влияния скважин (разбиение Вороного) ----------
+// каждая активная ячейка относится к ближайшей скважине (по евклидову расстоянию до ячеек перфорации);
+// ничья – за первой скважиной в порядке sim.wells. Оценка зон, не строгий материальный баланс.
+function wellZones(sim) {
+  const r = sim.r, nx = r.nx, out = sim.wells.map((w) => ({ well: w, pv: 0, oil0: 0, oil1: 0 }));
+  if (!sim.wells.length) return out;
+  for (const c of r.cells) {
+    const cx = c % nx, cy = Math.floor(c / nx);
+    let bi = 0, bd = Infinity;
+    for (let wi = 0; wi < sim.wells.length; wi++) for (const pf of sim.wells[wi].perf) {
+      const d = (cx - (pf.cell % nx)) ** 2 + (cy - Math.floor(pf.cell / nx)) ** 2;
+      if (d < bd) { bd = d; bi = wi; }
+    }
+    const z = out[bi], pv = r.poreVol[c];
+    z.pv += pv; z.oil0 += pv * (1 - r.Sw0[c]); z.oil1 += pv * (1 - sim.Sw[c]);
+  }
+  return out;
+}
+
 function reportTests() {
   const t = [];
   // эталоны: полигон (1), базовый купол (2) и объекты; ЧДД по рядам при ценах объекта = найденному оптимизатором,
@@ -2021,6 +2166,12 @@ function reportTests() {
   const cl = cloneSim(sm); advance(sm, 100); advance(cl, 100);
   let dP = 0; for (let c = 0; c < sm.P.length; c++) dP = Math.max(dP, Math.abs(sm.P[c] - cl.P[c]));
   t.push({ name: "клон состояния: продолжение даёт тот же результат", pass: dP < 1e-6 && Math.abs(sm.economy.balance - cl.economy.balance) < 1, details: `max|ΔP|=${dP.toExponential(1)}` });
+  const wz = wellZones(sm), sumPv = wz.reduce((a, z) => a + z.pv, 0), totPv = sm.r.cells.reduce((a, c) => a + sm.r.poreVol[c], 0), sumO0 = wz.reduce((a, z) => a + z.oil0, 0);
+  // физическая выработка зоны может быть слегка отрицательной: неоднородная начальная Sw, скважина вымывает связанную воду
+  const deplOk = wz.every((z) => z.oil0 <= 1e-6 || ((z.oil0 - z.oil1) / z.oil0 >= -0.25 && (z.oil0 - z.oil1) / z.oil0 <= 1));
+  t.push({ name: "зоны скважин (Вороной): поровые объёмы зон покрывают пласт, начальные запасы зон = OOIP, выработка зон физична (−25…100 %)",
+           pass: Math.abs(sumPv - totPv) / totPv < 1e-9 && Math.abs(sumO0 - sm.r.ooipM3) / sm.r.ooipM3 < 1e-9 && deplOk && wz.length === sm.wells.length && wz.every((z) => z.pv > 0),
+           details: `Σ пор. объёма ${(sumPv / 1e6).toFixed(2)} млн м³ (${wz.length} зон), Σ запасов = OOIP ${(sm.r.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т` });
   const ya = yearlyFromSim(cl, DEFAULT_PARAMS);
   const s1 = scoreDevelopment(0.4, 0.4, 100, 100), s2 = scoreDevelopment(0.5, 0.4, 130, 100), s3 = scoreDevelopment(0.2, 0.4, -5, 100), s4 = scoreDevelopment(0.382, 0.375, 103, 100);
   t.push({ name: "оценка: эталон = 100, ниже – пропорционально, выше – с убывающей отдачей (+25 % ≈ 109), убыточный вариант = 0 по ЧДД",
@@ -2069,9 +2220,18 @@ function scenarioTests() {
     t.push({ name: "перенос: вязкая нефть (Бб) и мощные ЭЦН – Sw не ниже Swc, баланс воды < 0.1 %, объёма < 0.5 %", pass: mn >= r.Swc - 1e-9 && Math.abs(errW) < 1e-3 && Math.abs(errV) < 0.005,
              details: `Sw min ${mn.toFixed(3)} (Swc ${r.Swc}), вода ${(errW * 100).toFixed(3)} %, объём ${(errV * 100).toFixed(3)} %, скважин ${sm.wells.length}` });
   }
+  const priceRatios = ["base", ...SCENARIO_ORDER].map((id) => scenarioParams(id).expl_cost / scenarioParams(id).drill_cost);
+  t.push({ name: "цены: разведочная скважина с керном, ГИС и испытаниями стоит 4 эксплуатационные во всех объектах",
+           pass: priceRatios.every((x) => x === 4), details: `${Math.min(...priceRatios)}–${Math.max(...priceRatios)}×` });
   // разные объекты – разная карта: структура отражена, разведочные скважины в других ячейках
   const cellsOf = (id) => buildReservoir2({ ...DEFAULT_PARAMS, ...scenarioParams(id) }).explore.map((e) => e.cell).join(",");
   t.push({ name: "объекты: структура отражается – у БВ8, АВ1, ЮВ1 и ЮК разные положения разведочных скважин", pass: new Set(["bv8", "av12", "yuv1", "yuk1011"].map(cellsOf)).size === 4 });
+  // ТРИЗ ачимовки: участок ×5 по площади (ячейка ≈ 89 м при сетке 50) и льгота НДПИ (цена netback 28 000)
+  const ra = buildReservoir2({ ...DEFAULT_PARAMS, ...scenarioParams("ach") });
+  t.push({ name: "ТРИЗ ачимовки: участок ×5 по площади, цена с льготой НДПИ (28 000 руб/т), запасы пропорциональны площади",
+           pass: ra.plot > 4400 && ra.plot < 4550 && ra.dx > 85 && scenarioParams("ach").price_oil === 28000 &&
+                 scenarioParams("bv8").price_oil === undefined && Math.abs(ra.ooipM3 / (2 * 1e6 / 0.86) / 5 - 1) < 0.25,
+           details: `участок ${(ra.plot / 1000).toFixed(2)} км, ячейка ${ra.dx.toFixed(1)} м, OOIP ${(ra.ooipM3 * 0.86 / 1e6).toFixed(2)} млн т` });
   return t;
 }
 
@@ -2256,21 +2416,44 @@ function completionTests() {
   t.push({ name: "ГРП: трещина не пересекает разлом (обрезается на нём)", pass: fz.wells[0].perf.every((pf) => pf.cell % fr.nx <= fc % fr.nx), details: `ячеек ${fz.wells[0].perf.length}` });
   const cl = cloneSim(m);
   t.push({ name: "клон сохраняет заканчивание скважин", pass: cl.wells[0].perf.length === m.wells[0].perf.length && cl.wells[1].kind === "frac" && cl.wells[1].perf !== m.wells[1].perf });
+  // стресс: трещины по максимальному горизонтальному напряжению
+  const s1 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS), saz1 = s1.r.stressAz;
+  s1.addWell(cellAt(s1, 22, 22), "prod", 150);
+  const rs1 = s1.setCompletion(s1.wells[0], "frac", { xf: 80 });
+  const s1b = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  s1b.addWell(cellAt(s1b, 22, 22), "prod", 150); s1b.setCompletion(s1b.wells[0], "frac", { xf: 80, az: 45 });
+  t.push({ name: "стресс: ГРП без явного азимута строится по SHmax, явный азимут сохраняется",
+           pass: rs1.ok && s1.wells[0].frac.az === saz1 % 180 && s1b.wells[0].frac.az === 45, details: `SHmax ${saz1}°, трещина ${s1.wells[0].frac.az}°; с az=45 → 45°` });
+  const s2 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS), saz2 = s2.r.stressAz;
+  s2.addWell(cellAt(s2, 22, 22), "prod", 150);
+  const rl = s2.setCompletion(s2.wells[0], "hs", { L: 800, az: saz2 % 180 }), nStem = s2.wells[0].perf.length;
+  const rmL = s2.setCompletion(s2.wells[0], "mgrp", { n: 3, xf: 80 });
+  const s3 = createSim(buildReservoir2(DEFAULT_PARAMS), DEFAULT_PARAMS);
+  s3.addWell(cellAt(s3, 22, 22), "prod", 150);
+  const rp = s3.setCompletion(s3.wells[0], "hs", { L: 800, az: (saz2 + 90) % 180 }), nStemP = s3.wells[0].perf.length;
+  const rmP = s3.setCompletion(s3.wells[0], "mgrp", { n: 3, xf: 80 });
+  t.push({ name: "стресс: ГС вдоль SHmax – продольные трещины (ячейки только ствола), поперёк SHmax – поперечные (вне ствола)",
+           pass: rl.ok && rmL.ok && s2.wells[0].perf.length === nStem && rp.ok && rmP.ok && s3.wells[0].perf.length > nStemP,
+           details: `SHmax ${saz2}°: вдоль ${nStem} → ${s2.wells[0].perf.length} ячеек, поперёк ${nStemP} → ${s3.wells[0].perf.length}` });
+  const st = (g, s) => scenarioForSeed(g, s).stress;
+  t.push({ name: "стресс: у сида свой азимут в ±15° от группы (БВ8 330°, Бб 50°), детерминирован",
+           pass: Math.abs(st("bv8", 42) - 330) <= 15 && Math.abs(st("bb", 42) - 50) <= 15 && st("bv8", 42) === scenarioForSeed("bv8", 42).stress,
+           details: `БВ8 сид 42: ${st("bv8", 42)}°, Бб сид 42: ${st("bb", 42)}°` });
   return t;
 }
 
 registerCore({
   setAccel, accelOn: () => !!ACCEL,
-  VERSION: "0.12.1",
+  VERSION: "0.13.0",
   DEFAULT_PARAMS, GRID, CONV_K,
   mulberry32, gauss, buildReservoir, isConnected,
   POLICIES, policyRun, seedRefRun, runGen, segCross, GRID_SIZES, DEFAULT_CALC, BASE_N, L2, SCENARIOS, SCENARIO_ORDER, scenOf, scenarioParams, scenarioForSeed, scenOfParams, SEED_MAX, hashSeed, l2Flip, buildReservoir2, wellLog, l2Top, l2Column, l2OilNet, l2Altitude,
   krw, kro, fw, lambdaT, wellIndex,
   createSim, buildFaceT, solvePressure, updateWellRates, advance, materialBalance,
   computeFaceFluxes, transportSubstep, cflLimit, simStats, estimatePathPV,
-  SCORE_BONUS, SEIS_WELLS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, buildupQuality, suggestWindow, buildSeismic, nearestSealFaultM,
+  dutyOf, Q_INJ_MAX, orderWell, cancelOrder, buyRig, drillStart, drillDays, SCORE_BONUS, SEIS_WELLS, createEconomy, flowOf, costOf, CAPEX, FRAC_MULT, DEFAULT_COSTS, WELL_OPEX_INJ, WELL_OPEX_IDLE, KNS_EFF, fracChokeSkin, RHO_OIL, gatherPressure, ATM_PA, solveEquipment, applyEquipment, wellG, HS_EFF, FRAC_EFF, FRAC_COND, fracSkin, fracCellFactor, espHeadM, chokeDpAtm, espPowerKW, espLoad, espEff, PUMPS, PUMP_DEFAULT, PUMP_NOMINALS, l2Skin, E1, pressureBuildup, interpretBuildup, buildupPres, buildupQuality, suggestWindow, buildSeismic, nearestSealFaultM,
   reservoirTests, relPermTests, pressureTests, wellTests,
-  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, gridTests, seedTests, reportTests, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
+  saturationTests, breakthroughTests, economyTests, level2Tests, level2bTests, equipmentTests, completionTests, scenarioTests, gridTests, seedTests, reportTests, wellZones, REF, refKey, cloneSim, yearlyFromSim, refYearly, npvOf, scoreDevelopment, level2bTests,
   runSelfTests() {
     return [...reservoirTests(), ...relPermTests(), ...pressureTests(), ...wellTests(),
             ...saturationTests(), ...breakthroughTests(), ...economyTests(), ...level2Tests(), ...level2bTests(), ...equipmentTests(), ...completionTests(), ...scenarioTests(), ...gridTests(), ...seedTests(), ...reportTests()];

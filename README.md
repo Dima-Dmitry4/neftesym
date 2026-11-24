@@ -59,7 +59,7 @@
 
 ## Запуск
 
-Игра – один файл [`index.html`](index.html) (плюс локальная копия Plotly в `vendor/`).
+Игра – один файл [`index.html`](index.html): Plotly и WebAssembly встроены, файл можно пересылать (например, в мессенджере) и открывать с диска двойным кликом.
 
 - **Онлайн:** https://dmitryvoronin.gitverse.site/neftesim_neftyasha/
 - **Локально:** скачайте репозиторий и откройте `index.html` двойным щелчком. Сеть и сервер не нужны.
@@ -92,7 +92,7 @@
 ## Разработка
 
 ```bash
-node tests/selftest.js            # самотест ядра (110 проверок) на JS
+node tests/selftest.js            # самотест ядра (111 проверок) на JS
 node tests/selftest.js --wasm     # то же через Rust/WebAssembly и сверка с JS
 ```
 
@@ -102,7 +102,7 @@ node tests/selftest.js --wasm     # то же через Rust/WebAssembly и с�
 
 ```
 index.html      игра целиком: ядро расчёта, интерфейс, встроенный WebAssembly
-vendor/         Plotly (локальная копия, без CDN)
+vendor/         исходная копия Plotly (встроена в index.html скриптом tools/embed-plotly.mjs)
 rust/           Rust-ядро (давление, потоки, перенос) → WebAssembly
 tests/          самотест физики и экономики
 tools/          поиск эталонов
@@ -116,4 +116,4 @@ docs/           описание модели (MODEL.md), снимки экра�
 интерфейс. Нефтяша и тексты игры – оригинальные. Названия месторождений и пластов используются только как географические и геологические аналоги, свойства
 пластов приблизительные и учебные, реальных данных недропользователей в игре нет.
 
-Лицензия **MIT**, см. [LICENSE](LICENSE). Графики: [Plotly.js](https://plotly.com/javascript/) (MIT), локальная копия в `vendor/`.
+Лицензия **MIT**, см. [LICENSE](LICENSE). Графики: [Plotly.js](https://plotly.com/javascript/) (MIT), исходная копия в `vendor/`, встроена в `index.html`.
