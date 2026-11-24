@@ -4637,6 +4637,8 @@ function openSchem(tab, name) {
 }
 function drawSchem() {
   if (!G.sim || $("schem-modal").classList.contains("hidden")) return;
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest("#sch-side")) return; // игрок выбирает насос в открытом списке – не перерисовывать панель под рукой
   $("sc-tab-g").classList.toggle("active", SCH.tab === "g"); $("sc-tab-w").classList.toggle("active", SCH.tab === "w"); $("sc-tab-p").classList.toggle("active", SCH.tab === "p");
   $("sc-wellwrap").classList.toggle("hidden", SCH.tab === "g");
   if (SCH.tab === "p") {
@@ -4819,7 +4821,7 @@ function drawPumpChar() {
     (adv ? `<div class="note keep">${adv}</div>` : "") +
     `<div class="note">Режим работы – пересечение напора насоса (синяя линия) и потребного напора скважины (серый пунктир: подъём столба жидкости за вычетом притока из пласта). ` +
     `Звезда на графике напора и на графике КПД показывает режим. Рабочая зона – 60–120 % от оптимальной подачи; штриховые линии – напор на 40 и 60 Гц.</div>`;
-  $("sch-pump").addEventListener("change", (ev) => setPump(w, ev.target.value)); // замена насоса прямо из характеристики
+  $("sch-pump").addEventListener("change", (ev) => { ev.target.blur(); setPump(w, ev.target.value); }); // замена насоса прямо из характеристики
 }
 
 // ---------------- итоги по годам ----------------
@@ -5809,6 +5811,7 @@ function startGame() {
   stopPlay(); saveSnap(G.sim);
   // реальное время: игровое время привязано к часам (catch-up после свёрнутой вкладки), без пауз
   G.rt = G.timeMode === "rt" ? { min: G.rtMin, rate: 3650 / (G.rtMin * 60), started: false, done: false, wall0: 0, t0: 0, lastYear: 0 } : null;
+  $("rt-start").classList.remove("hidden"); // кнопка могла остаться скрытой после прошлой игры в этом же окне
   applyLevelUI(); wellRows.clear(); renderWellTable(true);
   show("screen-game"); renderAll();
   if (G.rt) toast(`${G.edu ? "Учебный режим: геология открыта. " : ""}Непрерывное время: 10 лет = ${fmtClock(G.rt.min * 60)}, 1 год ≈ ${fmtClock(G.rt.min * 6)}. Осмотритесь и нажмите «▶ Старт» – дальше время не останавливается, изменения вносятся на ходу.`);
