@@ -33,8 +33,8 @@ manual/                 методичка на Quarto (HTML + PDF, сборка
 ## Команды
 
 ```bash
-node tests/selftest.js                      # самотест (≈ 3–4 мин на JS)
-node tests/selftest.js --wasm               # через WebAssembly (≈ 1 мин) + сверка с JS
+node tests/selftest.js                      # самотест (≈ 9 мин на JS)
+node tests/selftest.js --wasm               # через WebAssembly (≈ 2 мин) + сверка с JS
 
 node tools/embed-plotly.mjs                 # встроить vendor/plotly-cartesian.min.js в index.html (после обновления Plotly)
 

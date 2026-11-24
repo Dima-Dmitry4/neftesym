@@ -101,7 +101,7 @@ node tests/selftest.js --wasm     # то же через Rust/WebAssembly и с�
 Эталоны для объектов ищет [`tools/search-reference.js`](tools/search-reference.js). Подробнее для разработчиков и ИИ-агентов – [AGENTS.md](AGENTS.md).
 
 ```
-index.html      игра целиком: ядро расчёта, интерфейс, встроенный WebAssembly
+index.html      игра целиком: ядро расчёта, интерфейс, встроенные Plotly и WebAssembly
 vendor/         исходная копия Plotly (встроена в index.html скриптом tools/embed-plotly.mjs)
 rust/           Rust-ядро (давление, потоки, перенос) → WebAssembly
 tests/          самотест физики и экономики
